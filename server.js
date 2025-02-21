@@ -82,6 +82,17 @@ pool.connect(async (err, client, release) => {
             ON CONFLICT (username) DO NOTHING;
         `);
 
+        // Добавляем таблицу SolvedPuzzles
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS SolvedPuzzles (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255),
+                puzzle_fen TEXT,
+                solved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(username, puzzle_fen)
+            );
+        `);
+
     } catch (err) {
         console.error('Error creating tables:', err);
     } finally {
@@ -109,11 +120,8 @@ async function checkUserAccess(username) {
     }
 }
 
-const usedPuzzles = new Set();
-
 function generateRandomPuzzle() {
-    // Набор шаблонов для разных типов задач
-    const puzzleTemplates = [
+    const puzzles = [
         // Легкие задачи
         {
             fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
@@ -123,126 +131,236 @@ function generateRandomPuzzle() {
             type: 'Mate in 1',
             difficulty: 'easy'
         },
+        // Исправляем задачу с некорректным ходом пешки
         {
-            fen: '2rq1rk1/pb2bppp/1p2pn2/2p5/2P5/2N1P1B1/PP3PPP/R2QKB1R w KQ - 0 1',
-            move_1: 'g3d6',
-            move_2: 'c5d6',
+            fen: 'r2qkb1r/ppp2ppp/2n2n2/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'f6e4',
             solution: 'Blunder',
-            type: 'Pin',
+            type: 'Knight Fork',
+            difficulty: 'easy'
+        },
+        // Добавляем новую корректную задачу вместо проблемной
+        {
+            fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'f6e4',
+            solution: 'Good',
+            type: 'Knight Exchange',
             difficulty: 'easy'
         },
         // Средние задачи
         {
             fen: 'r4rk1/ppp2ppp/2n5/2bqp3/8/P1N5/1PP1QPPP/R1B2RK1 b - - 0 1',
-            move_1: 'd5e4',
-            move_2: 'c3e4',
-            solution: 'Blunder',
-            type: 'Fork',
+            move_1: 'd5f3',
+            move_2: 'g2f3',
+            solution: 'Good',
+            type: 'Queen Sacrifice',
             difficulty: 'medium'
         },
         {
-            fen: 'r1b2rk1/2q1bppp/p2p1n2/np2p3/3PP3/2P2N2/PPB2PPP/R1BQR1K1 w - - 0 1',
-            move_1: 'e4e5',
-            move_2: 'd6e5',
-            solution: 'Good',
-            type: 'Attack',
+            fen: '2r3k1/pp3pp1/4p3/3pP3/6P1/2P5/PP3P2/2KR4 w - - 0 1',
+            move_1: 'd1d5',
+            move_2: 'c8c3',
+            solution: 'Blunder',
+            type: 'Rook Pin',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1b2rk1/ppq2ppp/2pb1n2/3p4/3P4/2NBP3/PPQ2PPP/R1B2RK1 w - - 0 1',
+            move_1: 'c3e2',
+            move_2: 'c7g3',
+            solution: 'Blunder',
+            type: 'Queen Attack',
             difficulty: 'medium'
         },
         // Сложные задачи
         {
-            fen: 'r1b1k2r/ppppqppp/2n2n2/2b5/2B1P3/2N2N2/PPPP1PPP/R1BQ1RK1 w kq - 0 1',
-            move_1: 'c4f7',
-            move_2: 'e7f7',
-            solution: 'Good',
-            type: 'Sacrifice',
-            difficulty: 'hard'
-        },
-        {
-            fen: '2kr3r/ppp2ppp/2n5/1B1P4/4P1b1/2P1B3/P4PPP/R3K2R b KQ - 0 1',
-            move_1: 'c6d5',
-            move_2: 'e4d5',
+            fen: 'r2q1rk1/ppp2ppp/2n1bP2/2b5/2B5/2N5/PPP2PPP/R1BQ1RK1 w - - 0 1',
+            move_1: 'c4e6',
+            move_2: 'd8d1',
             solution: 'Blunder',
-            type: 'Trap',
+            type: 'Queen Counter',
             difficulty: 'hard'
         },
-        // Добавляем новые тактические задачи
         {
-            fen: '1rr3k1/3b1ppp/4pn2/p2pP3/1P1P4/P1B2N2/5PPP/2R2RK1 w - - 0 1',
-            move_1: 'e5e6',
-            move_2: 'd7e6',
+            fen: 'r1bq1rk1/pp3ppp/2n1pn2/2p5/2BP4/2N1PN2/PP3PPP/R2QK2R w KQ - 0 1',
+            move_1: 'c4f7',
+            move_2: 'g8f7',
             solution: 'Good',
-            type: 'Discovered Attack',
+            type: 'Bishop Sacrifice',
+            difficulty: 'hard'
+        },
+        // Добавляем новые задачи
+        {
+            fen: '3r2k1/p4ppp/1q6/3B4/8/P4N2/5PPP/3R2K1 w - - 0 1',
+            move_1: 'd5f7',
+            move_2: 'g8f7',
+            solution: 'Good',
+            type: 'Bishop Sacrifice',
             difficulty: 'medium'
         },
         {
-            fen: 'r3k2r/ppp2ppp/2n5/3q4/2B5/2N5/PPP2PPP/R3K2R w KQkq - 0 1',
+            fen: 'r4rk1/pp3ppp/2p5/4b3/4P3/2N5/PPP2PPP/2KR3R w - - 0 1',
+            move_1: 'c3e4',
+            move_2: 'e5c3',
+            solution: 'Blunder',
+            type: 'Bishop Fork',
+            difficulty: 'medium'
+        },
+        // Дополнительные легкие задачи
+        {
+            fen: 'r1b2rk1/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R1BQ1RK1 w - - 0 1',
             move_1: 'c3e4',
             move_2: 'd5e4',
             solution: 'Good',
-            type: 'Fork',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/2bpP3/8/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3d4',
-            move_2: 'c5d4',
-            solution: 'Good',
-            type: 'Pin',
-            difficulty: 'medium'
-        },
-        // Добавляем позицию с пешечным шахом
-        {
-            fen: '1k1r4/ppp2ppp/8/2b1P3/2B5/8/PPP2PPP/2K5 w - - 0 1',
-            move_1: 'e5e6',
-            move_2: 'c5e3',
-            solution: 'Good',
-            type: 'Discovered Check',
+            type: 'Knight Fork',
             difficulty: 'easy'
         },
-        // Заменяем на корректную позицию
         {
-            fen: 'r1bqk2r/ppp2ppp/2n5/2b1p3/2B5/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1',
+            fen: 'r3kb1r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R1B1K2R w KQkq - 0 1',
+            move_1: 'c3e4',
+            move_2: 'd5d1',
+            solution: 'Blunder',
+            type: 'Queen Attack',
+            difficulty: 'easy'
+        },
+        // Дополнительные средние задачи
+        {
+            fen: 'r1b2rk1/pp3ppp/2n2n2/2p5/2B5/2NP4/PPP2PPP/R1B1K2R w KQ - 0 1',
+            move_1: 'c4f7',
+            move_2: 'f6d5',
+            solution: 'Blunder',
+            type: 'Knight Defense',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r4rk1/ppp2ppp/3p4/4P3/1b6/2N5/PPP2PPP/R3KB1R w KQ - 0 1',
+            move_1: 'c3d5',
+            move_2: 'b4e1',
+            solution: 'Blunder',
+            type: 'Bishop Attack',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'c6e5',
+            solution: 'Good',
+            type: 'Knight Exchange',
+            difficulty: 'medium'
+        },
+        // Дополнительные сложные задачи
+        {
+            fen: 'r1bq1rk1/ppp2ppp/2n5/3p4/2BP4/2N1P3/PP3PPP/R2QK2R w KQ - 0 1',
+            move_1: 'c4f7',
+            move_2: 'c6e5',
+            solution: 'Blunder',
+            type: 'Knight Defense',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/ppp2ppp/2n5/3B4/8/2P5/PP3PPP/R3K2R w KQkq - 0 1',
+            move_1: 'd5f7',
+            move_2: 'e8f7',
+            solution: 'Good',
+            type: 'Bishop Sacrifice',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/2B5/2N5/PPP2PPP/R2QK2R w KQkq - 0 1',
             move_1: 'c4f7',
             move_2: 'e8f7',
             solution: 'Good',
-            type: 'Fork',
+            type: 'Bishop Sacrifice',
+            difficulty: 'hard'
+        },
+        // Тактические комбинации
+        {
+            fen: 'r2qk2r/ppp2ppp/2n5/3p4/2B5/2N5/PPP2PPP/R2Q1RK1 w kq - 0 1',
+            move_1: 'c4e6',
+            move_2: 'd8d1',
+            solution: 'Blunder',
+            type: 'Queen Counter',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'f3d2',
+            move_2: 'd5d4',
+            solution: 'Good',
+            type: 'Pawn Attack',
+            difficulty: 'medium'
+        },
+        // Убираем проблемную задачу и добавляем новую
+        {
+            fen: 'r1bq1rk1/ppp2ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQ1RK1 w - - 0 1',
+            move_1: 'c4e6',
+            move_2: 'f6e4',
+            solution: 'Blunder',
+            type: 'Knight Counter',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qk2r/ppp2ppp/2n1bn2/3p4/3P4/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'f6e4',
+            solution: 'Good',
+            type: 'Knight Tactics',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/2bPp3/4P3/2N2N2/PPP2PPP/R1BQK2R b KQkq - 0 1',
+            move_1: 'c5f2',
+            move_2: 'e1f2',
+            solution: 'Good',
+            type: 'Bishop Sacrifice',
             difficulty: 'medium'
         }
     ];
 
     // Если все позиции были использованы, очищаем историю
-    if (usedPuzzles.size >= puzzleTemplates.length) {
+    if (usedPuzzles.size >= puzzles.length) {
         usedPuzzles.clear();
     }
 
     // Выбираем случайную неиспользованную позицию
     let position;
     do {
-        position = puzzleTemplates[Math.floor(Math.random() * puzzleTemplates.length)];
+        position = puzzles[Math.floor(Math.random() * puzzles.length)];
     } while (usedPuzzles.has(position.fen));
 
     // Добавляем позицию в использованные
     usedPuzzles.add(position.fen);
-    
-    // Добавляем цвет в зависимости от того, чей ход
+
+    // Определяем цвет из FEN
     position.color = position.fen.includes(' w ') ? 'W' : 'B';
 
-    // Добавляем рейтинг в зависимости от сложности
-    const ratings = {
-        easy: [1000, 1400],
-        medium: [1400, 1800],
-        hard: [1800, 2200]
-    };
-    const [min, max] = ratings[position.difficulty];
-    position.rating = Math.floor(Math.random() * (max - min)) + min;
-    
     return position;
 }
 
 // Функция для поиска задачи для пользователя
 async function findPuzzleForUser(username) {
     try {
-        const position = generateRandomPuzzle();
+        let position;
+        let attempts = 0;
+        const maxAttempts = 50; // Максимальное количество попыток найти нерешенную задачу
+
+        // Пытаемся найти нерешенную задачу
+        do {
+            position = generateRandomPuzzle();
+            const isSolved = await isPuzzleSolved(username, position.fen);
+            if (!isSolved) {
+                break;
+            }
+            attempts++;
+        } while (attempts < maxAttempts);
+
+        // Если все задачи решены, очищаем историю
+        if (attempts >= maxAttempts) {
+            await pool.query('DELETE FROM SolvedPuzzles WHERE username = $1', [username]);
+            position = generateRandomPuzzle();
+        }
         
         const result = await pool.query(
             `INSERT INTO Puzzles 
@@ -250,7 +368,7 @@ async function findPuzzleForUser(username) {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [
-                position.rating,
+                1500, // начальный рейтинг
                 350.0,
                 0.06,
                 position.fen,
@@ -263,7 +381,12 @@ async function findPuzzleForUser(username) {
             ]
         );
 
-        console.log('Created new puzzle:', result.rows[0]);
+        // Когда пользователь решает задачу правильно, отмечаем её как решенную
+        // Это нужно добавить в обработчик /api/record-solution
+        if (result.rows[0]) {
+            await markPuzzleAsSolved(username, position.fen);
+        }
+
         return result.rows[0];
     } catch (err) {
         console.error('Error finding puzzle:', err);
@@ -479,12 +602,19 @@ app.post('/api/record-solution', async (req, res) => {
         console.log('Received request body:', req.body);
         const { username, puzzleId, success, time } = req.body;
         
-        // Проверяем подключение к базе
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
             
             const result = await recordPuzzleSolution(username, puzzleId, success, time);
+            
+            // Если решение правильное, отмечаем задачу как решенную
+            if (success) {
+                const puzzle = await client.query('SELECT fen FROM Puzzles WHERE id = $1', [puzzleId]);
+                if (puzzle.rows[0]) {
+                    await markPuzzleAsSolved(username, puzzle.rows[0].fen);
+                }
+            }
             
             await client.query('COMMIT');
             console.log('Solution recorded successfully:', result);
@@ -588,3 +718,29 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+// Функция для проверки, решал ли пользователь эту задачу
+async function isPuzzleSolved(username, fen) {
+    try {
+        const result = await pool.query(
+            'SELECT id FROM SolvedPuzzles WHERE username = $1 AND puzzle_fen = $2',
+            [username, fen]
+        );
+        return result.rows.length > 0;
+    } catch (err) {
+        console.error('Error checking solved puzzle:', err);
+        return false;
+    }
+}
+
+// Функция для записи решенной задачи
+async function markPuzzleAsSolved(username, fen) {
+    try {
+        await pool.query(
+            'INSERT INTO SolvedPuzzles (username, puzzle_fen) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [username, fen]
+        );
+    } catch (err) {
+        console.error('Error marking puzzle as solved:', err);
+    }
+}
