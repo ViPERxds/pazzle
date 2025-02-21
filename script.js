@@ -148,8 +148,8 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.initialFen = currentPuzzle.fen;
             puzzleConfig.preMove = currentPuzzle.move_1;
             puzzleConfig.evaluatedMove = currentPuzzle.move_2;
-            // Устанавливаем ориентацию доски в зависимости от того, кто должен ходить
-            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+            // Устанавливаем ориентацию доски противоположную тому, кто ходит
+            puzzleConfig.orientation = colorToMove === 'w' ? 'black' : 'white';
             puzzleConfig.solution = currentPuzzle.solution;
 
             initializeBoard();
