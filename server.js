@@ -199,14 +199,6 @@ async function getUserRating(username) {
         );
         
         if (result.rows.length === 0) {
-            // Если это первый раз, создаем запись для пользователя
-            await pool.query(
-                `INSERT INTO Users (username) 
-                VALUES ($1) 
-                ON CONFLICT (username) DO NOTHING`,
-                [username]
-            );
-            
             return {
                 rating: 1500,
                 rd: 350,
@@ -269,165 +261,60 @@ async function getSettings() {
     }
 }
 
-// Функция для записи результата решения
-async function recordPuzzleSolution(username, puzzleId, success, time) {
+// Обновим обработчик для записи решения
+app.post('/api/record-solution', async (req, res) => {
     try {
-        console.log('Starting recordPuzzleSolution with:', { username, puzzleId, success, time });
-        
-        const settings = await getSettings();
-        console.log('Settings:', settings);
-        
-        const normalTime = settings.normal_time || 60;
-        const R = success * Math.exp(-1/normalTime * Math.log(2) * time);
-        console.log('Calculated R with:', {
-            success,
-            time,
-            normalTime,
-            R
-        });
-        
-        const userRating = await getUserRating(username);
-        console.log('User rating:', userRating);
-        
-        const puzzleRating = await getPuzzleRating(puzzleId);
-        console.log('Puzzle rating:', puzzleRating);
-        
-        if (!puzzleRating) {
-            throw new Error(`Puzzle ${puzzleId} not found`);
-        }
-        
-        const newRatings = calculateNewRatings(userRating, puzzleRating, R);
-        console.log('New ratings calculated:', newRatings);
-        
-        // Добавляем проверку на null/undefined
-        if (!newRatings || !newRatings.userRating || !newRatings.userRD || !newRatings.userVolatility) {
-            throw new Error('Invalid new ratings calculated');
-        }
-        
-        console.log('Inserting into Journal...');
-        await pool.query(
-            `INSERT INTO Journal 
-            (username, puzzle_id, success, time, rating, rd, volatility) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-                username, 
-                puzzleId, 
-                success, 
-                time, 
-                newRatings.userRating,
-                newRatings.userRD,
-                newRatings.userVolatility
-            ]
-        );
-        console.log('Journal updated');
+        const { username, puzzleId, success, time } = req.body;
+        console.log('Recording solution:', { username, puzzleId, success, time });
 
-        return newRatings;
-    } catch (err) {
-        console.error('Detailed error in recordPuzzleSolution:', {
-            error: err,
-            message: err.message,
-            stack: err.stack,
-            input: { username, puzzleId, success, time }
-        });
-        throw err;
-    }
-}
-
-// Функция для расчета новых рейтингов
-function calculateNewRatings(userRating, puzzleRating, R) {
-    // Константы
-    const q = Math.log(10) / 400; // = 0.00575646273
-    const c = 34.6;  // Константа для изменения RD со временем
-    
-    // Шаг 1: Определение отклонения рейтинга (RD)
-    const RD = Math.min(Math.sqrt(userRating.rd * userRating.rd + c * c), 350);
-    
-    // Шаг 2: Определение нового рейтинга
-    const g = 1 / Math.sqrt(1 + 3 * q * q * puzzleRating.rd * puzzleRating.rd / (Math.PI * Math.PI));
-    const E = 1 / (1 + Math.pow(10, g * (userRating.rating - puzzleRating.rating) / -400));
-    const d2 = 1 / (q * q * g * g * E * (1 - E));
-    
-    // Новый рейтинг
-    const newRating = userRating.rating + (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
-    
-    // Шаг 3: Определение нового отклонения рейтинга
-    const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
-    
-    return {
-        userRating: newRating,
-        userRD: newRD,
-        userVolatility: userRating.volatility // Оставляем волатильность без изменений
-    };
-}
-
-// API endpoints
-app.get('/api/user-rating/:username', async (req, res) => {
-    try {
-        const username = req.params.username;
-        console.log('Getting rating for:', username);
-        
         // Проверяем существование пользователя
         let userExists = await checkUserAccess(username);
         if (!userExists) {
-            // Создаем нового пользователя
             await pool.query('INSERT INTO Users (username) VALUES ($1)', [username]);
         }
+
+        // Получаем текущий рейтинг пользователя
+        const userRating = await getUserRating(username);
         
-        const rating = await getUserRating(username);
-        res.json(rating);
-    } catch (err) {
-        console.error('Error in /api/user-rating:', err);
-        res.status(500).json({ rating: 1500, error: err.message });
-    }
-});
+        // Записываем результат в журнал
+        const result = await pool.query(
+            `INSERT INTO Journal 
+            (username, puzzle_id, success, time, rating, rd, volatility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *`,
+            [
+                username,
+                puzzleId,
+                success,
+                time,
+                userRating.rating,
+                userRating.rd,
+                userRating.volatility
+            ]
+        );
 
-app.get('/api/check-access/:username', async (req, res) => {
-    try {
-        const result = await checkUserAccess(req.params.username);
-        res.json({ hasAccess: true }); // Временно разрешаем доступ всем
-    } catch (err) {
-        console.error('Error checking access:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/random-puzzle/:username', async (req, res) => {
-    try {
-        const puzzle = generateRandomPuzzle();
-        console.log('Generated puzzle:', puzzle);
-        res.json(puzzle);
-    } catch (err) {
-        console.error('Error generating puzzle:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/record-solution', async (req, res) => {
-    try {
-        console.log('Received request body:', req.body);
-        const { username, puzzleId, success, time } = req.body;
+        // Обновляем рейтинг пользователя
+        const newRating = success ? userRating.rating + 10 : userRating.rating - 5;
         
-        // Проверяем подключение к базе
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            
-            const result = await recordPuzzleSolution(username, puzzleId, success, time);
-            
-            await client.query('COMMIT');
-            console.log('Solution recorded successfully:', result);
-            res.json(result);
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
-        }
+        // Записываем новый рейтинг
+        await pool.query(
+            `INSERT INTO Journal 
+            (username, rating, rd, volatility)
+            VALUES ($1, $2, $3, $4)`,
+            [username, newRating, userRating.rd, userRating.volatility]
+        );
+
+        res.json({
+            success: true,
+            rating: newRating
+        });
+
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
         res.status(500).json({ 
             error: err.message,
-            details: err.stack
+            success: false,
+            rating: 1500 // Возвращаем базовый рейтинг в случае ошибки
         });
     }
 });
