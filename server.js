@@ -120,7 +120,7 @@ async function checkUserAccess(username) {
     }
 }
 
-function generateRandomPuzzle() {
+async function generateRandomPuzzle() {
     const puzzles = [
         // Легкие задачи
         {
@@ -319,20 +319,9 @@ function generateRandomPuzzle() {
         }
     ];
 
-    // Если все позиции были использованы, очищаем историю
-    if (usedPuzzles.size >= puzzles.length) {
-        usedPuzzles.clear();
-    }
-
-    // Выбираем случайную неиспользованную позицию
-    let position;
-    do {
-        position = puzzles[Math.floor(Math.random() * puzzles.length)];
-    } while (usedPuzzles.has(position.fen));
-
-    // Добавляем позицию в использованные
-    usedPuzzles.add(position.fen);
-
+    // Убираем использование Set и просто возвращаем случайную задачу
+    const position = puzzles[Math.floor(Math.random() * puzzles.length)];
+    
     // Определяем цвет из FEN
     position.color = position.fen.includes(' w ') ? 'W' : 'B';
 
@@ -344,11 +333,11 @@ async function findPuzzleForUser(username) {
     try {
         let position;
         let attempts = 0;
-        const maxAttempts = 50; // Максимальное количество попыток найти нерешенную задачу
+        const maxAttempts = 50;
 
         // Пытаемся найти нерешенную задачу
         do {
-            position = generateRandomPuzzle();
+            position = await generateRandomPuzzle();
             const isSolved = await isPuzzleSolved(username, position.fen);
             if (!isSolved) {
                 break;
@@ -359,16 +348,16 @@ async function findPuzzleForUser(username) {
         // Если все задачи решены, очищаем историю
         if (attempts >= maxAttempts) {
             await pool.query('DELETE FROM SolvedPuzzles WHERE username = $1', [username]);
-            position = generateRandomPuzzle();
+            position = await generateRandomPuzzle();
         }
-        
+
         const result = await pool.query(
             `INSERT INTO Puzzles 
             (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [
-                1500, // начальный рейтинг
+                1500,
                 350.0,
                 0.06,
                 position.fen,
@@ -380,12 +369,6 @@ async function findPuzzleForUser(username) {
                 position.difficulty
             ]
         );
-
-        // Когда пользователь решает задачу правильно, отмечаем её как решенную
-        // Это нужно добавить в обработчик /api/record-solution
-        if (result.rows[0]) {
-            await markPuzzleAsSolved(username, position.fen);
-        }
 
         return result.rows[0];
     } catch (err) {
