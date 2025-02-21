@@ -301,7 +301,7 @@ function generatePuzzlesList() {
             difficulty: 'hard'
         },
         {
-            fen: 'r3k2r/ppp2ppp/2n5/3q4/8/2N2N2/PP2BPPP/R4RK1 b kq - 0 1',
+            fen: 'r3k2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R4RK1 b kq - 0 1',
             move_1: 'd5f3',
             move_2: 'e2f3',
             solution: 'Good',
@@ -500,13 +500,38 @@ async function getUnsolvedPuzzles(username) {
         // Фильтруем только те задачи, которые пользователь еще не пытался решить
         const unsolvedPuzzles = puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
         
-        // Перемешиваем массив задач случайным образом
-        for (let i = unsolvedPuzzles.length - 1; i > 0; i--) {
+        // Разделяем задачи на Good и Blunder
+        const goodPuzzles = unsolvedPuzzles.filter(p => p.solution === 'Good');
+        const blunderPuzzles = unsolvedPuzzles.filter(p => p.solution === 'Blunder');
+        
+        // Перемешиваем каждый массив отдельно
+        for (let i = goodPuzzles.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [unsolvedPuzzles[i], unsolvedPuzzles[j]] = [unsolvedPuzzles[j], unsolvedPuzzles[i]];
+            [goodPuzzles[i], goodPuzzles[j]] = [goodPuzzles[j], goodPuzzles[i]];
         }
         
-        return unsolvedPuzzles;
+        for (let i = blunderPuzzles.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [blunderPuzzles[i], blunderPuzzles[j]] = [blunderPuzzles[j], blunderPuzzles[i]];
+        }
+        
+        // Объединяем задачи в соотношении примерно 2:1 (Good:Blunder)
+        const result = [];
+        let goodIndex = 0;
+        let blunderIndex = 0;
+        
+        while (goodIndex < goodPuzzles.length || blunderIndex < blunderPuzzles.length) {
+            // Добавляем две Good задачи
+            for (let i = 0; i < 2 && goodIndex < goodPuzzles.length; i++) {
+                result.push(goodPuzzles[goodIndex++]);
+            }
+            // Добавляем одну Blunder задачу
+            if (blunderIndex < blunderPuzzles.length) {
+                result.push(blunderPuzzles[blunderIndex++]);
+            }
+        }
+        
+        return result;
     } catch (err) {
         console.error('Error getting unsolved puzzles:', err);
         throw err;
