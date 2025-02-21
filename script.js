@@ -21,11 +21,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let timer = null;
     let startTime = null;
     let seconds = 180; // 3 минуты
-    let currentUsername = 'test_user'; // Замените на реальное получение имени пользователя
+    let currentUsername = 'test_user';
 
-    const API_URL = process.env.NODE_ENV === 'production' 
-        ? 'https://your-render-app-name.onrender.com/api'
-        : 'http://localhost:3000/api';
+    // Используем глобальную конфигурацию
+    const API_URL = window.CONFIG.API_URL;
 
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay() {
