@@ -35,6 +35,7 @@ pool.connect(async (err, client, release) => {
             DROP TABLE IF EXISTS Puzzles;
             DROP TABLE IF EXISTS Users;
             DROP TABLE IF EXISTS Settings;
+            DROP TABLE IF EXISTS PuzzleAttempts;
         `);
 
         // Создаем таблицы заново
@@ -72,6 +73,15 @@ pool.connect(async (err, client, release) => {
             CREATE TABLE IF NOT EXISTS Settings (
                 parameter_name VARCHAR(50) PRIMARY KEY,
                 parameter_value FLOAT
+            );
+
+            CREATE TABLE IF NOT EXISTS PuzzleAttempts (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255),
+                puzzle_fen TEXT,
+                attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                success BOOLEAN,
+                UNIQUE(username, puzzle_fen)
             );
         `);
 
@@ -206,8 +216,154 @@ function generatePuzzlesList() {
             solution: 'Blunder',
             type: 'Knight Exchange',
             difficulty: 'medium'
+        },
+        // Добавляем новые разнообразные задачи
+        {
+            fen: 'r1b2rk1/pp3ppp/2n2q2/2b5/8/2N2NP1/PP2PPBP/R2Q1RK1 w - - 0 1',
+            move_1: 'f3e5',
+            move_2: 'f6e5',
+            solution: 'Good',
+            type: 'Double Attack',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r4rk1/ppp2ppp/3p4/4n3/2P1R3/2P5/P4PPP/R5K1 w - - 0 1',
+            move_1: 'e4e5',
+            move_2: 'd6e5',
+            solution: 'Blunder',
+            type: 'Rook Defense',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qr1k1/pbp2ppp/1p6/3P4/4n3/2N3P1/PP3PBP/R2Q1RK1 b - - 0 1',
+            move_1: 'e4f2',
+            move_2: 'g1f2',
+            solution: 'Good',
+            type: 'Knight Sacrifice',
+            difficulty: 'hard'
+        },
+        {
+            fen: '2r3k1/p4ppp/1p2p3/3r4/8/2R2P2/PP4PP/2R3K1 w - - 0 1',
+            move_1: 'c3c8',
+            move_2: 'r8c8',
+            solution: 'Good',
+            type: 'Rook Exchange',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r2q1rk1/ppp2ppp/2np4/2b1p3/2B1P3/2PP1N2/PP3PPP/R2QK2R w KQ - 0 1',
+            move_1: 'f3e5',
+            move_2: 'd6e5',
+            solution: 'Blunder',
+            type: 'Knight Fork',
+            difficulty: 'medium'
+        },
+        // Добавляем новые задачи
+        {
+            fen: 'r3r1k1/pp3ppp/2p5/3n4/8/2N2P2/PP4PP/R4RK1 w - - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6d5',
+            solution: 'Good',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2q1rk1/ppp2ppp/3b4/3P4/8/2N5/PP3PPP/R2Q1RK1 b - - 0 1',
+            move_1: 'd6f4',
+            move_2: 'd1d4',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r4rk1/ppp2ppp/8/4P3/1b6/2N5/PP3PPP/R3K2R w KQ - 0 1',
+            move_1: 'c3d5',
+            move_2: 'b4d2',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: '3r2k1/pp3pp1/2p4p/8/3P4/2P2N2/PP3PPP/3R2K1 w - - 0 1',
+            move_1: 'f3e5',
+            move_2: 'd8d5',
+            solution: 'Good',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r1b2rk1/pp3ppp/2n5/3q4/8/2N5/PP2QPPP/R4RK1 w - - 0 1',
+            move_1: 'c3e4',
+            move_2: 'd5e4',
+            solution: 'Good',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2q1rk1/1pp2ppp/p1nb1n2/4p3/4P3/1BN2N2/PPP2PPP/R2Q1RK1 w - - 0 1',
+            move_1: 'b3e6',
+            move_2: 'd6e5',
+            solution: 'Good',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r4rk1/pp3ppp/2p5/2b1n3/8/2N2P2/PPP3PP/R3K2R w KQ - 0 1',
+            move_1: 'c3e4',
+            move_2: 'c5e3',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1b2rk1/pp3ppp/2n1pn2/q7/3P4/2N1BN2/PP3PPP/R2Q1RK1 w - - 0 1',
+            move_1: 'c3d5',
+            move_2: 'e6d5',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: '2r3k1/pp3ppp/4p3/4N3/8/8/PP3PPP/3R2K1 w - - 0 1',
+            move_1: 'e5f7',
+            move_2: 'g8f7',
+            solution: 'Good',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r3k2r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R3K2R w KQkq - 0 1',
+            move_1: 'c3e4',
+            move_2: 'd5d1',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3n4/8/2N5/PPP1BPPP/R2QK2R w KQkq - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6e7',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r4rk1/ppp2ppp/3p4/4n3/8/2N5/PPP2PPP/2KR3R w - - 0 1',
+            move_1: 'c3e4',
+            move_2: 'e5c4',
+            solution: 'Good',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'c6e5',
+            solution: 'Good',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1b1k2r/pppp1ppp/2n2n2/8/1b6/2N2N2/PPP2PPP/R1B1KB1R w KQkq - 0 1',
+            move_1: 'c3d5',
+            move_2: 'f6d5',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3kb1r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R1B1K2R w KQkq - 0 1',
+            move_1: 'c3e4',
+            move_2: 'd5e4',
+            solution: 'Good',
+            difficulty: 'easy'
         }
-        // ... можно добавить еще задач
     ];
 }
 
@@ -217,21 +373,35 @@ async function generateRandomPuzzle() {
     throw new Error('Use findPuzzleForUser instead');
 }
 
-// Функция для получения нерешенных задач
+// Функция для проверки, пытался ли пользователь решить задачу
+async function hasPuzzleAttempt(username, fen) {
+    try {
+        const result = await pool.query(
+            'SELECT id FROM PuzzleAttempts WHERE username = $1 AND puzzle_fen = $2',
+            [username, fen]
+        );
+        return result.rows.length > 0;
+    } catch (err) {
+        console.error('Error checking puzzle attempt:', err);
+        return false;
+    }
+}
+
+// Функция для получения нерешенных задач (обновленная)
 async function getUnsolvedPuzzles(username) {
     try {
-        // Получаем все FEN-позиции, которые пользователь уже решил
-        const solvedResult = await pool.query(
-            'SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1',
+        // Получаем все FEN-позиции, которые пользователь уже пытался решить
+        const attemptedResult = await pool.query(
+            'SELECT puzzle_fen FROM PuzzleAttempts WHERE username = $1',
             [username]
         );
-        const solvedFens = solvedResult.rows.map(row => row.puzzle_fen);
+        const attemptedFens = attemptedResult.rows.map(row => row.puzzle_fen);
 
         // Получаем все доступные задачи
         const puzzles = generatePuzzlesList();
         
-        // Фильтруем только нерешенные задачи
-        return puzzles.filter(puzzle => !solvedFens.includes(puzzle.fen));
+        // Фильтруем только те задачи, которые пользователь еще не пытался решить
+        return puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
     } catch (err) {
         console.error('Error getting unsolved puzzles:', err);
         throw err;
@@ -479,7 +649,7 @@ app.post('/api/record-solution', async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Сначала получаем FEN задачи
+        // Получаем FEN задачи
         const puzzleResult = await client.query(
             'SELECT fen FROM Puzzles WHERE id = $1',
             [puzzleId]
@@ -488,14 +658,19 @@ app.post('/api/record-solution', async (req, res) => {
         if (!puzzleResult.rows[0]) {
             throw new Error('Puzzle not found');
         }
+
+        // Записываем попытку решения
+        await client.query(
+            `INSERT INTO PuzzleAttempts (username, puzzle_fen, success) 
+             VALUES ($1, $2, $3) 
+             ON CONFLICT (username, puzzle_fen) DO UPDATE SET 
+             success = $3, 
+             attempted_at = CURRENT_TIMESTAMP`,
+            [username, puzzleResult.rows[0].fen, success]
+        );
         
-        // Сначала записываем результат решения
+        // Записываем результат решения
         const result = await recordPuzzleSolution(username, puzzleId, success, time);
-        
-        // Отмечаем задачу как использованную ТОЛЬКО если она была решена правильно
-        if (success) {
-            await markPuzzleAsSolved(username, puzzleResult.rows[0].fen);
-        }
         
         await client.query('COMMIT');
         
