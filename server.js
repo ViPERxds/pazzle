@@ -131,168 +131,15 @@ async function generateRandomPuzzle() {
             type: 'Mate in 1',
             difficulty: 'easy'
         },
-        // Исправляем задачу с некорректным ходом пешки
         {
-            fen: 'r2qkb1r/ppp2ppp/2n2n2/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'f6e4',
+            fen: 'r1bqk2r/pppp1ppp/2n2n2/4N3/2B1P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 1',
+            move_1: 'f6e4',
+            move_2: 'e5c6',
             solution: 'Blunder',
             type: 'Knight Fork',
-            difficulty: 'easy'
-        },
-        // Добавляем новую корректную задачу вместо проблемной
-        {
-            fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'f6e4',
-            solution: 'Good',
-            type: 'Knight Exchange',
             difficulty: 'easy'
         },
         // Средние задачи
-        {
-            fen: 'r4rk1/ppp2ppp/2n5/2bqp3/8/P1N5/1PP1QPPP/R1B2RK1 b - - 0 1',
-            move_1: 'd5f3',
-            move_2: 'g2f3',
-            solution: 'Good',
-            type: 'Queen Sacrifice',
-            difficulty: 'medium'
-        },
-        {
-            fen: '2r3k1/pp3pp1/4p3/3pP3/6P1/2P5/PP3P2/2KR4 w - - 0 1',
-            move_1: 'd1d5',
-            move_2: 'c8c3',
-            solution: 'Blunder',
-            type: 'Rook Pin',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1b2rk1/ppq2ppp/2pb1n2/3p4/3P4/2NBP3/PPQ2PPP/R1B2RK1 w - - 0 1',
-            move_1: 'c3e2',
-            move_2: 'c7g3',
-            solution: 'Blunder',
-            type: 'Queen Attack',
-            difficulty: 'medium'
-        },
-        // Сложные задачи
-        {
-            fen: 'r2q1rk1/ppp2ppp/2n1bP2/2b5/2B5/2N5/PPP2PPP/R1BQ1RK1 w - - 0 1',
-            move_1: 'c4e6',
-            move_2: 'd8d1',
-            solution: 'Blunder',
-            type: 'Queen Counter',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bq1rk1/pp3ppp/2n1pn2/2p5/2BP4/2N1PN2/PP3PPP/R2QK2R w KQ - 0 1',
-            move_1: 'c4f7',
-            move_2: 'g8f7',
-            solution: 'Good',
-            type: 'Bishop Sacrifice',
-            difficulty: 'hard'
-        },
-        // Добавляем новые задачи
-        {
-            fen: '3r2k1/p4ppp/1q6/3B4/8/P4N2/5PPP/3R2K1 w - - 0 1',
-            move_1: 'd5f7',
-            move_2: 'g8f7',
-            solution: 'Good',
-            type: 'Bishop Sacrifice',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r4rk1/pp3ppp/2p5/4b3/4P3/2N5/PPP2PPP/2KR3R w - - 0 1',
-            move_1: 'c3e4',
-            move_2: 'e5c3',
-            solution: 'Blunder',
-            type: 'Bishop Fork',
-            difficulty: 'medium'
-        },
-        // Дополнительные легкие задачи
-        {
-            fen: 'r1b2rk1/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R1BQ1RK1 w - - 0 1',
-            move_1: 'c3e4',
-            move_2: 'd5e4',
-            solution: 'Good',
-            type: 'Knight Fork',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r3kb1r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R1B1K2R w KQkq - 0 1',
-            move_1: 'c3e4',
-            move_2: 'd5d1',
-            solution: 'Blunder',
-            type: 'Queen Attack',
-            difficulty: 'easy'
-        },
-        // Дополнительные средние задачи
-        {
-            fen: 'r1b2rk1/pp3ppp/2n2n2/2p5/2B5/2NP4/PPP2PPP/R1B1K2R w KQ - 0 1',
-            move_1: 'c4f7',
-            move_2: 'f6d5',
-            solution: 'Blunder',
-            type: 'Knight Defense',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r4rk1/ppp2ppp/3p4/4P3/1b6/2N5/PPP2PPP/R3KB1R w KQ - 0 1',
-            move_1: 'c3d5',
-            move_2: 'b4e1',
-            solution: 'Blunder',
-            type: 'Bishop Attack',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'c6e5',
-            solution: 'Good',
-            type: 'Knight Exchange',
-            difficulty: 'medium'
-        },
-        // Дополнительные сложные задачи
-        {
-            fen: 'r1bq1rk1/ppp2ppp/2n5/3p4/2BP4/2N1P3/PP3PPP/R2QK2R w KQ - 0 1',
-            move_1: 'c4f7',
-            move_2: 'c6e5',
-            solution: 'Blunder',
-            type: 'Knight Defense',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/ppp2ppp/2n5/3B4/8/2P5/PP3PPP/R3K2R w KQkq - 0 1',
-            move_1: 'd5f7',
-            move_2: 'e8f7',
-            solution: 'Good',
-            type: 'Bishop Sacrifice',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/2B5/2N5/PPP2PPP/R2QK2R w KQkq - 0 1',
-            move_1: 'c4f7',
-            move_2: 'e8f7',
-            solution: 'Good',
-            type: 'Bishop Sacrifice',
-            difficulty: 'hard'
-        },
-        // Тактические комбинации
-        {
-            fen: 'r2qk2r/ppp2ppp/2n5/3p4/2B5/2N5/PPP2PPP/R2Q1RK1 w kq - 0 1',
-            move_1: 'c4e6',
-            move_2: 'd8d1',
-            solution: 'Blunder',
-            type: 'Queen Counter',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3d2',
-            move_2: 'd5d4',
-            solution: 'Good',
-            type: 'Pawn Attack',
-            difficulty: 'medium'
-        },
-        // Убираем проблемную задачу и добавляем новую
         {
             fen: 'r1bq1rk1/ppp2ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQ1RK1 w - - 0 1',
             move_1: 'c4e6',
@@ -302,29 +149,68 @@ async function generateRandomPuzzle() {
             difficulty: 'medium'
         },
         {
-            fen: 'r2qk2r/ppp2ppp/2n1bn2/3p4/3P4/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'f6e4',
+            fen: 'r3k2r/ppp2ppp/2n5/3B4/4n3/2P5/PP3PPP/R3K2R w KQkq - 0 1',
+            move_1: 'd5f7',
+            move_2: 'e8d8',
             solution: 'Good',
-            type: 'Knight Tactics',
+            type: 'Discovered Check',
             difficulty: 'medium'
         },
         {
-            fen: 'r1bqk2r/ppp2ppp/2n5/2bPp3/4P3/2N2N2/PPP2PPP/R1BQK2R b KQkq - 0 1',
+            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3Pn3/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 0 1',
+            move_1: 'e2c4',
+            move_2: 'e4c3',
+            solution: 'Good',
+            type: 'Pin',
+            difficulty: 'medium'
+        },
+        // Сложные задачи
+        {
+            fen: 'r1b1k2r/pppp1ppp/2n2n2/4N3/2B1P1q1/8/PPPP2PP/RNBQ1K1R b kq - 0 1',
+            move_1: 'g4f3',
+            move_2: 'g2f3',
+            solution: 'Good',
+            type: 'Queen Sacrifice',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/ppp2ppp/2n2q2/3p4/3P4/2NBB3/PPP2PPP/R2Q1RK1 w kq - 0 1',
+            move_1: 'd3h7',
+            move_2: 'f6h4',
+            solution: 'Blunder',
+            type: 'Bishop Attack',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/2bPp3/8/2P5/PP1B1PPP/RN1QKBNR b KQkq - 0 1',
             move_1: 'c5f2',
             move_2: 'e1f2',
             solution: 'Good',
             type: 'Bishop Sacrifice',
+            difficulty: 'hard'
+        },
+        // Тактические комбинации
+        {
+            fen: 'r1bq1rk1/ppp2ppp/2n2n2/3p4/1b1P4/2N1PN2/PPP2PPP/R1BQK2R w KQ - 0 1',
+            move_1: 'e3e4',
+            move_2: 'b4c3',
+            solution: 'Good',
+            type: 'Double Attack',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP1BPPP/R1BQK2R b KQkq - 0 1',
+            move_1: 'c6d4',
+            move_2: 'f3d4',
+            solution: 'Blunder',
+            type: 'Knight Exchange',
             difficulty: 'medium'
         }
+        // ... можно добавить еще задач
     ];
 
-    // Убираем использование Set и просто возвращаем случайную задачу
     const position = puzzles[Math.floor(Math.random() * puzzles.length)];
-    
-    // Определяем цвет из FEN
     position.color = position.fen.includes(' w ') ? 'W' : 'B';
-
     return position;
 }
 
@@ -335,29 +221,26 @@ async function findPuzzleForUser(username) {
         let attempts = 0;
         const maxAttempts = 50;
 
-        // Пытаемся найти нерешенную задачу
         do {
             position = await generateRandomPuzzle();
             const isSolved = await isPuzzleSolved(username, position.fen);
-            if (!isSolved) {
-                break;
-            }
+            if (!isSolved) break;
             attempts++;
         } while (attempts < maxAttempts);
 
-        // Если все задачи решены, очищаем историю
         if (attempts >= maxAttempts) {
             await pool.query('DELETE FROM SolvedPuzzles WHERE username = $1', [username]);
             position = await generateRandomPuzzle();
         }
 
+        // Всегда используем рейтинг 1500
         const result = await pool.query(
             `INSERT INTO Puzzles 
             (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [
-                1500,
+                1500, // фиксированный начальный рейтинг
                 350.0,
                 0.06,
                 position.fen,
