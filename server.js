@@ -473,37 +473,42 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
 });
 
 app.post('/api/record-solution', async (req, res) => {
+    const client = await pool.connect();
     try {
-        console.log('Received request body:', req.body);
         const { username, puzzleId, success, time } = req.body;
         
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            
-            const result = await recordPuzzleSolution(username, puzzleId, success, time);
-            
-            // Отмечаем задачу как использованную независимо от успеха решения
-            const puzzle = await client.query('SELECT fen FROM Puzzles WHERE id = $1', [puzzleId]);
-            if (puzzle.rows[0]) {
-                await markPuzzleAsSolved(username, puzzle.rows[0].fen);
-            }
-            
-            await client.query('COMMIT');
-            console.log('Solution recorded successfully:', result);
-            res.json(result);
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
+        await client.query('BEGIN');
+        
+        // Сначала получаем FEN задачи
+        const puzzleResult = await client.query(
+            'SELECT fen FROM Puzzles WHERE id = $1',
+            [puzzleId]
+        );
+        
+        if (!puzzleResult.rows[0]) {
+            throw new Error('Puzzle not found');
         }
+        
+        // Сначала записываем результат решения
+        const result = await recordPuzzleSolution(username, puzzleId, success, time);
+        
+        // Отмечаем задачу как использованную ТОЛЬКО если она была решена правильно
+        if (success) {
+            await markPuzzleAsSolved(username, puzzleResult.rows[0].fen);
+        }
+        
+        await client.query('COMMIT');
+        
+        res.json(result);
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error in /api/record-solution:', err);
         res.status(500).json({ 
             error: err.message,
             details: err.stack
         });
+    } finally {
+        client.release();
     }
 });
 
@@ -606,14 +611,18 @@ async function isPuzzleSolved(username, fen) {
     }
 }
 
-// Функция для записи решенной задачи
+// Обновляем функцию markPuzzleAsSolved, чтобы она возвращала Promise
 async function markPuzzleAsSolved(username, fen) {
     try {
         await pool.query(
-            'INSERT INTO SolvedPuzzles (username, puzzle_fen) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            `INSERT INTO SolvedPuzzles (username, puzzle_fen) 
+             VALUES ($1, $2) 
+             ON CONFLICT (username, puzzle_fen) DO NOTHING`,
             [username, fen]
         );
+        console.log(`Marked puzzle ${fen} as solved for user ${username}`);
     } catch (err) {
         console.error('Error marking puzzle as solved:', err);
+        throw err; // Пробрасываем ошибку дальше
     }
 }
