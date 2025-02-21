@@ -483,12 +483,10 @@ app.post('/api/record-solution', async (req, res) => {
             
             const result = await recordPuzzleSolution(username, puzzleId, success, time);
             
-            // Если решение правильное, отмечаем задачу как решенную
-            if (success) {
-                const puzzle = await client.query('SELECT fen FROM Puzzles WHERE id = $1', [puzzleId]);
-                if (puzzle.rows[0]) {
-                    await markPuzzleAsSolved(username, puzzle.rows[0].fen);
-                }
+            // Отмечаем задачу как использованную независимо от успеха решения
+            const puzzle = await client.query('SELECT fen FROM Puzzles WHERE id = $1', [puzzleId]);
+            if (puzzle.rows[0]) {
+                await markPuzzleAsSolved(username, puzzle.rows[0].fen);
             }
             
             await client.query('COMMIT');
