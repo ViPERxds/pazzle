@@ -133,91 +133,6 @@ async function checkUserAccess(username) {
 // Переносим все задачи в generatePuzzlesList
 function generatePuzzlesList() {
     return [
-        // Легкие задачи
-        {
-            fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
-            move_1: 'h5f7',
-            move_2: 'e8f7',
-            solution: 'Good',
-            type: 'Mate in 1',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r1bqk2r/pppp1ppp/2n2n2/4N3/2B1P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 1',
-            move_1: 'f6e4',
-            move_2: 'e5c6',
-            solution: 'Blunder',
-            type: 'Knight Fork',
-            difficulty: 'easy'
-        },
-        // Средние задачи
-        {
-            fen: 'r1bq1rk1/ppp2ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQ1RK1 w - - 0 1',
-            move_1: 'c4e6',
-            move_2: 'f6e4',
-            solution: 'Blunder',
-            type: 'Knight Counter',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r3k2r/ppp2ppp/2n5/3B4/4n3/2P5/PP3PPP/R3K2R w KQkq - 0 1',
-            move_1: 'd5f7',
-            move_2: 'e8d8',
-            solution: 'Good',
-            type: 'Discovered Check',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3Pn3/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'e2c4',
-            move_2: 'e4c3',
-            solution: 'Good',
-            type: 'Pin',
-            difficulty: 'medium'
-        },
-        // Сложные задачи
-        {
-            fen: 'r1b1k2r/pppp1ppp/2n2n2/4N3/2B1P1q1/8/PPPP2PP/RNBQ1K1R b kq - 0 1',
-            move_1: 'g4f3',
-            move_2: 'g2f3',
-            solution: 'Good',
-            type: 'Queen Sacrifice',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/ppp2ppp/2n2q2/3p4/3P4/2NBB3/PPP2PPP/R2Q1RK1 w kq - 0 1',
-            move_1: 'd3h7',
-            move_2: 'f6h4',
-            solution: 'Blunder',
-            type: 'Bishop Attack',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/2bPp3/8/2P5/PP1B1PPP/RN1QKBNR b KQkq - 0 1',
-            move_1: 'c5f2',
-            move_2: 'e1f2',
-            solution: 'Good',
-            type: 'Bishop Sacrifice',
-            difficulty: 'hard'
-        },
-        // Тактические комбинации
-        {
-            fen: 'r1bq1rk1/ppp2ppp/2n2n2/3p4/1b1P4/2N1PN2/PPP2PPP/R1BQK2R w KQ - 0 1',
-            move_1: 'e3e4',
-            move_2: 'b4c3',
-            solution: 'Good',
-            type: 'Double Attack',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP1BPPP/R1BQK2R b KQkq - 0 1',
-            move_1: 'c6d4',
-            move_2: 'f3d4',
-            solution: 'Blunder',
-            type: 'Knight Exchange',
-            difficulty: 'medium'
-        },
-        // Добавляем новые разнообразные задачи
         {
             fen: 'r1b2rk1/pp3ppp/2n2q2/2b5/8/2N2NP1/PP2PPBP/R2Q1RK1 w - - 0 1',
             move_1: 'f3e5',
@@ -363,6 +278,188 @@ function generatePuzzlesList() {
             move_2: 'd5e4',
             solution: 'Good',
             difficulty: 'easy'
+        },
+        {
+            fen: 'r1b2rk1/pp2nppp/2p5/3p4/3P4/2N1BN2/PP3PPP/3R1RK1 w - - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6d5',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r4rk1/pp2qppp/2p5/3p4/3P4/2P2N2/PP1Q1PPP/R4RK1 w - - 0 1',
+            move_1: 'f3e5',
+            move_2: 'e7e5',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1bq1rk1/pp3ppp/2n5/2b5/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6d4',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/ppp2ppp/2n5/3q4/8/2N2N2/PP2BPPP/R4RK1 b kq - 0 1',
+            move_1: 'd5f3',
+            move_2: 'e2f3',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1b2rk1/ppp1qppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
+            move_1: 'c3d5',
+            move_2: 'e7e2',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r4rk1/pp2bppp/2p5/3p4/3P4/2N1BN2/PP3PPP/R4RK1 w - - 0 1',
+            move_1: 'f3e5',
+            move_2: 'e7c5',
+            solution: 'Good',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/2B5/2N2N2/PP2QPPP/R4RK1 w kq - 0 1',
+            move_1: 'c4d5',
+            move_2: 'c6e5',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N2N2/PP2BPPP/R4RK1 b kq - 0 1',
+            move_1: 'c6e5',
+            move_2: 'f3e5',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1b2rk1/pp3ppp/2n2q2/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
+            move_1: 'c3e4',
+            move_2: 'f6e6',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r4rk1/pp2bppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6d4',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1bq1rk1/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R w KQ - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6d4',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2Q1RK1 b kq - 0 1',
+            move_1: 'f3d2',
+            move_2: 'd5d4',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R b KQkq - 0 1',
+            move_1: 'c6d4',
+            move_2: 'c3d5',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r3k2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R b KQkq - 0 1',
+            move_1: 'd5d4',
+            move_2: 'c3e4',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r2qk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2Q1RK1 b kq - 0 1',
+            move_1: 'c6e5',
+            move_2: 'f3e5',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R w KQkq - 0 1',
+            move_1: 'f3d2',
+            move_2: 'd5d4',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r1bq1rk1/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R w KQ - 0 1',
+            move_1: 'f3d4',
+            move_2: 'c6e5',
+            solution: 'Blunder',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R b kq - 0 1',
+            move_1: 'c6e5',
+            move_2: 'f3e5',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r2q1rk1/ppp2ppp/8/3p4/3P4/4P3/PP3PPP/R2QK2R b KQ - 0 1',
+            move_1: 'd8d6',
+            move_2: 'd1d3',
+            solution: 'Good',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w kq - 0 1',
+            move_1: 'c3d5',
+            move_2: 'c6d4',
+            solution: 'Blunder',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N5/PP2BPPP/R3K2R w KQ - 0 1',
+            move_1: 'e2c4',
+            move_2: 'd5c4',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R b KQkq - 0 1',
+            move_1: 'c6d4',
+            move_2: 'c3d5',
+            solution: 'Blunder',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r1b1k2r/ppp2ppp/2n5/3q4/8/2N2N2/PP2BPPP/R2Q1RK1 w kq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'd5e5',
+            solution: 'Good',
+            difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N2N2/PP2BPPP/R3K2R b KQkq - 0 1',
+            move_1: 'c6e5',
+            move_2: 'f3d4',
+            solution: 'Blunder',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r2qk2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w kq - 0 1',
+            move_1: 'f3e5',
+            move_2: 'c6e5',
+            solution: 'Good',
+            difficulty: 'easy'
+        },
+        {
+            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R w KQkq - 0 1',
+            move_1: 'c3e4',
+            move_2: 'd5e4',
+            solution: 'Blunder',
+            difficulty: 'hard'
         }
     ];
 }
@@ -401,7 +498,15 @@ async function getUnsolvedPuzzles(username) {
         const puzzles = generatePuzzlesList();
         
         // Фильтруем только те задачи, которые пользователь еще не пытался решить
-        return puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
+        const unsolvedPuzzles = puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
+        
+        // Перемешиваем массив задач случайным образом
+        for (let i = unsolvedPuzzles.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [unsolvedPuzzles[i], unsolvedPuzzles[j]] = [unsolvedPuzzles[j], unsolvedPuzzles[i]];
+        }
+        
+        return unsolvedPuzzles;
     } catch (err) {
         console.error('Error getting unsolved puzzles:', err);
         throw err;
@@ -411,7 +516,7 @@ async function getUnsolvedPuzzles(username) {
 // Обновляем findPuzzleForUser
 async function findPuzzleForUser(username) {
     try {
-        // Получаем список нерешенных задач
+        // Получаем список нерешенных задач (уже перемешанный)
         const unsolvedPuzzles = await getUnsolvedPuzzles(username);
 
         // Если нет нерешенных задач
@@ -419,8 +524,8 @@ async function findPuzzleForUser(username) {
             throw new Error('Все задачи решены! Поздравляем!');
         }
 
-        // Выбираем случайную задачу из нерешенных
-        const position = unsolvedPuzzles[Math.floor(Math.random() * unsolvedPuzzles.length)];
+        // Берем первую задачу из перемешанного списка
+        const position = unsolvedPuzzles[0];
         position.color = position.fen.includes(' w ') ? 'W' : 'B';
 
         // Сохраняем задачу в базу
@@ -429,18 +534,8 @@ async function findPuzzleForUser(username) {
             (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
-            [
-                1500,
-                350.0,
-                0.06,
-                position.fen,
-                position.move_1,
-                position.move_2,
-                position.solution,
-                position.type,
-                position.color,
-                position.difficulty
-            ]
+            [1500, 350.0, 0.06, position.fen, position.move_1, position.move_2,
+             position.solution, position.type, position.color, position.difficulty]
         );
 
         return result.rows[0];
