@@ -371,24 +371,41 @@ document.addEventListener('DOMContentLoaded', function() {
             draggable: true,
             onDragStart: function(source, piece) {
                 // Разрешаем перетаскивание только после предварительного хода
+                // и только для фигур того цвета, чей ход
                 return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
             },
             onDrop: function(source, target) {
+                // Получаем фигуру, которая делает ход
+                const piece = game.get(source);
+                
                 // Проверяем валидность хода
                 const move = game.move({
                     from: source,
                     to: target,
-                    promotion: 'q'
+                    promotion: 'q' // Автоматическое превращение в ферзя
                 });
 
-                if (move === null) return 'snapback';
+                // Если ход невозможен по правилам шахмат
+                if (move === null) {
+                    return 'snapback';
+                }
+
+                // Отменяем ход, чтобы проверить, совпадает ли он с ожидаемым
+                game.undo();
 
                 // Проверяем, совпадает ли ход с ожидаемым
                 const moveString = source + target;
                 if (moveString === puzzleConfig.evaluatedMove) {
+                    // Делаем ход снова и обрабатываем результат
+                    game.move({
+                        from: source,
+                        to: target,
+                        promotion: 'q'
+                    });
                     handlePuzzleResult(puzzleConfig.solution === 'Good');
                 } else {
-                    handlePuzzleResult(puzzleConfig.solution === 'Blunder');
+                    // Если ход не совпадает с ожидаемым, возвращаем фигуру
+                    return 'snapback';
                 }
             },
             onSnapEnd: function() {
