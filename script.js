@@ -253,161 +253,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let board = null;
     let game = new Chess();
-    let arrow = null;
 
     function initializeBoard() {
-        // Очищаем предыдущий таймер если есть
-        if (timer) {
-            clearInterval(timer);
-            timer = null;
-        }
+        const config = {
+            draggable: false,
+            position: 'start',
+            orientation: 'white'
+        };
         
-        // Сбрасываем время
-        seconds = 180;
-        startTime = null; // Сбрасываем стартовое время
-        updateTimer();
-        
-        // Очищаем предыдущую стрелку
-        const oldArrow = document.querySelector('.arrow');
-        if (oldArrow) {
-            oldArrow.remove();
-        }
-        
-        // Настройка начальной позиции
-        game.load(puzzleConfig.initialFen);
-        
-        // Инициализация доски
-        if (board) {
-            board.destroy();
-        }
-        
-        // Оборачиваем доску в контейнер
-        const boardElement = document.getElementById('board');
-        if (!boardElement.parentElement.classList.contains('board-container')) {
-            const container = document.createElement('div');
-            container.className = 'board-container';
-            boardElement.parentElement.insertBefore(container, boardElement);
-            container.appendChild(boardElement);
-        }
-        
-        board = Chessboard('board', {
-            position: game.fen(),
-            orientation: puzzleConfig.orientation,
-            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
-            moveSpeed: 800, // Значительно увеличиваем время анимации
-            snapSpeed: 100,
-            snapbackSpeed: 200,
-            appearSpeed: 200,
-            trashSpeed: 100,
-            animation: true // Явно включаем анимацию
-        });
-
-        // Анимация предварительного хода
-        setTimeout(() => {
-            const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-            
-            // Создаем промис для анимации
-            const animateMove = () => new Promise(resolve => {
-                const piece = document.querySelector(`[data-square="${from}"] .piece-417db`);
-                if (piece) {
-                    const fromSquare = document.querySelector(`[data-square="${from}"]`);
-                    const toSquare = document.querySelector(`[data-square="${to}"]`);
-                    const fromRect = fromSquare.getBoundingClientRect();
-                    const toRect = toSquare.getBoundingClientRect();
-                    
-                    // Добавляем CSS transition
-                    piece.style.transition = 'transform 0.8s ease-in-out';
-                    piece.style.transform = `translate(${toRect.left - fromRect.left}px, ${toRect.top - fromRect.top}px)`;
-                    
-                    // После завершения анимации
-                    piece.addEventListener('transitionend', () => {
-                        game.move({ from, to, promotion: 'q' });
-                        board.position(game.fen(), false);
-                        resolve();
-                    }, { once: true });
-                } else {
-                    game.move({ from, to, promotion: 'q' });
-                    board.position(game.fen(), false);
-                    resolve();
-                }
-            });
-
-            // Выполняем анимацию и показываем стрелку
-            animateMove().then(() => {
-                setTimeout(() => {
-                    drawArrow();
-                    startTimer();
-                }, 100);
-            });
-        }, puzzleConfig.preMoveDelay);
+        board = Chessboard('board', config);
+        $(window).resize(() => board.resize());
     }
 
-    function drawArrow() {
-        console.log('Drawing arrow for move:', puzzleConfig.evaluatedMove); // Добавляем лог
-        
-        const [from, to] = puzzleConfig.evaluatedMove.match(/.{2}/g);
+    // Функция для отрисовки стрелки
+    function drawArrow(move) {
+        if (!move) return;
         
         // Удаляем старую стрелку
-        const oldArrow = document.querySelector('.arrow');
-        if (oldArrow) oldArrow.remove();
-
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("class", "arrow");
-        svg.style.position = 'absolute';
-        svg.style.top = '0';
-        svg.style.left = '0';
-        svg.style.width = '100%';
-        svg.style.height = '100%';
-        svg.style.pointerEvents = 'none';
-        svg.style.zIndex = '1000';
+        $('.arrow').remove();
         
-        const board = document.querySelector('#board');
-        if (!board) {
-            console.error('Board element not found');
-            return;
-        }
+        const [from, to] = move.match(/.{2}/g);
+        const fromSquare = $(`[data-square="${from}"]`);
+        const toSquare = $(`[data-square="${to}"]`);
         
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
-        const boardRect = board.getBoundingClientRect();
-        const fromRect = fromSquare.getBoundingClientRect();
-        const toRect = toSquare.getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
-
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
-
-        // Вычисляем угол и размеры
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.15;
-        const headWidth = squareSize * 0.3;
-        const headLength = squareSize * 0.3;
-
-        // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
-
-        // Создаем путь для стрелки
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `
-            M ${x1 - width*dy} ${y1 + width*dx}
-            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
-            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
-            L ${x2} ${y2}
-            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
-            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
-            L ${x1 + width*dy} ${y1 - width*dx}
-            Z
-        `);
-        path.setAttribute("fill", "#00ff00");
-        path.setAttribute("opacity", "0.5");
-
-        svg.appendChild(path);
-        board.appendChild(svg);
+        if (!fromSquare.length || !toSquare.length) return;
+        
+        const fromRect = fromSquare[0].getBoundingClientRect();
+        const toRect = toSquare[0].getBoundingClientRect();
+        
+        const boardElement = $('#board');
+        const boardRect = boardElement[0].getBoundingClientRect();
+        
+        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        arrow.classList.add('arrow');
+        arrow.style.position = 'absolute';
+        arrow.style.top = '0';
+        arrow.style.left = '0';
+        arrow.style.width = '100%';
+        arrow.style.height = '100%';
+        arrow.style.pointerEvents = 'none';
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        
+        const startX = fromRect.left - boardRect.left + fromRect.width / 2;
+        const startY = fromRect.top - boardRect.top + fromRect.height / 2;
+        const endX = toRect.left - boardRect.left + toRect.width / 2;
+        const endY = toRect.top - boardRect.top + toRect.height / 2;
+        
+        path.setAttribute('d', `M${startX},${startY} L${endX},${endY}`);
+        path.setAttribute('stroke', '#00ff00');
+        path.setAttribute('stroke-width', '5');
+        path.setAttribute('opacity', '0.5');
+        path.setAttribute('marker-end', 'url(#arrowhead)');
+        
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', 'arrowhead');
+        marker.setAttribute('markerWidth', '10');
+        marker.setAttribute('markerHeight', '7');
+        marker.setAttribute('refX', '9');
+        marker.setAttribute('refY', '3.5');
+        marker.setAttribute('orient', 'auto');
+        
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+        polygon.setAttribute('fill', '#00ff00');
+        
+        marker.appendChild(polygon);
+        defs.appendChild(marker);
+        arrow.appendChild(defs);
+        arrow.appendChild(path);
+        
+        boardElement.append(arrow);
     }
 
     // Вспомогательная функция для получения координат клетки
@@ -445,14 +362,15 @@ document.addEventListener('DOMContentLoaded', function() {
             currentPuzzle = puzzle;
             
             // Устанавливаем позицию на доске
-            board.position(puzzle.fen);
+            board.position(puzzle.fen, false);
             
             // Показываем стрелку для первого хода
-            drawArrow(puzzle.move_1);
+            setTimeout(() => {
+                drawArrow(puzzle.move_1);
+            }, 500);
             
-            // Обновляем таймер
-            startTime = Date.now();
-            updateTimer();
+            // Запускаем таймер
+            startTimer();
         } catch (err) {
             console.error('Error starting puzzle:', err);
         }
