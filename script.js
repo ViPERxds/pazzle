@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
             startPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
             
-            const response = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
+            const response = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -140,11 +140,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('No puzzle received');
             }
 
+            // Определяем, кто должен ходить из FEN позиции
+            const fenParts = currentPuzzle.fen.split(' ');
+            const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
+            
             // Обновляем конфигурацию
             puzzleConfig.initialFen = currentPuzzle.fen;
             puzzleConfig.preMove = currentPuzzle.move_1;
             puzzleConfig.evaluatedMove = currentPuzzle.move_2;
-            puzzleConfig.orientation = currentPuzzle.color === 'W' ? 'white' : 'black';
+            // Устанавливаем ориентацию доски в зависимости от того, кто должен ходить
+            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
             initializeBoard();
