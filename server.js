@@ -262,8 +262,8 @@ async function getSettings() {
 // Обновим обработчик для записи решения
 app.post('/api/record-solution', async (req, res) => {
     try {
-        const { username, success, time } = req.body;
-        console.log('Recording solution:', { username, success, time });
+        const { username, puzzleId, success, time } = req.body;
+        console.log('Recording solution:', { username, puzzleId, success, time });
 
         // Проверяем существование пользователя
         let userExists = await checkUserAccess(username);
@@ -275,12 +275,14 @@ app.post('/api/record-solution', async (req, res) => {
         const userRating = await getUserRating(username);
         
         // Записываем результат в журнал
-        await pool.query(
+        const result = await pool.query(
             `INSERT INTO Journal 
-            (username, success, time, rating, rd, volatility)
-            VALUES ($1, $2, $3, $4, $5, $6)`,
+            (username, puzzle_id, success, time, rating, rd, volatility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *`,
             [
                 username,
+                puzzleId,
                 success,
                 time,
                 userRating.rating,
@@ -310,7 +312,7 @@ app.post('/api/record-solution', async (req, res) => {
         res.status(500).json({ 
             error: err.message,
             success: false,
-            rating: 1500
+            rating: 1500 // Возвращаем базовый рейтинг в случае ошибки
         });
     }
 });
