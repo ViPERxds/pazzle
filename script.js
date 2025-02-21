@@ -23,7 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let seconds = 180; // 3 минуты
     let currentUsername = 'test_user'; // Замените на реальное получение имени пользователя
 
-    const API_URL = window.location.origin + '/api';
+    const API_URL = process.env.NODE_ENV === 'production' 
+        ? 'https://your-render-app-name.onrender.com/api'
+        : 'http://localhost:3000/api';
 
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay() {
@@ -124,103 +126,170 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Обработчик для кнопки Good
-    goodButton.addEventListener('click', async () => {
+    // Обработчик кнопки START
+    startButton.addEventListener('click', async () => {
         try {
-            if (!currentPuzzle) return;
+            // Проверяем доступ пользователя
+            const accessResponse = await fetch(`${API_URL}/check-access/${currentUsername}`);
+            const accessData = await accessResponse.json();
             
-            const response = await fetch(`${API_URL}/record-solution`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    username: currentUsername,
-                    puzzleId: currentPuzzle.id || Date.now(),
-                    success: currentPuzzle.solution === 'Good',
-                    time: Math.floor((Date.now() - startTime) / 1000)
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (!accessData.hasAccess) {
+                alert('У вас нет доступа к приложению');
+                return;
             }
 
-            // Останавливаем таймер
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
+            // Получаем новую задачу
+            const puzzleResponse = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
+            currentPuzzle = await puzzleResponse.json();
+            
+            if (!currentPuzzle) {
+                alert('Ошибка загрузки задачи');
+                return;
             }
 
-            // Показываем результат
-            puzzlePage.classList.add('hidden');
-            resultPage.classList.remove('hidden');
-            
-            resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
-            resultText.style.color = currentPuzzle.solution === 'Good' ? 'green' : 'red';
-            
-            await updateRatingDisplay();
+            // Обновляем конфигурацию
+            puzzleConfig.initialFen = currentPuzzle.fen;
+            puzzleConfig.preMove = currentPuzzle.move_1;
+            puzzleConfig.evaluatedMove = currentPuzzle.move_2;
+            puzzleConfig.orientation = currentPuzzle.color === 'W' ? 'white' : 'black';
+            puzzleConfig.solution = currentPuzzle.solution;
+
+            // Показываем страницу с задачей
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            initializeBoard();
         } catch (err) {
-            console.error('Error recording solution:', err);
-            alert('Произошла ошибка при записи решения');
+            console.error('Error starting puzzle:', err);
+            alert('Произошла ошибка при загрузке задачи');
         }
     });
 
-    // Обработчик для кнопки Blunder
-    blunderButton.addEventListener('click', async () => {
-        try {
-            if (!currentPuzzle) return;
-            
-            const response = await fetch(`${API_URL}/record-solution`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    username: currentUsername,
-                    puzzleId: currentPuzzle.id || Date.now(),
-                    success: currentPuzzle.solution === 'Blunder',
-                    time: Math.floor((Date.now() - startTime) / 1000)
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            // Останавливаем таймер
-            if (timer) {
+    // Инициализация кнопок
+    function initializeButtons() {
+        if (goodButton) {
+            goodButton.addEventListener('click', async () => {
+                if (!currentPuzzle) {
+                    console.error('No current puzzle!');
+                    return;
+                }
+                
                 clearInterval(timer);
-                timer = null;
+                
+                try {
+                    const timeSpent = Math.max(0, 180 - seconds);
+                    
+                    const response = await fetch(`${API_URL}/record-solution`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username: currentUsername,
+                            puzzleId: currentPuzzle.id,
+                            success: currentPuzzle.solution === 'Good',
+                            time: timeSpent
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    puzzlePage.classList.add('hidden');
+                    resultPage.classList.remove('hidden');
+                    resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
+                    
+                    await updateRatingDisplay();
+                    
+                } catch (err) {
+                    console.error('Error recording solution:', err);
+                    alert('Произошла ошибка при записи решения');
+                }
+            });
+        } else {
+            console.error('Good button not found!');
+        }
+
+        if (blunderButton) {
+            blunderButton.addEventListener('click', async () => {
+                if (!currentPuzzle) {
+                    console.error('No current puzzle!');
+                    return;
+                }
+                
+                clearInterval(timer);
+                
+                try {
+                    const timeSpent = Math.max(0, 180 - seconds);
+                    
+                    const response = await fetch(`${API_URL}/record-solution`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username: currentUsername,
+                            puzzleId: currentPuzzle.id,
+                            success: currentPuzzle.solution === 'Blunder',
+                            time: timeSpent
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    puzzlePage.classList.add('hidden');
+                    resultPage.classList.remove('hidden');
+                    resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
+                    
+                    await updateRatingDisplay();
+                    
+                } catch (err) {
+                    console.error('Error recording solution:', err);
+                    alert('Произошла ошибка при записи решения');
+                }
+            });
+        } else {
+            console.error('Blunder button not found!');
+        }
+    }
+
+    // Вызываем инициализацию кнопок после загрузки DOM
+    initializeButtons();
+
+    document.querySelector('.next-btn').addEventListener('click', async () => {
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+        
+        try {
+            const puzzleResponse = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
+            currentPuzzle = await puzzleResponse.json();
+            
+            if (!currentPuzzle) {
+                alert('Ошибка загрузки задачи');
+                return;
             }
 
-            // Показываем результат
-            puzzlePage.classList.add('hidden');
-            resultPage.classList.remove('hidden');
-            
-            resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
-            resultText.style.color = currentPuzzle.solution === 'Blunder' ? 'green' : 'red';
-            
-            await updateRatingDisplay();
+            // Обновляем конфигурацию
+            puzzleConfig.initialFen = currentPuzzle.fen;
+            puzzleConfig.preMove = currentPuzzle.move_1;
+            puzzleConfig.evaluatedMove = currentPuzzle.move_2;
+            puzzleConfig.orientation = currentPuzzle.color === 'W' ? 'white' : 'black';
+            puzzleConfig.solution = currentPuzzle.solution;
+
+            // Показываем страницу с задачей
+            resultPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            initializeBoard();
         } catch (err) {
-            console.error('Error recording solution:', err);
-            alert('Произошла ошибка при записи решения');
+            console.error('Error loading next puzzle:', err);
+            alert('Ошибка при загрузке следующей задачи');
         }
-    });
-
-    // Обработчик для кнопки Next
-    document.querySelector('.next-btn').addEventListener('click', () => {
-        resultPage.classList.add('hidden');
-        startPage.classList.remove('hidden');
-        startPuzzle(); // Загружаем следующую задачу
-    });
-
-    // Обработчик для кнопки Start
-    startButton.addEventListener('click', () => {
-        startPage.classList.add('hidden');
-        puzzlePage.classList.remove('hidden');
-        startTime = Date.now();
-        startPuzzle();
     });
 
     document.querySelector('.analyze-btn').addEventListener('click', () => {
@@ -427,34 +496,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Инициализация при загрузке
     initializeBoard();
-
-    async function startPuzzle() {
-        try {
-            const response = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const puzzle = await response.json();
-            console.log('Received puzzle:', puzzle);
-            
-            if (puzzle.error) {
-                console.error('Puzzle error:', puzzle.error);
-                return;
-            }
-            
-            currentPuzzle = puzzle;
-            
-            // Устанавливаем позицию на доске
-            board.position(puzzle.fen);
-            
-            // Показываем стрелку для первого хода
-            drawArrow(puzzle.move_1);
-            
-            // Обновляем таймер
-            startTime = Date.now();
-            updateTimer();
-        } catch (err) {
-            console.error('Error starting puzzle:', err);
-        }
-    }
 }); 
