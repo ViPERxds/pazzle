@@ -3,7 +3,11 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const path = require('path');
 const app = express();
-require('dotenv').config();
+require('dotenv').config({
+    path: process.env.NODE_ENV === 'production' 
+        ? '.env'
+        : '.env.development'
+});
 
 app.use(cors({
     origin: '*',
@@ -13,11 +17,10 @@ app.use(cors({
 app.use(express.json());
 
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'chess_puzzles',
-    password: 'vladus2007',
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 // Проверяем подключение при запуске
