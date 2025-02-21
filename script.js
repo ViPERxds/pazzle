@@ -335,15 +335,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function initializeBoard() {
         // Очищаем предыдущий таймер если есть
-        if (timer) {
-            clearInterval(timer);
-            timer = null;
+        if (window.timerInterval) {
+            clearInterval(window.timerInterval);
         }
         
         // Сбрасываем время
-        seconds = 180;
-        startTime = null;
-        updateTimer();
+        document.getElementById('timer').textContent = '00:00';
         
         // Очищаем предыдущую стрелку
         const oldArrow = document.querySelector('.arrow');
@@ -433,6 +430,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(drawArrow, 500);
         }, 500);
 
+        // Запускаем секундомер
         startStopwatch();
     }
 
@@ -521,4 +519,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Инициализация при загрузке
     initializeBoard();
+
+    // Обновляем функцию handlePuzzleResult
+    async function handlePuzzleResult(isCorrect) {
+        // Останавливаем секундомер
+        if (window.timerInterval) {
+            clearInterval(window.timerInterval);
+        }
+        
+        // Получаем прошедшее время
+        const timeDisplay = document.getElementById('timer').textContent;
+        const [minutes, seconds] = timeDisplay.split(':').map(Number);
+        const totalSeconds = minutes * 60 + seconds;
+
+        try {
+            // Отправляем результат на сервер
+            const response = await fetchWithAuth(`${API_URL}/record-solution`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    username: currentUsername,
+                    puzzleId: currentPuzzle.id,
+                    success: isCorrect,
+                    time: totalSeconds
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // Показываем результат
+            resultText.textContent = isCorrect ? 'Right!' : 'Wrong!';
+            puzzlePage.classList.add('hidden');
+            resultPage.classList.remove('hidden');
+
+            // Обновляем рейтинг
+            await updateRatingDisplay();
+        } catch (err) {
+            console.error('Error recording solution:', err);
+            alert('Произошла ошибка при сохранении результата');
+        }
+    }
 }); 
