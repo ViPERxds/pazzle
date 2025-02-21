@@ -28,7 +28,15 @@ pool.connect(async (err, client, release) => {
     console.log('Successfully connected to database');
     
     try {
-        // Создаем необходимые таблицы если их нет
+        // Удаляем существующие таблицы
+        await client.query(`
+            DROP TABLE IF EXISTS Journal;
+            DROP TABLE IF EXISTS Puzzles;
+            DROP TABLE IF EXISTS Users;
+            DROP TABLE IF EXISTS Settings;
+        `);
+
+        // Создаем таблицы заново
         await client.query(`
             CREATE TABLE IF NOT EXISTS Users (
                 username VARCHAR(255) PRIMARY KEY
@@ -45,8 +53,7 @@ pool.connect(async (err, client, release) => {
                 solution VARCHAR(10),
                 type VARCHAR(50),
                 color CHAR(1),
-                difficulty VARCHAR(20),
-                puzzle_rating INT
+                difficulty VARCHAR(20)
             );
             
             CREATE TABLE IF NOT EXISTS Journal (
@@ -67,7 +74,7 @@ pool.connect(async (err, client, release) => {
             );
         `);
 
-        // Добавляем тестового пользователя если его нет
+        // Добавляем тестового пользователя
         await client.query(`
             INSERT INTO Users (username)
             VALUES ('test_user')
@@ -238,8 +245,8 @@ async function findPuzzleForUser(username) {
         
         const result = await pool.query(
             `INSERT INTO Puzzles 
-            (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty, puzzle_rating)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [
                 position.rating,
@@ -251,8 +258,7 @@ async function findPuzzleForUser(username) {
                 position.solution,
                 position.type,
                 position.color,
-                position.difficulty,
-                position.rating
+                position.difficulty
             ]
         );
 
