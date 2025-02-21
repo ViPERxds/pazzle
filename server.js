@@ -69,19 +69,88 @@ const usedPuzzles = new Set();
 
 // Функция для генерации случайной шахматной позиции
 function generateRandomPuzzle() {
-    const chess = new Chess();
+    // Набор шаблонов для разных типов задач
+    const puzzleTemplates = [
+        // Легкие задачи
+        {
+            fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
+            move_1: 'h5f7',
+            move_2: 'e8f7',
+            solution: 'Good',
+            type: 'Mate in 1',
+            difficulty: 'easy'
+        },
+        {
+            fen: '2rq1rk1/pb2bppp/1p2pn2/2p5/2P5/2N1P1B1/PP3PPP/R2QKB1R w KQ - 0 1',
+            move_1: 'g3d6',
+            move_2: 'c5d6',
+            solution: 'Blunder',
+            type: 'Pin',
+            difficulty: 'easy'
+        },
+        // Средние задачи
+        {
+            fen: 'r4rk1/ppp2ppp/2n5/2bqp3/8/P1N5/1PP1QPPP/R1B2RK1 b - - 0 1',
+            move_1: 'd5e4',
+            move_2: 'c3e4',
+            solution: 'Blunder',
+            type: 'Fork',
+            difficulty: 'medium'
+        },
+        {
+            fen: 'r1b2rk1/2q1bppp/p2p1n2/np2p3/3PP3/2P2N2/PPB2PPP/R1BQR1K1 w - - 0 1',
+            move_1: 'e4e5',
+            move_2: 'd6e5',
+            solution: 'Good',
+            type: 'Attack',
+            difficulty: 'medium'
+        },
+        // Сложные задачи
+        {
+            fen: 'r1b1k2r/ppppqppp/2n2n2/2b5/2B1P3/2N2N2/PPPP1PPP/R1BQ1RK1 w kq - 0 1',
+            move_1: 'c4f7',
+            move_2: 'e7f7',
+            solution: 'Good',
+            type: 'Sacrifice',
+            difficulty: 'hard'
+        },
+        {
+            fen: '2kr3r/ppp2ppp/2n5/1B1P4/4P1b1/2P1B3/P4PPP/R3K2R b KQ - 0 1',
+            move_1: 'c6d5',
+            move_2: 'e4d5',
+            solution: 'Blunder',
+            type: 'Trap',
+            difficulty: 'hard'
+        }
+    ];
+
+    // Если все позиции были использованы, очищаем историю
+    if (usedPuzzles.size >= puzzleTemplates.length) {
+        usedPuzzles.clear();
+    }
+
+    // Выбираем случайную неиспользованную позицию
+    let position;
+    do {
+        position = puzzleTemplates[Math.floor(Math.random() * puzzleTemplates.length)];
+    } while (usedPuzzles.has(position.fen));
+
+    // Добавляем позицию в использованные
+    usedPuzzles.add(position.fen);
     
-    return {
-        id: Date.now(), // Временный ID
-        fen: chess.fen(),
-        move_1: 'e2e4',  // Пример хода
-        move_2: 'e7e5',  // Пример хода
-        solution: 'd2d4', // Пример решения
-        type: 'mate',
-        color: 'w',
-        difficulty: 'medium',
-        rating: 1500
+    // Добавляем цвет в зависимости от того, чей ход
+    position.color = position.fen.includes(' w ') ? 'w' : 'b';
+
+    // Добавляем рейтинг в зависимости от сложности
+    const ratings = {
+        easy: [1000, 1400],
+        medium: [1400, 1800],
+        hard: [1800, 2200]
     };
+    const [min, max] = ratings[position.difficulty];
+    position.rating = Math.floor(Math.random() * (max - min)) + min;
+    
+    return position;
 }
 
 // Функция для поиска задачи для пользователя
@@ -324,37 +393,12 @@ app.get('/api/check-access/:username', async (req, res) => {
 
 app.get('/api/random-puzzle/:username', async (req, res) => {
     try {
-        // Генерируем новую головоломку
         const puzzle = generateRandomPuzzle();
-        
-        // Сохраняем в базу данных
-        const result = await pool.query(
-            `INSERT INTO Puzzles 
-            (fen, move_1, move_2, solution, type, color, difficulty, rating, rd, volatility)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING *`,
-            [
-                puzzle.fen,
-                puzzle.move_1,
-                puzzle.move_2,
-                puzzle.solution,
-                puzzle.type,
-                puzzle.color,
-                puzzle.difficulty,
-                puzzle.rating,
-                350.0,
-                0.06
-            ]
-        );
-        
-        res.json(result.rows[0]);
+        console.log('Generated puzzle:', puzzle);
+        res.json(puzzle);
     } catch (err) {
         console.error('Error generating puzzle:', err);
-        res.status(500).json({ 
-            error: err.message,
-            // Возвращаем базовую головоломку в случае ошибки
-            ...generateRandomPuzzle()
-        });
+        res.status(500).json({ error: err.message });
     }
 });
 
