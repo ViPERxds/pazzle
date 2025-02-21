@@ -21,15 +21,38 @@ document.addEventListener('DOMContentLoaded', function() {
     let timer = null;
     let startTime = null;
     let seconds = 180; // 3 минуты
-    let currentUsername = 'test_user';
+
+    // Инициализация Telegram WebApp
+    const tg = window.Telegram.WebApp;
+    tg.expand(); // Раскрываем на весь экран
+    
+    // Получаем имя пользователя из Telegram
+    let currentUsername = tg.initDataUnsafe?.user?.username || 'test_user';
+    
+    // Добавляем цвета из темы Telegram
+    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
+    document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
+    document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
+    document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
     // Используем глобальную конфигурацию
     const API_URL = window.CONFIG.API_URL;
 
+    async function fetchWithAuth(url, options = {}) {
+        const tg = window.Telegram.WebApp;
+        const headers = {
+            ...options.headers,
+            'Content-Type': 'application/json',
+            'X-Telegram-Init-Data': tg.initData
+        };
+        
+        return fetch(url, { ...options, headers });
+    }
+
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay() {
         try {
-            const response = await fetch(`${API_URL}/user-rating/${currentUsername}`);
+            const response = await fetchWithAuth(`${API_URL}/user-rating/${currentUsername}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -99,20 +122,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Ждем обновления рейтинга
         await new Promise(resolve => setTimeout(resolve, 500));
         await updateRatingDisplay();
-    }
-
-    // Добавьте обработку ошибок в fetch запросы
-    async function fetchWithError(url, options = {}) {
-        try {
-            const response = await fetch(url, options);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return await response.json();
-        } catch (err) {
-            console.error('Fetch error:', err);
-            throw err;
-        }
     }
 
     // Обработчик кнопки START
