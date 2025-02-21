@@ -36,24 +36,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const userRating = await response.json();
             console.log('Received user rating:', userRating);
             
-            if (userRating && typeof userRating.rating === 'number') {
-                const displayRating = Math.round(userRating.rating);
-                ratingElements.forEach(el => {
-                    el.textContent = displayRating;
-                    // Добавляем цветовую индикацию изменения рейтинга
-                    if (displayRating > 0) {
-                        el.style.color = 'green';
-                    } else if (displayRating < 0) {
-                        el.style.color = 'red';
-                    } else {
-                        el.style.color = 'black';
-                    }
-                });
-            }
+            ratingElements.forEach(el => {
+                el.textContent = Math.round(userRating.rating || 1500);
+                el.style.color = 'black';
+            });
         } catch (err) {
             console.error('Error updating rating:', err);
             ratingElements.forEach(el => {
-                el.textContent = '0';
+                el.textContent = '1500';
                 el.style.color = 'black';
             });
         }
@@ -128,22 +118,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обработчик кнопки START
     startButton.addEventListener('click', async () => {
         try {
-            // Проверяем доступ пользователя
-            const accessResponse = await fetch(`${API_URL}/check-access/${currentUsername}`);
-            const accessData = await accessResponse.json();
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
             
-            if (!accessData.hasAccess) {
-                alert('У вас нет доступа к приложению');
-                return;
+            const response = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-
-            // Получаем новую задачу
-            const puzzleResponse = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
-            currentPuzzle = await puzzleResponse.json();
             
+            currentPuzzle = await response.json();
             if (!currentPuzzle) {
-                alert('Ошибка загрузки задачи');
-                return;
+                throw new Error('No puzzle received');
             }
 
             // Обновляем конфигурацию
@@ -153,13 +138,10 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.orientation = currentPuzzle.color === 'W' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
-            // Показываем страницу с задачей
-            startPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
             initializeBoard();
         } catch (err) {
             console.error('Error starting puzzle:', err);
-            alert('Произошла ошибка при загрузке задачи');
+            alert('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
         }
     });
 
