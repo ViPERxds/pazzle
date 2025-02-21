@@ -148,8 +148,8 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.initialFen = currentPuzzle.fen;
             puzzleConfig.preMove = currentPuzzle.move_1;
             puzzleConfig.evaluatedMove = currentPuzzle.move_2;
-            // Устанавливаем ориентацию доски: если ходят черные - черные внизу, если белые - белые внизу
-            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+            // Меняем логику ориентации: если ходят белые - черные внизу, и наоборот
+            puzzleConfig.orientation = colorToMove === 'w' ? 'black' : 'white';
             puzzleConfig.solution = currentPuzzle.solution;
 
             initializeBoard();
@@ -352,7 +352,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Устанавливаем ориентацию доски на основе FEN
         const fenParts = puzzleConfig.initialFen.split(' ');
         const colorToMove = fenParts[1];
-        puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+        // Меняем логику ориентации: если ходят белые - черные внизу, и наоборот
+        puzzleConfig.orientation = colorToMove === 'w' ? 'black' : 'white';
         
         // Настройка начальной позиции
         game.load(puzzleConfig.initialFen);
@@ -389,12 +390,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Анимация предварительного хода
+        // Анимация предварительного хода с задержкой
         setTimeout(() => {
             const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+            
+            // Делаем ход в игре
             game.move({ from, to, promotion: 'q' });
-            board.position(game.fen());
-            drawArrow();
+            
+            // Анимируем ход на доске
+            board.move(`${from}-${to}`);
+            
+            // После завершения анимации рисуем стрелку
+            setTimeout(drawArrow, 500);
         }, 500);
 
         startTimer();
