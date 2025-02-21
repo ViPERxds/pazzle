@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.initialFen = currentPuzzle.fen;
             puzzleConfig.preMove = currentPuzzle.move_1;
             puzzleConfig.evaluatedMove = currentPuzzle.move_2;
-            // Если ходят черные - черные внизу, если белые - белые внизу
+            // Тот, кто ходит, должен быть внизу
             puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Устанавливаем ориентацию доски на основе FEN
         const fenParts = puzzleConfig.initialFen.split(' ');
         const colorToMove = fenParts[1];
-        // Если ходят черные - черные внизу, если белые - белые внизу
+        // Тот, кто ходит, должен быть внизу
         puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
         
         // Настройка начальной позиции
