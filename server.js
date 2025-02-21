@@ -453,6 +453,11 @@ app.get('/favicon.ico', (req, res) => {
 // Добавляем раздачу статических файлов
 app.use(express.static(path.join(__dirname)));
 
+// Добавляем маршрут для index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // Добавляем функцию getSettings
 async function getSettings() {
     try {
