@@ -515,19 +515,18 @@ async function getUnsolvedPuzzles(username) {
             [blunderPuzzles[i], blunderPuzzles[j]] = [blunderPuzzles[j], blunderPuzzles[i]];
         }
         
-        // Объединяем задачи в соотношении примерно 2:1 (Good:Blunder)
+        // Чередуем Good и Blunder задачи
         const result = [];
-        let goodIndex = 0;
-        let blunderIndex = 0;
+        const maxLength = Math.max(goodPuzzles.length, blunderPuzzles.length);
         
-        while (goodIndex < goodPuzzles.length || blunderIndex < blunderPuzzles.length) {
-            // Добавляем две Good задачи
-            for (let i = 0; i < 2 && goodIndex < goodPuzzles.length; i++) {
-                result.push(goodPuzzles[goodIndex++]);
-            }
-            // Добавляем одну Blunder задачу
-            if (blunderIndex < blunderPuzzles.length) {
-                result.push(blunderPuzzles[blunderIndex++]);
+        for (let i = 0; i < maxLength; i++) {
+            // Добавляем случайным образом Good или Blunder
+            if (Math.random() < 0.5) {
+                if (i < goodPuzzles.length) result.push(goodPuzzles[i]);
+                if (i < blunderPuzzles.length) result.push(blunderPuzzles[i]);
+            } else {
+                if (i < blunderPuzzles.length) result.push(blunderPuzzles[i]);
+                if (i < goodPuzzles.length) result.push(goodPuzzles[i]);
             }
         }
         
