@@ -11,18 +11,16 @@ require('dotenv').config({
 });
 
 app.use(cors({
-    origin: true, // Разрешаем запросы с того же домена
+    origin: '*', // Разрешаем запросы с любого домена
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Добавим промежуточное ПО для предварительной проверки CORS
-app.options('*', cors());
-
-// Удалим дублирующие заголовки
+// Добавляем заголовки для всех ответов
 app.use((req, res, next) => {
-    res.header('Cache-Control', 'no-cache');
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     next();
 });
 
@@ -359,6 +357,48 @@ app.get('/', (req, res) => {
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
+});
+
+// API endpoints
+app.get('/api/user-rating/:username', async (req, res) => {
+    try {
+        const username = req.params.username;
+        console.log('Getting rating for:', username);
+        
+        // Проверяем существование пользователя
+        let userExists = await checkUserAccess(username);
+        if (!userExists) {
+            // Создаем нового пользователя
+            await pool.query('INSERT INTO Users (username) VALUES ($1)', [username]);
+        }
+        
+        const rating = await getUserRating(username);
+        res.json(rating);
+    } catch (err) {
+        console.error('Error in /api/user-rating:', err);
+        res.status(500).json({ rating: 1500, error: err.message });
+    }
+});
+
+app.get('/api/check-access/:username', async (req, res) => {
+    try {
+        const result = await checkUserAccess(req.params.username);
+        res.json({ hasAccess: true }); // Временно разрешаем доступ всем
+    } catch (err) {
+        console.error('Error checking access:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/random-puzzle/:username', async (req, res) => {
+    try {
+        const puzzle = generateRandomPuzzle();
+        console.log('Generated puzzle:', puzzle);
+        res.json(puzzle);
+    } catch (err) {
+        console.error('Error generating puzzle:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Запускаем сервер
