@@ -1,33 +1,3 @@
-// Добавим стили для фигур в начало файла
-const style = document.createElement('style');
-style.textContent = `
-    .piece-417db {
-        width: 100% !important;
-        height: 100% !important;
-        background-size: contain !important;
-        cursor: default !important;
-    }
-    
-    .board-b72b1 {
-        border: 2px solid #404040;
-        box-sizing: border-box;
-    }
-    
-    .white-1e1d7 {
-        background-color: #f0d9b5;
-    }
-    
-    .black-3c85d {
-        background-color: #b58863;
-    }
-    
-    .arrow {
-        pointer-events: none;
-        z-index: 100;
-    }
-`;
-document.head.appendChild(style);
-
 document.addEventListener('DOMContentLoaded', function() {
     const startPage = document.getElementById('startPage');
     const puzzlePage = document.getElementById('puzzlePage');
@@ -166,6 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     username: currentUsername,
+                    puzzleId: currentPuzzle.id || Date.now(),
                     success: currentPuzzle.solution === 'Good',
                     time: Math.floor((Date.now() - startTime) / 1000)
                 })
@@ -176,19 +147,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Останавливаем таймер
-            stopTimer();
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
 
             // Показываем результат
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
             
-            const isCorrect = currentPuzzle.solution === 'Good';
-            resultText.textContent = isCorrect ? 'Correct!' : 'Wrong!';
-            resultText.style.color = isCorrect ? 'green' : 'red';
+            resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
+            resultText.style.color = currentPuzzle.solution === 'Good' ? 'green' : 'red';
             
             await updateRatingDisplay();
         } catch (err) {
             console.error('Error recording solution:', err);
+            alert('Произошла ошибка при записи решения');
         }
     });
 
@@ -204,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     username: currentUsername,
+                    puzzleId: currentPuzzle.id || Date.now(),
                     success: currentPuzzle.solution === 'Blunder',
                     time: Math.floor((Date.now() - startTime) / 1000)
                 })
@@ -214,19 +189,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Останавливаем таймер
-            stopTimer();
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
 
             // Показываем результат
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
             
-            const isCorrect = currentPuzzle.solution === 'Blunder';
-            resultText.textContent = isCorrect ? 'Correct!' : 'Wrong!';
-            resultText.style.color = isCorrect ? 'green' : 'red';
+            resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
+            resultText.style.color = currentPuzzle.solution === 'Blunder' ? 'green' : 'red';
             
             await updateRatingDisplay();
         } catch (err) {
             console.error('Error recording solution:', err);
+            alert('Произошла ошибка при записи решения');
         }
     });
 
@@ -280,8 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const config = {
             draggable: false,
             position: 'start',
-            orientation: 'white',
-            pieceTheme: '/img/chesspieces/wikipedia/{piece}.png' // Вернем старую тему фигур
+            orientation: 'white'
         };
         
         board = Chessboard('board', config);
@@ -385,12 +362,12 @@ document.addEventListener('DOMContentLoaded', function() {
             currentPuzzle = puzzle;
             
             // Устанавливаем позицию на доске
-            board.position(puzzle.fen);
+            board.position(puzzle.fen, false);
             
-            // Делаем первый ход и показываем стрелку
-            const [from, to] = puzzle.move_1.match(/.{2}/g);
-            board.move(`${from}-${to}`);
-            drawArrow(puzzle.move_2);
+            // Показываем стрелку для первого хода
+            setTimeout(() => {
+                drawArrow(puzzle.move_1);
+            }, 500);
             
             // Запускаем таймер
             startTimer();
