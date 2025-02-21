@@ -387,17 +387,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Устанавливаем позицию на доске
             board.position(puzzle.fen);
             
-            // Делаем первый ход
-            setTimeout(() => {
-                const [from, to] = puzzle.move_1.match(/.{2}/g);
-                board.move(`${from}-${to}`);
-                
-                // Показываем стрелку для второго хода
-                setTimeout(() => {
-                    const [from2, to2] = puzzle.move_2.match(/.{2}/g);
-                    drawArrow(`${from2}-${to2}`);
-                }, 500);
-            }, 1000);
+            // Делаем первый ход и показываем стрелку
+            const [from, to] = puzzle.move_1.match(/.{2}/g);
+            board.move(`${from}-${to}`);
+            drawArrow(puzzle.move_2);
             
             // Запускаем таймер
             startTimer();
