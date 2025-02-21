@@ -262,28 +262,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const puzzleResponse = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
-            currentPuzzle = await puzzleResponse.json();
+            const response = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
+            currentPuzzle = await response.json();
             if (!currentPuzzle) {
-                alert('Ошибка загрузки задачи');
-                return;
+                throw new Error('No puzzle received');
             }
 
             // Обновляем конфигурацию
             puzzleConfig.initialFen = currentPuzzle.fen;
             puzzleConfig.preMove = currentPuzzle.move_1;
             puzzleConfig.evaluatedMove = currentPuzzle.move_2;
-            puzzleConfig.orientation = currentPuzzle.color === 'W' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
-            // Показываем страницу с задачей
             resultPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
-            initializeBoard();
+            
+            initializeBoard(); // Здесь ориентация обновится автоматически
         } catch (err) {
             console.error('Error loading next puzzle:', err);
-            alert('Ошибка при загрузке следующей задачи');
+            alert('Произошла ошибка при загрузке следующей задачи');
         }
     });
 
@@ -319,91 +320,32 @@ document.addEventListener('DOMContentLoaded', function() {
     let game = new Chess();
     let arrow = null;
 
+    // Функция для определения ориентации доски
+    function getBoardOrientation(fen) {
+        const fenParts = fen.split(' ');
+        const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
+        return colorToMove === 'w' ? 'white' : 'black';
+    }
+
     function initializeBoard() {
-        // Очищаем предыдущий таймер если есть
-        if (timer) {
-            clearInterval(timer);
-            timer = null;
-        }
-        
-        // Сбрасываем время
-        seconds = 180;
-        startTime = null; // Сбрасываем стартовое время
-        updateTimer();
-        
-        // Очищаем предыдущую стрелку
-        const oldArrow = document.querySelector('.arrow');
-        if (oldArrow) {
-            oldArrow.remove();
-        }
-        
-        // Настройка начальной позиции
-        game.load(puzzleConfig.initialFen);
-        
-        // Инициализация доски
         if (board) {
             board.destroy();
         }
-        
-        // Оборачиваем доску в контейнер
-        const boardElement = document.getElementById('board');
-        if (!boardElement.parentElement.classList.contains('board-container')) {
-            const container = document.createElement('div');
-            container.className = 'board-container';
-            boardElement.parentElement.insertBefore(container, boardElement);
-            container.appendChild(boardElement);
-        }
+
+        // Устанавливаем ориентацию доски на основе FEN
+        puzzleConfig.orientation = getBoardOrientation(puzzleConfig.initialFen);
         
         board = Chessboard('board', {
-            position: game.fen(),
+            position: puzzleConfig.initialFen,
             orientation: puzzleConfig.orientation,
-            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
-            moveSpeed: 800, // Значительно увеличиваем время анимации
-            snapSpeed: 100,
-            snapbackSpeed: 200,
-            appearSpeed: 200,
-            trashSpeed: 100,
-            animation: true // Явно включаем анимацию
+            draggable: true,
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd
         });
 
-        // Анимация предварительного хода
-        setTimeout(() => {
-            const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-            
-            // Создаем промис для анимации
-            const animateMove = () => new Promise(resolve => {
-                const piece = document.querySelector(`[data-square="${from}"] .piece-417db`);
-                if (piece) {
-                    const fromSquare = document.querySelector(`[data-square="${from}"]`);
-                    const toSquare = document.querySelector(`[data-square="${to}"]`);
-                    const fromRect = fromSquare.getBoundingClientRect();
-                    const toRect = toSquare.getBoundingClientRect();
-                    
-                    // Добавляем CSS transition
-                    piece.style.transition = 'transform 0.8s ease-in-out';
-                    piece.style.transform = `translate(${toRect.left - fromRect.left}px, ${toRect.top - fromRect.top}px)`;
-                    
-                    // После завершения анимации
-                    piece.addEventListener('transitionend', () => {
-                        game.move({ from, to, promotion: 'q' });
-                        board.position(game.fen(), false);
-                        resolve();
-                    }, { once: true });
-                } else {
-                    game.move({ from, to, promotion: 'q' });
-                    board.position(game.fen(), false);
-                    resolve();
-                }
-            });
-
-            // Выполняем анимацию и показываем стрелку
-            animateMove().then(() => {
-                setTimeout(() => {
-                    drawArrow();
-                    startTimer();
-                }, 100);
-            });
-        }, puzzleConfig.preMoveDelay);
+        game.load(puzzleConfig.initialFen);
+        startTimer();
     }
 
     function drawArrow() {
