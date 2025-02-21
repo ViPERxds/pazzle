@@ -280,10 +280,27 @@ async function findPuzzleForUser(username) {
     }
 }
 
-// Функция для получения рейтинга пользователя
+// Функция для инициализации рейтинга нового пользователя
+async function initializeUserRating(username) {
+    try {
+        const result = await pool.query(
+            `INSERT INTO Journal 
+            (username, puzzle_id, success, time, rating, rd, volatility)
+            VALUES ($1, 0, true, 0, 1500, 350, 0.06)
+            RETURNING rating, rd, volatility`,
+            [username]
+        );
+        return result.rows[0];
+    } catch (err) {
+        console.error('Error initializing user rating:', err);
+        throw err;
+    }
+}
+
+// Обновляем функцию getUserRating
 async function getUserRating(username) {
     try {
-        console.log('Getting rating for user:', username);
+        // Получаем последнюю запись рейтинга пользователя
         const result = await pool.query(
             `SELECT rating, rd, volatility 
             FROM Journal 
@@ -292,26 +309,13 @@ async function getUserRating(username) {
             LIMIT 1`,
             [username]
         );
-        
-        console.log('Database result for user rating:', result.rows);
-        
+
+        // Если записей нет - инициализируем рейтинг
         if (result.rows.length === 0) {
-            const defaultRating = {
-                rating: 0,
-                rd: 350,
-                volatility: 0.06
-            };
-            console.log('No rating found, using default:', defaultRating);
-            return defaultRating;
+            return await initializeUserRating(username);
         }
-        
-        const rating = {
-            rating: Number(result.rows[0].rating),
-            rd: Number(result.rows[0].rd),
-            volatility: Number(result.rows[0].volatility)
-        };
-        console.log('Found rating:', rating);
-        return rating;
+
+        return result.rows[0];
     } catch (err) {
         console.error('Error getting user rating:', err);
         throw err;
@@ -362,66 +366,35 @@ async function getSettings() {
     }
 }
 
-// Функция для записи результата решения
+// Обновляем функцию recordPuzzleSolution
 async function recordPuzzleSolution(username, puzzleId, success, time) {
     try {
-        console.log('Starting recordPuzzleSolution with:', { username, puzzleId, success, time });
-        
-        const settings = await getSettings();
-        console.log('Settings:', settings);
-        
-        const normalTime = settings.normal_time || 60;
-        const R = success * Math.exp(-1/normalTime * Math.log(2) * time);
-        console.log('Calculated R with:', {
-            success,
-            time,
-            normalTime,
-            R
-        });
-        
         const userRating = await getUserRating(username);
-        console.log('User rating:', userRating);
-        
         const puzzleRating = await getPuzzleRating(puzzleId);
-        console.log('Puzzle rating:', puzzleRating);
         
-        if (!puzzleRating) {
-            throw new Error(`Puzzle ${puzzleId} not found`);
-        }
+        // Рассчитываем новый рейтинг
+        const newRatings = calculateNewRatings(userRating, puzzleRating, success ? 1 : 0);
         
-        const newRatings = calculateNewRatings(userRating, puzzleRating, R);
-        console.log('New ratings calculated:', newRatings);
-        
-        // Добавляем проверку на null/undefined
-        if (!newRatings || !newRatings.userRating || !newRatings.userRD || !newRatings.userVolatility) {
-            throw new Error('Invalid new ratings calculated');
-        }
-        
-        console.log('Inserting into Journal...');
-        await pool.query(
+        // Записываем результат
+        const result = await pool.query(
             `INSERT INTO Journal 
-            (username, puzzle_id, success, time, rating, rd, volatility) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            (username, puzzle_id, success, time, rating, rd, volatility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING rating, rd, volatility`,
             [
-                username, 
-                puzzleId, 
-                success, 
-                time, 
+                username,
+                puzzleId,
+                success,
+                time,
                 newRatings.userRating,
                 newRatings.userRD,
                 newRatings.userVolatility
             ]
         );
-        console.log('Journal updated');
 
-        return newRatings;
+        return result.rows[0];
     } catch (err) {
-        console.error('Detailed error in recordPuzzleSolution:', {
-            error: err,
-            message: err.message,
-            stack: err.stack,
-            input: { username, puzzleId, success, time }
-        });
+        console.error('Error recording solution:', err);
         throw err;
     }
 }
@@ -440,8 +413,13 @@ function calculateNewRatings(userRating, puzzleRating, R) {
     const E = 1 / (1 + Math.pow(10, g * (userRating.rating - puzzleRating.rating) / -400));
     const d2 = 1 / (q * q * g * g * E * (1 - E));
     
-    // Новый рейтинг
-    const newRating = userRating.rating + (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
+    // Ограничиваем максимальное изменение рейтинга
+    const maxRatingChange = 32;
+    const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
+    const limitedRatingChange = Math.max(Math.min(ratingChange, maxRatingChange), -maxRatingChange);
+    
+    // Новый рейтинг с ограничением
+    const newRating = userRating.rating + limitedRatingChange;
     
     // Шаг 3: Определение нового отклонения рейтинга
     const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
