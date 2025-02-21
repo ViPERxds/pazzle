@@ -175,5 +175,11 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="script.js"></script>
+    <script>
+    window.onerror = function(msg, url, line) {
+        console.error('JavaScript error:', msg, 'at', url, ':', line);
+        return false;
+    };
+    </script>
 </body>
 </html> 
