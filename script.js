@@ -349,11 +349,11 @@ document.addEventListener('DOMContentLoaded', function() {
             board.destroy();
         }
 
-        // Устанавливаем ориентацию доски на основе FEN
-        const fenParts = puzzleConfig.initialFen.split(' ');
-        const colorToMove = fenParts[1];
-        // Тот, кто ходит, должен быть внизу
-        puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+        // Определяем цвет фигуры, которая сделала первый ход
+        const [fromSquare] = puzzleConfig.preMove.match(/.{2}/g);
+        const piece = game.get(fromSquare);
+        // Если первый ход сделали белые (piece.color === 'w'), то черные внизу
+        puzzleConfig.orientation = piece.color === 'w' ? 'black' : 'white';
         
         // Настройка начальной позиции
         game.load(puzzleConfig.initialFen);
