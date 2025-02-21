@@ -1,3 +1,33 @@
+// Добавим стили для фигур в начало файла
+const style = document.createElement('style');
+style.textContent = `
+    .piece-417db {
+        width: 100% !important;
+        height: 100% !important;
+        background-size: contain !important;
+        cursor: default !important;
+    }
+    
+    .board-b72b1 {
+        border: 2px solid #404040;
+        box-sizing: border-box;
+    }
+    
+    .white-1e1d7 {
+        background-color: #f0d9b5;
+    }
+    
+    .black-3c85d {
+        background-color: #b58863;
+    }
+    
+    .arrow {
+        pointer-events: none;
+        z-index: 100;
+    }
+`;
+document.head.appendChild(style);
+
 document.addEventListener('DOMContentLoaded', function() {
     const startPage = document.getElementById('startPage');
     const puzzlePage = document.getElementById('puzzlePage');
@@ -136,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     username: currentUsername,
-                    puzzleId: currentPuzzle.id || Date.now(),
+                    puzzleId: 0, // Временно используем фиксированное значение
                     success: currentPuzzle.solution === 'Good',
                     time: Math.floor((Date.now() - startTime) / 1000)
                 })
@@ -147,10 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Останавливаем таймер
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
+            stopTimer();
 
             // Показываем результат
             puzzlePage.classList.add('hidden');
@@ -178,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     username: currentUsername,
-                    puzzleId: currentPuzzle.id || Date.now(),
+                    puzzleId: 0, // Временно используем фиксированное значение
                     success: currentPuzzle.solution === 'Blunder',
                     time: Math.floor((Date.now() - startTime) / 1000)
                 })
@@ -189,10 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Останавливаем таймер
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
+            stopTimer();
 
             // Показываем результат
             puzzlePage.classList.add('hidden');
@@ -258,7 +282,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const config = {
             draggable: false,
             position: 'start',
-            orientation: 'white'
+            orientation: 'white',
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg', // Добавляем тему фигур
+            showNotation: true // Показываем координаты
         };
         
         board = Chessboard('board', config);
@@ -363,6 +389,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Устанавливаем позицию на доске
             board.position(puzzle.fen, false);
+            
+            // Определяем ориентацию доски
+            const orientation = puzzle.fen.includes(' w ') ? 'white' : 'black';
+            board.orientation(orientation);
             
             // Показываем стрелку для первого хода
             setTimeout(() => {
