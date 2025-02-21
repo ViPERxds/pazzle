@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const ratingElements = document.querySelectorAll('.rating');
     const goodButton = document.querySelector('.good-btn');
     const blunderButton = document.querySelector('.blunder-btn');
+    const timerElement = document.querySelector('.timer');
     
     // Проверяем, найдены ли элементы
     console.log('Elements found:', {
@@ -96,13 +97,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const remainingSeconds = seconds % 60;
             const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
             
-            document.getElementById('timer').textContent = timeString;
+            timerElement.textContent = timeString;
             
             // Если прошло 3 минуты, останавливаем секундомер
             if (seconds >= maxTime) {
                 clearInterval(window.timerInterval);
                 // Автоматически отправляем текущее решение как неверное
-                submitSolution(false);
+                handlePuzzleResult(false);
             }
         }, 1000);
 
@@ -114,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
         clearInterval(window.timerInterval);
         
         // Получаем прошедшее время в секундах
-        const timeDisplay = document.getElementById('timer').textContent;
+        const timeDisplay = timerElement.textContent;
         const [minutes, seconds] = timeDisplay.split(':').map(Number);
         const totalSeconds = minutes * 60 + seconds;
         
@@ -340,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Сбрасываем время
-        document.getElementById('timer').textContent = '00:00';
+        timerElement.textContent = '00:00';
         
         // Очищаем предыдущую стрелку
         const oldArrow = document.querySelector('.arrow');
@@ -528,7 +529,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Получаем прошедшее время
-        const timeDisplay = document.getElementById('timer').textContent;
+        const timeDisplay = timerElement.textContent;
         const [minutes, seconds] = timeDisplay.split(':').map(Number);
         const totalSeconds = minutes * 60 + seconds;
 
