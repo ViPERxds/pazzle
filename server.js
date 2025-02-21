@@ -120,8 +120,9 @@ async function checkUserAccess(username) {
     }
 }
 
-async function generateRandomPuzzle() {
-    const puzzles = [
+// Переносим все задачи в generatePuzzlesList
+function generatePuzzlesList() {
+    return [
         // Легкие задачи
         {
             fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
@@ -208,10 +209,12 @@ async function generateRandomPuzzle() {
         }
         // ... можно добавить еще задач
     ];
+}
 
-    const position = puzzles[Math.floor(Math.random() * puzzles.length)];
-    position.color = position.fen.includes(' w ') ? 'W' : 'B';
-    return position;
+// Упрощаем generateRandomPuzzle, так как он больше не нужен
+async function generateRandomPuzzle() {
+    // Эта функция больше не используется
+    throw new Error('Use findPuzzleForUser instead');
 }
 
 // Функция для получения нерешенных задач
@@ -235,7 +238,7 @@ async function getUnsolvedPuzzles(username) {
     }
 }
 
-// Функция для поиска новой задачи
+// Обновляем findPuzzleForUser
 async function findPuzzleForUser(username) {
     try {
         // Получаем список нерешенных задач
@@ -275,13 +278,6 @@ async function findPuzzleForUser(username) {
         console.error('Error finding puzzle:', err);
         throw err;
     }
-}
-
-// Переименуем старую функцию и будем использовать её только для получения списка задач
-function generatePuzzlesList() {
-    return [
-        // ... существующие задачи ...
-    ];
 }
 
 // Функция для получения рейтинга пользователя
