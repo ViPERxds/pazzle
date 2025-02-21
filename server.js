@@ -214,33 +214,50 @@ async function generateRandomPuzzle() {
     return position;
 }
 
-// Функция для поиска задачи для пользователя
+// Функция для получения нерешенных задач
+async function getUnsolvedPuzzles(username) {
+    try {
+        // Получаем все FEN-позиции, которые пользователь уже решил
+        const solvedResult = await pool.query(
+            'SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1',
+            [username]
+        );
+        const solvedFens = solvedResult.rows.map(row => row.puzzle_fen);
+
+        // Получаем все доступные задачи
+        const puzzles = generatePuzzlesList();
+        
+        // Фильтруем только нерешенные задачи
+        return puzzles.filter(puzzle => !solvedFens.includes(puzzle.fen));
+    } catch (err) {
+        console.error('Error getting unsolved puzzles:', err);
+        throw err;
+    }
+}
+
+// Функция для поиска новой задачи
 async function findPuzzleForUser(username) {
     try {
-        let position;
-        let attempts = 0;
-        const maxAttempts = 50;
+        // Получаем список нерешенных задач
+        const unsolvedPuzzles = await getUnsolvedPuzzles(username);
 
-        do {
-            position = await generateRandomPuzzle();
-            const isSolved = await isPuzzleSolved(username, position.fen);
-            if (!isSolved) break;
-            attempts++;
-        } while (attempts < maxAttempts);
-
-        if (attempts >= maxAttempts) {
-            await pool.query('DELETE FROM SolvedPuzzles WHERE username = $1', [username]);
-            position = await generateRandomPuzzle();
+        // Если нет нерешенных задач
+        if (unsolvedPuzzles.length === 0) {
+            throw new Error('Все задачи решены! Поздравляем!');
         }
 
-        // Всегда используем рейтинг 1500
+        // Выбираем случайную задачу из нерешенных
+        const position = unsolvedPuzzles[Math.floor(Math.random() * unsolvedPuzzles.length)];
+        position.color = position.fen.includes(' w ') ? 'W' : 'B';
+
+        // Сохраняем задачу в базу
         const result = await pool.query(
             `INSERT INTO Puzzles 
             (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [
-                1500, // фиксированный начальный рейтинг
+                1500,
                 350.0,
                 0.06,
                 position.fen,
@@ -258,6 +275,13 @@ async function findPuzzleForUser(username) {
         console.error('Error finding puzzle:', err);
         throw err;
     }
+}
+
+// Переименуем старую функцию и будем использовать её только для получения списка задач
+function generatePuzzlesList() {
+    return [
+        // ... существующие задачи ...
+    ];
 }
 
 // Функция для получения рейтинга пользователя
@@ -456,10 +480,21 @@ app.get('/api/check-access/:username', async (req, res) => {
 
 app.get('/api/random-puzzle/:username', async (req, res) => {
     try {
-        const result = await findPuzzleForUser(req.params.username);
-        res.json(result);
+        const username = req.params.username;
+        console.log('Generating puzzle for user:', username);
+        
+        const puzzle = await findPuzzleForUser(username);
+        res.json(puzzle);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        if (err.message === 'Все задачи решены! Поздравляем!') {
+            res.status(404).json({ 
+                error: err.message,
+                type: 'ALL_SOLVED'
+            });
+        } else {
+            console.error('Error in /api/random-puzzle:', err);
+            res.status(500).json({ error: err.message });
+        }
     }
 });
 
