@@ -20,13 +20,65 @@ const pool = new Pool({
 });
 
 // Проверяем подключение при запуске
-pool.connect((err, client, release) => {
+pool.connect(async (err, client, release) => {
     if (err) {
         console.error('Error connecting to the database:', err);
         return;
     }
     console.log('Successfully connected to database');
-    release();
+    
+    try {
+        // Создаем необходимые таблицы если их нет
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS Users (
+                username VARCHAR(255) PRIMARY KEY
+            );
+            
+            CREATE TABLE IF NOT EXISTS Puzzles (
+                id SERIAL PRIMARY KEY,
+                rating FLOAT DEFAULT 1500,
+                rd FLOAT DEFAULT 350,
+                volatility FLOAT DEFAULT 0.06,
+                fen TEXT NOT NULL,
+                move_1 VARCHAR(10),
+                move_2 VARCHAR(10),
+                solution VARCHAR(10),
+                type VARCHAR(50),
+                color CHAR(1),
+                difficulty VARCHAR(20),
+                puzzle_rating INT
+            );
+            
+            CREATE TABLE IF NOT EXISTS Journal (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255),
+                puzzle_id INT,
+                success BOOLEAN,
+                time INT,
+                rating FLOAT,
+                rd FLOAT,
+                volatility FLOAT,
+                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE TABLE IF NOT EXISTS Settings (
+                parameter_name VARCHAR(50) PRIMARY KEY,
+                parameter_value FLOAT
+            );
+        `);
+
+        // Добавляем тестового пользователя если его нет
+        await client.query(`
+            INSERT INTO Users (username)
+            VALUES ('test_user')
+            ON CONFLICT (username) DO NOTHING;
+        `);
+
+    } catch (err) {
+        console.error('Error creating tables:', err);
+    } finally {
+        release();
+    }
 });
 
 // Добавляем обработчик ошибок для пула
