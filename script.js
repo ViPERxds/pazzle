@@ -494,4 +494,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Инициализация при загрузке
     initializeBoard();
+
+    async function startPuzzle() {
+        try {
+            const response = await fetch(`${API_URL}/random-puzzle/${currentUsername}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const puzzle = await response.json();
+            console.log('Received puzzle:', puzzle);
+            
+            if (puzzle.error) {
+                console.error('Puzzle error:', puzzle.error);
+                return;
+            }
+            
+            currentPuzzle = puzzle;
+            // ... остальной код ...
+        } catch (err) {
+            console.error('Error starting puzzle:', err);
+        }
+    }
 }); 
