@@ -10,7 +10,7 @@ require('dotenv').config({
 });
 
 app.use(cors({
-    origin: ['https://chess-puzzles-bot.onrender.com', 'http://localhost:3000'],
+    origin: true, // Разрешаем запросы с того же домена
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -19,11 +19,9 @@ app.use(cors({
 // Добавим промежуточное ПО для предварительной проверки CORS
 app.options('*', cors());
 
-// Добавим заголовки для всех ответов
+// Удалим дублирующие заголовки
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Cache-Control', 'no-cache');
     next();
 });
 
@@ -406,11 +404,21 @@ function calculateNewRatings(userRating, puzzleRating, R) {
 // API endpoints
 app.get('/api/user-rating/:username', async (req, res) => {
     try {
-        const result = await getUserRating(req.params.username);
-        res.json(result || { rating: 1500 }); // Возвращаем значение по умолчанию
+        const username = req.params.username;
+        console.log('Getting rating for:', username);
+        
+        // Проверяем существование пользователя
+        let userExists = await checkUserAccess(username);
+        if (!userExists) {
+            // Создаем нового пользователя
+            await pool.query('INSERT INTO Users (username) VALUES ($1)', [username]);
+        }
+        
+        const rating = await getUserRating(username);
+        res.json(rating);
     } catch (err) {
-        console.error('Error getting user rating:', err);
-        res.status(500).json({ error: err.message, rating: 1500 });
+        console.error('Error in /api/user-rating:', err);
+        res.status(500).json({ rating: 1500, error: err.message });
     }
 });
 
@@ -502,6 +510,15 @@ async function getPuzzleRating(puzzleId) {
         throw err;
     }
 }
+
+// Добавим в начало файла после настроек CORS
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
 
 // Запускаем сервер
 const PORT = process.env.PORT || 3000;
