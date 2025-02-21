@@ -149,9 +149,9 @@
     <script>
         // Добавляем глобальную конфигурацию
         window.CONFIG = {
-            API_URL: window.location.hostname === 'localhost' 
+            API_URL: window.location.hostname.includes('localhost') 
                 ? 'http://localhost:3000/api'
-                : 'https://chess-puzzles-bot.onrender.com/api'  // Замените на ваш URL на render.com
+                : `https://${window.location.hostname}/api`
         };
     </script>
 </head>
