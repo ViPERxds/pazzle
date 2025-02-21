@@ -1,0 +1,183 @@
+/* Фиксируем всю структуру */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    position: fixed;
+    left: 0;
+    top: 0;
+}
+
+#puzzlePage {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: white;
+}
+
+.board-container {
+    width: 400px;
+    height: 400px;
+    position: relative;
+    overflow: hidden;
+    perspective: 1000px;
+    transform-style: preserve-3d;
+}
+
+#board {
+    position: absolute;
+    width: 400px !important;
+    height: 400px !important;
+    top: 0;
+    left: 0;
+}
+
+.container {
+    width: 100%;
+    max-width: 400px;
+    height: 700px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 2px solid #000;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: white;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+}
+
+.rating {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 24px;
+}
+
+.start-btn {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background-color: #90EE90;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    margin: auto;
+}
+
+.chess-board {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    margin: 20px 0;
+}
+
+.buttons {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    justify-content: center;
+}
+
+.blunder-btn, .good-btn, .analyze-btn, .next-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    border: none;
+    color: white;
+    flex: 1;
+}
+
+.blunder-btn, .analyze-btn {
+    background-color: #ffb3b3;
+}
+
+.good-btn, .next-btn {
+    background-color: #90EE90;
+}
+
+.timer {
+    font-size: 24px;
+    margin-top: 10px;
+}
+
+.result {
+    font-size: 36px;
+    margin: auto;
+}
+
+.hidden {
+    display: none;
+}
+
+.arrow {
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.good-btn, .blunder-btn {
+    flex: 1;
+    padding: 15px 30px;
+    font-size: 18px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.good-btn {
+    background-color: #90EE90;
+    color: #000;
+}
+
+.blunder-btn {
+    background-color: #FFB6C1;
+    color: #000;
+}
+
+.good-btn:hover, .blunder-btn:hover {
+    transform: scale(1.05);
+}
+
+.good-btn:active, .blunder-btn:active {
+    transform: scale(0.95);
+}
+
+.button-container {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+}
+
+.board-b72b1 {
+    position: absolute !important;
+    width: 400px !important;
+    height: 400px !important;
+    contain: layout size;
+}
+
+.square-55d63 {
+    contain: layout size;
+}
+
+.piece-417db {
+    transition-property: transform;
+    transition-timing-function: ease-in-out;
+    will-change: transform;
+    transform-origin: center;
+    position: absolute !important;
+} 
