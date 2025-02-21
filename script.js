@@ -352,12 +352,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Сначала загружаем позицию
         game.load(puzzleConfig.initialFen);
 
-        // Теперь определяем цвет фигуры, которая делает первый ход
+        // Делаем первый ход, чтобы определить, чей ход следующий
         const [fromSquare] = puzzleConfig.preMove.match(/.{2}/g);
         const piece = game.get(fromSquare);
         
-        // Устанавливаем ориентацию: если ходят белые - белые внизу, если черные - черные внизу
-        puzzleConfig.orientation = piece.color === 'w' ? 'white' : 'black';
+        // Устанавливаем ориентацию: тот, кто должен ответить на ход, будет внизу
+        // Если первый ход белых - черные отвечают и должны быть внизу
+        // Если первый ход черных - белые отвечают и должны быть внизу
+        puzzleConfig.orientation = piece.color === 'w' ? 'black' : 'white';
+        
+        // Возвращаем позицию в исходное состояние
+        game.load(puzzleConfig.initialFen);
         
         board = Chessboard('board', {
             position: game.fen(),
