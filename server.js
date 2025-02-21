@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const path = require('path');
+const crypto = require('crypto');
 const app = express();
 
 app.use(cors({
@@ -540,6 +541,47 @@ async function getPuzzleRating(puzzleId) {
         throw err;
     }
 }
+
+// Функция проверки данных от Telegram
+function validateTelegramWebAppData(telegramInitData) {
+    const initData = new URLSearchParams(telegramInitData);
+    const hash = initData.get('hash');
+    const botToken = process.env.BOT_TOKEN; // Токен вашего бота
+
+    // Удаляем hash из проверяемых данных
+    initData.delete('hash');
+    
+    // Сортируем оставшиеся поля
+    const dataCheckString = Array.from(initData.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `${key}=${value}`)
+        .join('\n');
+
+    // Создаем HMAC-SHA256
+    const secret = crypto.createHmac('sha256', 'WebAppData')
+        .update(botToken)
+        .digest();
+    
+    const calculatedHash = crypto.createHmac('sha256', secret)
+        .update(dataCheckString)
+        .digest('hex');
+
+    return calculatedHash === hash;
+}
+
+// Добавляем middleware для проверки авторизации
+app.use('/api', (req, res, next) => {
+    const initData = req.headers['x-telegram-init-data'];
+    
+    if (!initData || !validateTelegramWebAppData(initData)) {
+        // В режиме разработки пропускаем проверку
+        if (process.env.NODE_ENV === 'development') {
+            return next();
+        }
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+});
 
 // Изменим порт на переменную окружения
 const PORT = process.env.PORT || 3000;
