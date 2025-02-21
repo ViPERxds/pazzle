@@ -166,7 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     username: currentUsername,
-                    puzzleId: 0, // Временно используем фиксированное значение
                     success: currentPuzzle.solution === 'Good',
                     time: Math.floor((Date.now() - startTime) / 1000)
                 })
@@ -183,13 +182,13 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
             
-            resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
-            resultText.style.color = currentPuzzle.solution === 'Good' ? 'green' : 'red';
+            const isCorrect = currentPuzzle.solution === 'Good';
+            resultText.textContent = isCorrect ? 'Correct!' : 'Wrong!';
+            resultText.style.color = isCorrect ? 'green' : 'red';
             
             await updateRatingDisplay();
         } catch (err) {
             console.error('Error recording solution:', err);
-            alert('Произошла ошибка при записи решения');
         }
     });
 
@@ -205,7 +204,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     username: currentUsername,
-                    puzzleId: 0, // Временно используем фиксированное значение
                     success: currentPuzzle.solution === 'Blunder',
                     time: Math.floor((Date.now() - startTime) / 1000)
                 })
@@ -222,13 +220,13 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
             
-            resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
-            resultText.style.color = currentPuzzle.solution === 'Blunder' ? 'green' : 'red';
+            const isCorrect = currentPuzzle.solution === 'Blunder';
+            resultText.textContent = isCorrect ? 'Correct!' : 'Wrong!';
+            resultText.style.color = isCorrect ? 'green' : 'red';
             
             await updateRatingDisplay();
         } catch (err) {
             console.error('Error recording solution:', err);
-            alert('Произошла ошибка при записи решения');
         }
     });
 
@@ -283,8 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
             draggable: false,
             position: 'start',
             orientation: 'white',
-            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg', // Добавляем тему фигур
-            showNotation: true // Показываем координаты
+            pieceTheme: '/img/chesspieces/wikipedia/{piece}.png' // Вернем старую тему фигур
         };
         
         board = Chessboard('board', config);
@@ -388,16 +385,19 @@ document.addEventListener('DOMContentLoaded', function() {
             currentPuzzle = puzzle;
             
             // Устанавливаем позицию на доске
-            board.position(puzzle.fen, false);
+            board.position(puzzle.fen);
             
-            // Определяем ориентацию доски
-            const orientation = puzzle.fen.includes(' w ') ? 'white' : 'black';
-            board.orientation(orientation);
-            
-            // Показываем стрелку для первого хода
+            // Делаем первый ход
             setTimeout(() => {
-                drawArrow(puzzle.move_1);
-            }, 500);
+                const [from, to] = puzzle.move_1.match(/.{2}/g);
+                board.move(`${from}-${to}`);
+                
+                // Показываем стрелку для второго хода
+                setTimeout(() => {
+                    const [from2, to2] = puzzle.move_2.match(/.{2}/g);
+                    drawArrow(`${from2}-${to2}`);
+                }, 500);
+            }, 1000);
             
             // Запускаем таймер
             startTimer();
