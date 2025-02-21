@@ -78,50 +78,56 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обновляем рейтинг каждые 5 секунд
     setInterval(updateRatingDisplay, 5000);
 
-    function updateTimer() {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        const display = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-        document.querySelector('.timer').textContent = display;
-    }
-
-    function startTimer() {
-        if (timer) {
-            clearInterval(timer);
-        }
+    function startStopwatch() {
+        let seconds = 0;
+        const maxTime = 180; // 3 минуты в секундах
         
-        startTime = Date.now();
-        timer = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            seconds = Math.max(180 - elapsed, 0); // Обратный отсчет от 3 минут
+        // Очищаем предыдущий интервал если он был
+        if (window.timerInterval) {
+            clearInterval(window.timerInterval);
+        }
+
+        // Обновляем отображение времени каждую секунду
+        window.timerInterval = setInterval(() => {
+            seconds++;
             
-            updateTimer();
+            // Форматируем время в MM:SS
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
             
-            if (seconds <= 0) {
-                clearInterval(timer);
-                // Время вышло - отмечаем как неудачную попытку
-                handlePuzzleResult(false);
+            document.getElementById('timer').textContent = timeString;
+            
+            // Если прошло 3 минуты, останавливаем секундомер
+            if (seconds >= maxTime) {
+                clearInterval(window.timerInterval);
+                // Автоматически отправляем текущее решение как неверное
+                submitSolution(false);
             }
         }, 1000);
+
+        return seconds;
     }
 
-    function stopTimer() {
-        if (timer) {
-            clearInterval(timer);
-            timer = null;
-        }
-        return Math.floor((Date.now() - startTime) / 1000);
-    }
-
-    async function showResult(isCorrect) {
-        clearInterval(timer);
-        resultText.textContent = isCorrect ? 'Right!' : 'Wrong!';
-        puzzlePage.classList.add('hidden');
-        resultPage.classList.remove('hidden');
+    function submitSolution(success) {
+        // Останавливаем секундомер
+        clearInterval(window.timerInterval);
         
-        // Ждем обновления рейтинга
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await updateRatingDisplay();
+        // Получаем прошедшее время в секундах
+        const timeDisplay = document.getElementById('timer').textContent;
+        const [minutes, seconds] = timeDisplay.split(':').map(Number);
+        const totalSeconds = minutes * 60 + seconds;
+        
+        // Остальной код функции остается без изменений...
+    }
+
+    function showPuzzle(puzzle) {
+        // ... существующий код ...
+        
+        // Запускаем секундомер вместо таймера
+        startStopwatch();
+        
+        // ... остальной код ...
     }
 
     // Обработчик кнопки START
@@ -427,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(drawArrow, 500);
         }, 500);
 
-        startTimer();
+        startStopwatch();
     }
 
     function drawArrow() {
