@@ -11,10 +11,11 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #f0f0f0;
+    background-color: var(--tg-theme-bg-color);
     position: fixed;
     left: 0;
     top: 0;
+    color: var(--tg-theme-text-color);
 }
 
 #puzzlePage {
@@ -73,11 +74,12 @@ body {
     width: 120px;
     height: 120px;
     border-radius: 50%;
-    background-color: #90EE90;
+    background-color: var(--tg-theme-button-color);
     border: none;
     cursor: pointer;
     font-size: 20px;
     margin: auto;
+    color: var(--tg-theme-button-text-color);
 }
 
 .chess-board {
@@ -98,16 +100,9 @@ body {
     padding: 10px 20px;
     cursor: pointer;
     border: none;
-    color: white;
+    color: var(--tg-theme-button-text-color);
     flex: 1;
-}
-
-.blunder-btn, .analyze-btn {
-    background-color: #ffb3b3;
-}
-
-.good-btn, .next-btn {
-    background-color: #90EE90;
+    background-color: var(--tg-theme-button-color);
 }
 
 .timer {
@@ -180,4 +175,11 @@ body {
     will-change: transform;
     transform-origin: center;
     position: absolute !important;
+}
+
+:root {
+    --tg-theme-bg-color: #ffffff;
+    --tg-theme-text-color: #000000;
+    --tg-theme-button-color: #40a7e3;
+    --tg-theme-button-text-color: #ffffff;
 } 
