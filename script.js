@@ -328,23 +328,75 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initializeBoard() {
+        // Очищаем предыдущий таймер если есть
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+        
+        // Сбрасываем время
+        seconds = 180;
+        startTime = null;
+        updateTimer();
+        
+        // Очищаем предыдущую стрелку
+        const oldArrow = document.querySelector('.arrow');
+        if (oldArrow) {
+            oldArrow.remove();
+        }
+        
         if (board) {
             board.destroy();
         }
 
         // Устанавливаем ориентацию доски на основе FEN
-        puzzleConfig.orientation = getBoardOrientation(puzzleConfig.initialFen);
+        const fenParts = puzzleConfig.initialFen.split(' ');
+        const colorToMove = fenParts[1];
+        puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+        
+        // Настройка начальной позиции
+        game.load(puzzleConfig.initialFen);
         
         board = Chessboard('board', {
-            position: puzzleConfig.initialFen,
+            position: game.fen(),
             orientation: puzzleConfig.orientation,
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             draggable: true,
-            onDragStart: onDragStart,
-            onDrop: onDrop,
-            onSnapEnd: onSnapEnd
+            onDragStart: function(source, piece) {
+                // Разрешаем перетаскивание только после предварительного хода
+                return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
+            },
+            onDrop: function(source, target) {
+                // Проверяем валидность хода
+                const move = game.move({
+                    from: source,
+                    to: target,
+                    promotion: 'q'
+                });
+
+                if (move === null) return 'snapback';
+
+                // Проверяем, совпадает ли ход с ожидаемым
+                const moveString = source + target;
+                if (moveString === puzzleConfig.evaluatedMove) {
+                    handlePuzzleResult(puzzleConfig.solution === 'Good');
+                } else {
+                    handlePuzzleResult(puzzleConfig.solution === 'Blunder');
+                }
+            },
+            onSnapEnd: function() {
+                board.position(game.fen());
+            }
         });
 
-        game.load(puzzleConfig.initialFen);
+        // Анимация предварительного хода
+        setTimeout(() => {
+            const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+            game.move({ from, to, promotion: 'q' });
+            board.position(game.fen());
+            drawArrow();
+        }, 500);
+
         startTimer();
     }
 
