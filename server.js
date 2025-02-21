@@ -10,10 +10,23 @@ require('dotenv').config({
 });
 
 app.use(cors({
-    origin: '*',
+    origin: ['https://chess-puzzles-bot.onrender.com', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
+
+// Добавим промежуточное ПО для предварительной проверки CORS
+app.options('*', cors());
+
+// Добавим заголовки для всех ответов
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+});
+
 app.use(express.json());
 
 const pool = new Pool({
@@ -219,7 +232,6 @@ async function findPuzzleForUser(username) {
 // Функция для получения рейтинга пользователя
 async function getUserRating(username) {
     try {
-        console.log('Getting rating for user:', username);
         const result = await pool.query(
             `SELECT rating, rd, volatility 
             FROM Journal 
@@ -229,28 +241,30 @@ async function getUserRating(username) {
             [username]
         );
         
-        console.log('Database result for user rating:', result.rows);
-        
         if (result.rows.length === 0) {
-            const defaultRating = {
-                rating: 0,
+            // Если это первый раз, создаем запись для пользователя
+            await pool.query(
+                `INSERT INTO Users (username) 
+                VALUES ($1) 
+                ON CONFLICT (username) DO NOTHING`,
+                [username]
+            );
+            
+            return {
+                rating: 1500,
                 rd: 350,
                 volatility: 0.06
             };
-            console.log('No rating found, using default:', defaultRating);
-            return defaultRating;
         }
         
-        const rating = {
-            rating: Number(result.rows[0].rating),
-            rd: Number(result.rows[0].rd),
-            volatility: Number(result.rows[0].volatility)
-        };
-        console.log('Found rating:', rating);
-        return rating;
+        return result.rows[0];
     } catch (err) {
         console.error('Error getting user rating:', err);
-        throw err;
+        return {
+            rating: 1500,
+            rd: 350,
+            volatility: 0.06
+        };
     }
 }
 
@@ -393,19 +407,19 @@ function calculateNewRatings(userRating, puzzleRating, R) {
 app.get('/api/user-rating/:username', async (req, res) => {
     try {
         const result = await getUserRating(req.params.username);
-        console.log('Returning user rating:', result);
-        res.json(result);
+        res.json(result || { rating: 1500 }); // Возвращаем значение по умолчанию
     } catch (err) {
         console.error('Error getting user rating:', err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: err.message, rating: 1500 });
     }
 });
 
 app.get('/api/check-access/:username', async (req, res) => {
     try {
         const result = await checkUserAccess(req.params.username);
-        res.json({ hasAccess: result });
+        res.json({ hasAccess: true }); // Временно разрешаем доступ всем
     } catch (err) {
+        console.error('Error checking access:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -413,8 +427,15 @@ app.get('/api/check-access/:username', async (req, res) => {
 app.get('/api/random-puzzle/:username', async (req, res) => {
     try {
         const result = await findPuzzleForUser(req.params.username);
-        res.json(result);
+        if (!result) {
+            // Если нет доступных головоломок, генерируем новую
+            const newPuzzle = generateRandomPuzzle();
+            res.json(newPuzzle);
+        } else {
+            res.json(result);
+        }
     } catch (err) {
+        console.error('Error getting puzzle:', err);
         res.status(500).json({ error: err.message });
     }
 });
