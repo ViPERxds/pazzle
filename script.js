@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let seconds = 180; // 3 минуты
     let currentUsername = 'test_user'; // Замените на реальное получение имени пользователя
 
-    const API_URL = 'https://ваш-render-домен.onrender.com/api';
+    const API_URL = window.location.origin + '/api';
 
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay() {
