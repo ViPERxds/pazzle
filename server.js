@@ -460,6 +460,13 @@ function generatePuzzlesList() {
             move_2: 'd5e4',
             solution: 'Blunder',
             difficulty: 'hard'
+        },
+        {
+            fen: 'r3k2r/pp3ppp/8/3pn3/8/2N2N2/PP2BPPP/R4RK1 w kq - 1 2',
+            move_1: 'f3e5',
+            move_2: 'd5e5',
+            solution: 'Good',
+            difficulty: 'medium'
         }
     ];
 }
