@@ -130,10 +130,23 @@ async function checkUserAccess(username) {
     }
 }
 
-// Обновляем функцию generatePuzzlesList
+// Временно заменяем функцию generatePuzzlesList для отладки
 async function generatePuzzlesList() {
     try {
         const result = await pool.query('SELECT * FROM PuzzlesList');
+        console.log(`Found ${result.rows.length} puzzles in database`);
+        
+        if (result.rows.length === 0) {
+            console.warn('No puzzles found in PuzzlesList table!');
+            // Возвращаем хотя бы одну тестовую задачу
+            return [{
+                fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
+                move_1: 'h5f7',
+                move_2: 'e8f7',
+                solution: 'Good',
+                type: 'tactical'
+            }];
+        }
         
         // Преобразуем результаты, убирая поле difficulty
         return result.rows.map(puzzle => ({
@@ -141,11 +154,19 @@ async function generatePuzzlesList() {
             move_1: puzzle.move_1,
             move_2: puzzle.move_2,
             solution: puzzle.solution,
-            type: puzzle.type || 'tactical' // Используем значение по умолчанию, если type не указан
+            type: puzzle.type || 'tactical'
         }));
     } catch (err) {
         console.error('Error getting puzzles from database:', err);
-        throw err;
+        console.error(err.stack);
+        // Возвращаем хотя бы одну тестовую задачу в случае ошибки
+        return [{
+            fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
+            move_1: 'h5f7',
+            move_2: 'e8f7',
+            solution: 'Good',
+            type: 'tactical'
+        }];
     }
 }
 
@@ -172,18 +193,25 @@ async function hasPuzzleAttempt(username, fen) {
 // Функция для получения нерешенных задач (упрощенная версия)
 async function getUnsolvedPuzzles(username) {
     try {
+        console.log(`Getting unsolved puzzles for user: ${username}`);
+        
         // Получаем все попытки пользователя
         const attemptedResult = await pool.query(
             'SELECT puzzle_fen FROM PuzzleAttempts WHERE username = $1',
             [username]
         );
         const attemptedFens = attemptedResult.rows.map(row => row.puzzle_fen);
+        console.log(`User has attempted ${attemptedFens.length} puzzles`);
         
         // Получаем все доступные задачи
-        const puzzles = generatePuzzlesList();
+        const puzzles = await generatePuzzlesList();
+        console.log(`Total available puzzles: ${puzzles.length}`);
         
         // Возвращаем только те задачи, которые пользователь еще не пытался решить
-        return puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
+        const unsolvedPuzzles = puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
+        console.log(`Unsolved puzzles: ${unsolvedPuzzles.length}`);
+        
+        return unsolvedPuzzles;
     } catch (err) {
         console.error('Error getting unsolved puzzles:', err);
         throw err;
@@ -420,20 +448,22 @@ app.get('/api/check-access/:username', async (req, res) => {
 app.get('/api/random-puzzle/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        console.log('Generating puzzle for user:', username);
+        console.log(`Getting random puzzle for user: ${username}`);
         
+        // Получаем случайную задачу
         const puzzle = await findPuzzleForUser(username);
+        console.log('Found puzzle:', puzzle);
+        
         res.json(puzzle);
     } catch (err) {
-        if (err.message === 'Все задачи решены! Поздравляем!') {
-            res.status(404).json({ 
-                error: err.message,
-                type: 'ALL_SOLVED'
-            });
-        } else {
-            console.error('Error in /api/random-puzzle:', err);
-            res.status(500).json({ error: err.message });
-        }
+        console.error('Error in /api/random-puzzle:', err);
+        
+        // Более подробная информация об ошибке
+        res.status(500).json({ 
+            error: err.message,
+            stack: err.stack,
+            details: 'Ошибка при получении задачи'
+        });
     }
 });
 
