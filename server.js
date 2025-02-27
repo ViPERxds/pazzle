@@ -130,11 +130,19 @@ async function checkUserAccess(username) {
     }
 }
 
-// Заменяем старую функцию generatePuzzlesList
+// Обновляем функцию generatePuzzlesList
 async function generatePuzzlesList() {
     try {
         const result = await pool.query('SELECT * FROM PuzzlesList');
-        return result.rows;
+        
+        // Преобразуем результаты, убирая поле difficulty
+        return result.rows.map(puzzle => ({
+            fen: puzzle.fen,
+            move_1: puzzle.move_1,
+            move_2: puzzle.move_2,
+            solution: puzzle.solution,
+            type: puzzle.type || 'tactical' // Используем значение по умолчанию, если type не указан
+        }));
     } catch (err) {
         console.error('Error getting puzzles from database:', err);
         throw err;
