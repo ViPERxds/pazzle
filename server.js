@@ -130,345 +130,15 @@ async function checkUserAccess(username) {
     }
 }
 
-// Переносим все задачи в generatePuzzlesList
-function generatePuzzlesList() {
-    return [
-        {
-            fen: 'r1b2rk1/pp3ppp/2n2q2/2b5/8/2N2NP1/PP2PPBP/R2Q1RK1 w - - 0 1',
-            move_1: 'f3e5',
-            move_2: 'f6e5',
-            solution: 'Good',
-            type: 'Double Attack',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r4rk1/ppp2ppp/3p4/4n3/2P1R3/2P5/P4PPP/R5K1 w - - 0 1',
-            move_1: 'e4e5',
-            move_2: 'd6e5',
-            solution: 'Blunder',
-            type: 'Rook Defense',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qr1k1/pbp2ppp/1p6/3P4/4n3/2N3P1/PP3PBP/R2Q1RK1 b - - 0 1',
-            move_1: 'e4f2',
-            move_2: 'g1f2',
-            solution: 'Good',
-            type: 'Knight Sacrifice',
-            difficulty: 'hard'
-        },
-        {
-            fen: '2r3k1/p4ppp/1p2p3/3r4/8/2R2P2/PP4PP/2R3K1 w - - 0 1',
-            move_1: 'c3c8',
-            move_2: 'r8c8',
-            solution: 'Good',
-            type: 'Rook Exchange',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r2q1rk1/ppp2ppp/2np4/2b1p3/2B1P3/2PP1N2/PP3PPP/R2QK2R w KQ - 0 1',
-            move_1: 'f3e5',
-            move_2: 'd6e5',
-            solution: 'Blunder',
-            type: 'Knight Fork',
-            difficulty: 'medium'
-        },
-        // Добавляем новые задачи
-        {
-            fen: 'r3r1k1/pp3ppp/2p5/3n4/8/2N2P2/PP4PP/R4RK1 w - - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6d5',
-            solution: 'Good',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2q1rk1/ppp2ppp/3b4/3P4/8/2N5/PP3PPP/R2Q1RK1 b - - 0 1',
-            move_1: 'd6f4',
-            move_2: 'd1d4',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r4rk1/ppp2ppp/8/4P3/1b6/2N5/PP3PPP/R3K2R w KQ - 0 1',
-            move_1: 'c3d5',
-            move_2: 'b4d2',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: '3r2k1/pp3pp1/2p4p/8/3P4/2P2N2/PP3PPP/3R2K1 w - - 0 1',
-            move_1: 'f3e5',
-            move_2: 'd8d5',
-            solution: 'Good',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r1b2rk1/pp3ppp/2n5/3q4/8/2N5/PP2QPPP/R4RK1 w - - 0 1',
-            move_1: 'c3e4',
-            move_2: 'd5e4',
-            solution: 'Good',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2q1rk1/1pp2ppp/p1nb1n2/4p3/4P3/1BN2N2/PPP2PPP/R2Q1RK1 w - - 0 1',
-            move_1: 'b3e6',
-            move_2: 'd6e5',
-            solution: 'Good',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r4rk1/pp3ppp/2p5/2b1n3/8/2N2P2/PPP3PP/R3K2R w KQ - 0 1',
-            move_1: 'c3e4',
-            move_2: 'c5e3',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1b2rk1/pp3ppp/2n1pn2/q7/3P4/2N1BN2/PP3PPP/R2Q1RK1 w - - 0 1',
-            move_1: 'c3d5',
-            move_2: 'e6d5',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: '2r3k1/pp3ppp/4p3/4N3/8/8/PP3PPP/3R2K1 w - - 0 1',
-            move_1: 'e5f7',
-            move_2: 'g8f7',
-            solution: 'Good',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r3k2r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R3K2R w KQkq - 0 1',
-            move_1: 'c3e4',
-            move_2: 'd5d1',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3n4/8/2N5/PPP1BPPP/R2QK2R w KQkq - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6e7',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r4rk1/ppp2ppp/3p4/4n3/8/2N5/PPP2PPP/2KR3R w - - 0 1',
-            move_1: 'c3e4',
-            move_2: 'e5c4',
-            solution: 'Good',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/3P4/2N2N2/PPP2PPP/R1BQK2R w KQkq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'c6e5',
-            solution: 'Good',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1b1k2r/pppp1ppp/2n2n2/8/1b6/2N2N2/PPP2PPP/R1B1KB1R w KQkq - 0 1',
-            move_1: 'c3d5',
-            move_2: 'f6d5',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3kb1r/ppp2ppp/2n5/3q4/8/2N5/PPP2PPP/R1B1K2R w KQkq - 0 1',
-            move_1: 'c3e4',
-            move_2: 'd5e4',
-            solution: 'Good',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r1b2rk1/pp2nppp/2p5/3p4/3P4/2N1BN2/PP3PPP/3R1RK1 w - - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6d5',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r4rk1/pp2qppp/2p5/3p4/3P4/2P2N2/PP1Q1PPP/R4RK1 w - - 0 1',
-            move_1: 'f3e5',
-            move_2: 'e7e5',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bq1rk1/pp3ppp/2n5/2b5/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6d4',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R4RK1 b kq - 0 1',
-            move_1: 'd5f3',
-            move_2: 'e2f3',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1b2rk1/ppp1qppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
-            move_1: 'c3d5',
-            move_2: 'e7e2',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r4rk1/pp2bppp/2p5/3p4/3P4/2N1BN2/PP3PPP/R4RK1 w - - 0 1',
-            move_1: 'f3e5',
-            move_2: 'e7c5',
-            solution: 'Good',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/2B5/2N2N2/PP2QPPP/R4RK1 w kq - 0 1',
-            move_1: 'c4d5',
-            move_2: 'c6e5',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N2N2/PP2BPPP/R4RK1 b kq - 0 1',
-            move_1: 'c6e5',
-            move_2: 'f3e5',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1b2rk1/pp3ppp/2n2q2/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
-            move_1: 'c3e4',
-            move_2: 'f6e6',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r4rk1/pp2bppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w - - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6d4',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bq1rk1/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R w KQ - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6d4',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2Q1RK1 b kq - 0 1',
-            move_1: 'f3d2',
-            move_2: 'd5d4',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R b KQkq - 0 1',
-            move_1: 'c6d4',
-            move_2: 'c3d5',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r3k2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R b KQkq - 0 1',
-            move_1: 'd5d4',
-            move_2: 'c3e4',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r2qk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2Q1RK1 b kq - 0 1',
-            move_1: 'c6e5',
-            move_2: 'f3e5',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/3P4/2N2N2/PP2BPPP/R2QK2R w KQkq - 0 1',
-            move_1: 'f3d2',
-            move_2: 'd5d4',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r1bq1rk1/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R w KQ - 0 1',
-            move_1: 'f3d4',
-            move_2: 'c6e5',
-            solution: 'Blunder',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R b kq - 0 1',
-            move_1: 'c6e5',
-            move_2: 'f3e5',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r2q1rk1/ppp2ppp/8/3p4/3P4/4P3/PP3PPP/R2QK2R b KQ - 0 1',
-            move_1: 'd8d6',
-            move_2: 'd1d3',
-            solution: 'Good',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w kq - 0 1',
-            move_1: 'c3d5',
-            move_2: 'c6d4',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N5/PP2BPPP/R3K2R w KQ - 0 1',
-            move_1: 'e2c4',
-            move_2: 'd5c4',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qkb1r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R b KQkq - 0 1',
-            move_1: 'c6d4',
-            move_2: 'c3d5',
-            solution: 'Blunder',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r1b1k2r/ppp2ppp/2n5/3q4/8/2N2N2/PP2BPPP/R2Q1RK1 w kq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'd5e5',
-            solution: 'Good',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/pp3ppp/2n5/3p4/8/2N2N2/PP2BPPP/R3K2R b KQkq - 0 1',
-            move_1: 'c6e5',
-            move_2: 'f3d4',
-            solution: 'Blunder',
-            difficulty: 'medium'
-        },
-        {
-            fen: 'r2qk2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2Q1RK1 w kq - 0 1',
-            move_1: 'f3e5',
-            move_2: 'c6e5',
-            solution: 'Good',
-            difficulty: 'easy'
-        },
-        {
-            fen: 'r1bqk2r/ppp2ppp/2n5/3p4/8/2N2N2/PP2BPPP/R2QK2R w KQkq - 0 1',
-            move_1: 'c3e4',
-            move_2: 'd5e4',
-            solution: 'Blunder',
-            difficulty: 'hard'
-        },
-        {
-            fen: 'r3k2r/pp3ppp/8/3pn3/8/2N2N2/PP2BPPP/R4RK1 w kq - 1 2',
-            move_1: 'f3e5',
-            move_2: 'd5e5',
-            solution: 'Good',
-            difficulty: 'medium'
-        }
-    ];
+// Заменяем старую функцию generatePuzzlesList
+async function generatePuzzlesList() {
+    try {
+        const result = await pool.query('SELECT * FROM PuzzlesList');
+        return result.rows;
+    } catch (err) {
+        console.error('Error getting puzzles from database:', err);
+        throw err;
+    }
 }
 
 // Упрощаем generateRandomPuzzle, так как он больше не нужен
@@ -491,53 +161,21 @@ async function hasPuzzleAttempt(username, fen) {
     }
 }
 
-// Функция для получения нерешенных задач (обновленная)
+// Функция для получения нерешенных задач (упрощенная версия)
 async function getUnsolvedPuzzles(username) {
     try {
-        // Получаем все FEN-позиции, которые пользователь уже пытался решить
+        // Получаем все попытки пользователя
         const attemptedResult = await pool.query(
             'SELECT puzzle_fen FROM PuzzleAttempts WHERE username = $1',
             [username]
         );
         const attemptedFens = attemptedResult.rows.map(row => row.puzzle_fen);
-
+        
         // Получаем все доступные задачи
         const puzzles = generatePuzzlesList();
         
-        // Фильтруем только те задачи, которые пользователь еще не пытался решить
-        const unsolvedPuzzles = puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
-        
-        // Разделяем задачи на Good и Blunder
-        const goodPuzzles = unsolvedPuzzles.filter(p => p.solution === 'Good');
-        const blunderPuzzles = unsolvedPuzzles.filter(p => p.solution === 'Blunder');
-        
-        // Перемешиваем каждый массив отдельно
-        for (let i = goodPuzzles.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [goodPuzzles[i], goodPuzzles[j]] = [goodPuzzles[j], goodPuzzles[i]];
-        }
-        
-        for (let i = blunderPuzzles.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [blunderPuzzles[i], blunderPuzzles[j]] = [blunderPuzzles[j], blunderPuzzles[i]];
-        }
-        
-        // Чередуем Good и Blunder задачи
-        const result = [];
-        const maxLength = Math.max(goodPuzzles.length, blunderPuzzles.length);
-        
-        for (let i = 0; i < maxLength; i++) {
-            // Добавляем случайным образом Good или Blunder
-            if (Math.random() < 0.5) {
-                if (i < goodPuzzles.length) result.push(goodPuzzles[i]);
-                if (i < blunderPuzzles.length) result.push(blunderPuzzles[i]);
-            } else {
-                if (i < blunderPuzzles.length) result.push(blunderPuzzles[i]);
-                if (i < goodPuzzles.length) result.push(goodPuzzles[i]);
-            }
-        }
-        
-        return result;
+        // Возвращаем только те задачи, которые пользователь еще не пытался решить
+        return puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
     } catch (err) {
         console.error('Error getting unsolved puzzles:', err);
         throw err;
@@ -547,7 +185,7 @@ async function getUnsolvedPuzzles(username) {
 // Обновляем findPuzzleForUser
 async function findPuzzleForUser(username) {
     try {
-        // Получаем список нерешенных задач (уже перемешанный)
+        // Получаем список нерешенных задач
         const unsolvedPuzzles = await getUnsolvedPuzzles(username);
 
         // Если нет нерешенных задач
@@ -562,11 +200,20 @@ async function findPuzzleForUser(username) {
         // Сохраняем задачу в базу
         const result = await pool.query(
             `INSERT INTO Puzzles 
-            (rating, rd, volatility, fen, move_1, move_2, solution, type, color, difficulty)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            (rating, rd, volatility, fen, move_1, move_2, solution, type, color)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *`,
-            [1500, 350.0, 0.06, position.fen, position.move_1, position.move_2,
-             position.solution, position.type, position.color, position.difficulty]
+            [
+                1500, 
+                350.0, 
+                0.06, 
+                position.fen, 
+                position.move_1, 
+                position.move_2,
+                position.solution,
+                position.type,
+                position.color
+            ]
         );
 
         return result.rows[0];
@@ -665,6 +312,17 @@ async function getSettings() {
 // Обновляем функцию recordPuzzleSolution
 async function recordPuzzleSolution(username, puzzleId, success, time) {
     try {
+        // Проверяем, не решал ли пользователь эту задачу раньше
+        const existingAttempt = await pool.query(
+            'SELECT id FROM Journal WHERE username = $1 AND puzzle_id = $2',
+            [username, puzzleId]
+        );
+
+        if (existingAttempt.rows.length > 0) {
+            throw new Error('Эта задача уже была решена');
+        }
+
+        // Получаем текущий рейтинг пользователя
         const userRating = await getUserRating(username);
         const puzzleRating = await getPuzzleRating(puzzleId);
         
@@ -690,8 +348,11 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
 
         return result.rows[0];
     } catch (err) {
+        if (err.message === 'Эта задача уже была решена') {
+            throw err;
+        }
         console.error('Error recording solution:', err);
-        throw err;
+        throw new Error('Ошибка при записи решения');
     }
 }
 
