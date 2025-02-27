@@ -218,43 +218,37 @@ async function getUnsolvedPuzzles(username) {
     }
 }
 
-// Обновляем findPuzzleForUser
+// Обновляем функцию findPuzzleForUser
 async function findPuzzleForUser(username) {
     try {
-        // Получаем список нерешенных задач
-        const unsolvedPuzzles = await getUnsolvedPuzzles(username);
-
-        // Если нет нерешенных задач
-        if (unsolvedPuzzles.length === 0) {
-            throw new Error('Все задачи решены! Поздравляем!');
+        console.log(`Finding puzzle for user: ${username}`);
+        
+        // Получаем все задачи из PuzzlesList
+        const result = await pool.query('SELECT * FROM PuzzlesList LIMIT 1');
+        
+        if (result.rows.length === 0) {
+            throw new Error('Нет доступных задач');
         }
-
-        // Берем первую задачу из перемешанного списка
-        const position = unsolvedPuzzles[0];
-        position.color = position.fen.includes(' w ') ? 'W' : 'B';
-
-        // Сохраняем задачу в базу
-        const result = await pool.query(
+        
+        const puzzle = result.rows[0];
+        console.log('Selected puzzle:', puzzle);
+        
+        // Определяем цвет
+        const color = puzzle.fen.includes(' w ') ? 'W' : 'B';
+        
+        // Создаем запись в таблице Puzzles
+        const insertResult = await pool.query(
             `INSERT INTO Puzzles 
             (rating, rd, volatility, fen, move_1, move_2, solution, type, color)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *`,
-            [
-                1500, 
-                350.0, 
-                0.06, 
-                position.fen, 
-                position.move_1, 
-                position.move_2,
-                position.solution,
-                position.type,
-                position.color
-            ]
+            [1500, 350.0, 0.06, puzzle.fen, puzzle.move_1, puzzle.move_2, 
+             puzzle.solution, 'tactical', color]
         );
-
-        return result.rows[0];
+        
+        return insertResult.rows[0];
     } catch (err) {
-        console.error('Error finding puzzle:', err);
+        console.error('Error in findPuzzleForUser:', err);
         throw err;
     }
 }
