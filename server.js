@@ -61,9 +61,10 @@ pool.connect(async (err, client, release) => {
                 move_1 VARCHAR(10),
                 move_2 VARCHAR(10),
                 solution VARCHAR(10),
-                type VARCHAR(50),
-                color CHAR(1),
-                difficulty VARCHAR(20)
+                type VARCHAR(50) DEFAULT 'Good',
+                color CHAR(1) DEFAULT 'w',
+                difficulty VARCHAR(20) DEFAULT 'normal',
+                number INT DEFAULT 0
             );
             
             CREATE TABLE IF NOT EXISTS Journal (
@@ -111,11 +112,11 @@ pool.connect(async (err, client, release) => {
         // Копируем задачи из PuzzlesList в Puzzles
         if (puzzles.rows.length > 0) {
             const values = puzzles.rows.map(p => 
-                `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06)`
+                `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${p.type || 'Good'}', '${p.color || 'w'}', '${p.difficulty || 'normal'}', 0)`
             ).join(',');
             
             await client.query(`
-                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility)
+                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, color, difficulty, number)
                 VALUES ${values}
             `);
             console.log(`Copied ${puzzles.rows.length} puzzles to Puzzles table`);
@@ -407,14 +408,30 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             throw new Error('Эта задача уже была решена');
         }
 
-        // Получаем текущий рейтинг пользователя
+        // Получаем текущий рейтинг пользователя и задачи
         const userRating = await getUserRating(username);
         const puzzleRating = await getPuzzleRating(puzzleId);
         
-        // Рассчитываем новый рейтинг
-        const newRatings = calculateNewRatings(userRating, puzzleRating, success ? 1 : 0);
+        // Рассчитываем новые рейтинги
+        const userResult = calculateNewRatings(userRating, puzzleRating, success ? 1 : 0);
+        // Для задачи инвертируем результат
+        const puzzleResult = calculateNewRatings(puzzleRating, userRating, success ? 0 : 1);
         
-        // Записываем результат
+        // Если задача решена успешно, увеличиваем счетчик решений
+        if (success) {
+            await pool.query(
+                'UPDATE Puzzles SET number = number + 1 WHERE id = $1',
+                [puzzleId]
+            );
+        }
+        
+        // Обновляем рейтинг задачи
+        await pool.query(
+            'UPDATE Puzzles SET rating = $1, rd = $2, volatility = $3 WHERE id = $4',
+            [puzzleResult.userRating, puzzleResult.userRD, puzzleResult.userVolatility, puzzleId]
+        );
+        
+        // Записываем результат пользователя
         const result = await pool.query(
             `INSERT INTO Journal 
             (username, puzzle_id, success, time, rating, rd, volatility)
@@ -425,9 +442,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 puzzleId,
                 success,
                 time,
-                newRatings.userRating,
-                newRatings.userRD,
-                newRatings.userVolatility
+                userResult.userRating,
+                userResult.userRD,
+                userResult.userVolatility
             ]
         );
 
