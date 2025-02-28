@@ -116,11 +116,14 @@ pool.connect(async (err, client, release) => {
 
         // Копируем задачи из PuzzlesList в Puzzles
         if (puzzles.rows.length > 0) {
+            const validTypes = ['missed', 'usual', 'fake', 'worst', 'best', 'not defense'];
             const values = puzzles.rows.map(p => {
                 // Проверяем и нормализуем цвет
                 const color = p.fen.includes(' w ') ? 'w' : 'b';
+                // Проверяем тип задачи
+                const type = validTypes.includes(p.type) ? p.type : 'usual';
                 // Используем значения из базы данных или null для тегов
-                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${p.type || ''}', 
+                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${type}', 
                 '${p.tag1 || ''}', '${p.tag2 || ''}', '${p.tag3 || ''}', '${p.tag4 || ''}', '${p.tag5 || ''}', '${p.tag6 || ''}',
                 '${color}', 0)`;
             }).join(',');
@@ -132,6 +135,14 @@ pool.connect(async (err, client, release) => {
             `);
             console.log(`Copied ${puzzles.rows.length} puzzles to Puzzles table`);
         }
+
+        // Добавляем базовые задачи с разными цветами
+        await client.query(`
+            INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, color, number) VALUES
+            ('r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1', 'h5f7', 'e8f7', 'Good', 1500, 350, 0.06, 'usual', 'w', 0),
+            ('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1', 'f3e5', 'c6e5', 'Blunder', 1500, 350, 0.06, 'missed', 'b', 0),
+            ('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1', 'f1c4', 'd7d6', 'Good', 1500, 350, 0.06, 'best', 'w', 0)
+        `);
 
     } catch (err) {
         console.error('Error creating tables:', err);
