@@ -57,14 +57,19 @@ pool.connect(async (err, client, release) => {
                 rating FLOAT DEFAULT 1500,
                 rd FLOAT DEFAULT 350,
                 volatility FLOAT DEFAULT 0.06,
+                number INT DEFAULT 0,
                 fen TEXT NOT NULL,
                 move_1 VARCHAR(10),
                 move_2 VARCHAR(10),
                 solution VARCHAR(10),
-                type VARCHAR(50) DEFAULT 'Good',
-                color CHAR(1) DEFAULT 'w',
-                difficulty VARCHAR(20) DEFAULT 'normal',
-                number INT DEFAULT 0
+                type VARCHAR(50),
+                tag1 VARCHAR(50),
+                tag2 VARCHAR(50),
+                tag3 VARCHAR(50),
+                tag4 VARCHAR(50),
+                tag5 VARCHAR(50),
+                tag6 VARCHAR(50),
+                color CHAR(1)
             );
             
             CREATE TABLE IF NOT EXISTS Journal (
@@ -114,13 +119,15 @@ pool.connect(async (err, client, release) => {
             const values = puzzles.rows.map(p => {
                 // Проверяем и нормализуем цвет
                 const color = p.fen.includes(' w ') ? 'w' : 'b';
-                // Используем тип из базы данных или 'usual' по умолчанию
-                const type = p.type || 'usual';
-                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${type}', '${color}', '${p.difficulty || 'normal'}', 0)`;
+                // Используем значения из базы данных или null для тегов
+                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${p.type || ''}', 
+                '${p.tag1 || ''}', '${p.tag2 || ''}', '${p.tag3 || ''}', '${p.tag4 || ''}', '${p.tag5 || ''}', '${p.tag6 || ''}',
+                '${color}', 0)`;
             }).join(',');
             
             await client.query(`
-                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, color, difficulty, number)
+                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, 
+                tag1, tag2, tag3, tag4, tag5, tag6, color, number)
                 VALUES ${values}
             `);
             console.log(`Copied ${puzzles.rows.length} puzzles to Puzzles table`);
