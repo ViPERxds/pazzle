@@ -111,9 +111,11 @@ pool.connect(async (err, client, release) => {
 
         // Копируем задачи из PuzzlesList в Puzzles
         if (puzzles.rows.length > 0) {
-            const values = puzzles.rows.map(p => 
-                `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${p.type || 'Good'}', '${p.color || 'w'}', '${p.difficulty || 'normal'}', 0)`
-            ).join(',');
+            const values = puzzles.rows.map(p => {
+                // Проверяем и нормализуем цвет
+                const color = (p.color && p.color.toLowerCase() === 'b') ? 'b' : 'w';
+                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${p.type || 'Good'}', '${color}', '${p.difficulty || 'normal'}', 0)`;
+            }).join(',');
             
             await client.query(`
                 INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, color, difficulty, number)
