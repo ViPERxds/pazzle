@@ -218,57 +218,58 @@ async function getUnsolvedPuzzles(username) {
     }
 }
 
+// Функция для инициализации базовых задач
+async function initializePuzzles() {
+    try {
+        // Проверяем, есть ли уже задачи
+        const count = await pool.query('SELECT COUNT(*) FROM Puzzles');
+        if (count.rows[0].count === '0') {
+            // Добавляем базовые задачи
+            await pool.query(`
+                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility) VALUES
+                ('r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1', 'h5f7', 'e8f7', 'Good', 1500, 350, 0.06),
+                ('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1', 'f3e5', 'c6e5', 'Blunder', 1500, 350, 0.06),
+                ('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1', 'f1c4', 'd7d6', 'Good', 1500, 350, 0.06)
+            `);
+            console.log('Added initial puzzles');
+        }
+    } catch (err) {
+        console.error('Error initializing puzzles:', err);
+    }
+}
+
+// Вызываем инициализацию при запуске
+initializePuzzles();
+
 // Обновляем функцию findPuzzleForUser
 async function findPuzzleForUser(username) {
     try {
         console.log(`Finding puzzle for user: ${username}`);
         
-        // Получаем список уже решённых задач пользователем
-        const solvedResult = await pool.query(
-            `SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1`,
-            [username]
-        );
-        const solvedFens = solvedResult.rows.map(row => row.puzzle_fen);
-        
-        // Получаем случайную нерешённую задачу с учётом рейтинга пользователя
-        const userRating = await getUserRating(username);
-        const ratingRange = 300; // Диапазон рейтинга для подбора задач
-        
-        const result = await pool.query(
-            `SELECT * FROM Puzzles 
-            WHERE fen NOT IN (
-                SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1
-            )
-            AND ABS(rating - $2) <= $3
-            ORDER BY RANDOM() 
-            LIMIT 1`,
-            [username, userRating.rating, ratingRange]
-        );
-        
-        // Если нет подходящих задач в диапазоне, расширяем диапазон
-        if (result.rows.length === 0) {
-            const widerResult = await pool.query(
-                `SELECT * FROM Puzzles 
-                WHERE fen NOT IN (
-                    SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1
-                )
-                ORDER BY ABS(rating - $2)
-                LIMIT 1`,
-                [username, userRating.rating]
-            );
-            
-            if (widerResult.rows.length === 0) {
-                // Если все задачи решены, сбрасываем историю решений
-                await pool.query(
-                    `DELETE FROM SolvedPuzzles WHERE username = $1`,
-                    [username]
-                );
-                return findPuzzleForUser(username); // Рекурсивный вызов после сброса
-            }
-            
-            return widerResult.rows[0];
+        // Проверяем наличие задач
+        const puzzleCount = await pool.query('SELECT COUNT(*) FROM Puzzles');
+        if (puzzleCount.rows[0].count === '0') {
+            await initializePuzzles();
         }
         
+        // Получаем случайную задачу
+        const result = await pool.query(
+            `SELECT * FROM Puzzles 
+            WHERE id NOT IN (
+                SELECT puzzle_id FROM Journal WHERE username = $1
+            )
+            ORDER BY RANDOM() 
+            LIMIT 1`,
+            [username]
+        );
+        
+        if (result.rows.length === 0) {
+            // Если все задачи решены, очищаем историю
+            await pool.query('DELETE FROM Journal WHERE username = $1', [username]);
+            return findPuzzleForUser(username);
+        }
+        
+        console.log('Found puzzle:', result.rows[0]);
         return result.rows[0];
     } catch (err) {
         console.error('Error in findPuzzleForUser:', err);
