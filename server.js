@@ -251,22 +251,51 @@ async function findPuzzleForUser(username) {
         if (puzzleCount.rows[0].count === '0') {
             await initializePuzzles();
         }
+
+        // Получаем рейтинг пользователя
+        const userRating = await getUserRating(username);
         
-        // Получаем случайную задачу
+        // Получаем случайную задачу в пределах ±300 от рейтинга пользователя
         const result = await pool.query(
             `SELECT * FROM Puzzles 
             WHERE id NOT IN (
                 SELECT puzzle_id FROM Journal WHERE username = $1
             )
+            AND rating BETWEEN $2 AND $3
             ORDER BY RANDOM() 
             LIMIT 1`,
-            [username]
+            [username, userRating.rating - 300, userRating.rating + 300]
         );
         
         if (result.rows.length === 0) {
-            // Если все задачи решены, очищаем историю
-            await pool.query('DELETE FROM Journal WHERE username = $1', [username]);
-            return findPuzzleForUser(username);
+            // Если не нашли задачу в диапазоне, расширяем диапазон
+            const resultWider = await pool.query(
+                `SELECT * FROM Puzzles 
+                WHERE id NOT IN (
+                    SELECT puzzle_id FROM Journal WHERE username = $1
+                )
+                ORDER BY RANDOM() 
+                LIMIT 1`,
+                [username]
+            );
+            
+            if (resultWider.rows.length === 0) {
+                // Если все задачи решены, очищаем только самые старые 50% решений
+                await pool.query(`
+                    DELETE FROM Journal 
+                    WHERE username = $1 
+                    AND id IN (
+                        SELECT id FROM Journal 
+                        WHERE username = $1 
+                        ORDER BY date ASC 
+                        LIMIT (SELECT COUNT(*)/2 FROM Journal WHERE username = $1)
+                    )`,
+                    [username]
+                );
+                return findPuzzleForUser(username);
+            }
+            
+            return resultWider.rows[0];
         }
         
         console.log('Found puzzle:', result.rows[0]);
@@ -410,11 +439,11 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
     }
 }
 
-// Функция для расчета новых рейтингов
+// Обновляем функцию calculateNewRatings без жесткого ограничения
 function calculateNewRatings(userRating, puzzleRating, R) {
     // Константы
-    const q = Math.log(10) / 400; // = 0.00575646273
-    const c = 34.6;  // Константа для изменения RD со временем
+    const q = Math.log(10) / 400;
+    const c = 34.6;
     
     // Шаг 1: Определение отклонения рейтинга (RD)
     const RD = Math.min(Math.sqrt(userRating.rd * userRating.rd + c * c), 350);
@@ -424,13 +453,11 @@ function calculateNewRatings(userRating, puzzleRating, R) {
     const E = 1 / (1 + Math.pow(10, g * (userRating.rating - puzzleRating.rating) / -400));
     const d2 = 1 / (q * q * g * g * E * (1 - E));
     
-    // Ограничиваем максимальное изменение рейтинга
-    const maxRatingChange = 32;
+    // Вычисляем изменение рейтинга без ограничений
     const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
-    const limitedRatingChange = Math.max(Math.min(ratingChange, maxRatingChange), -maxRatingChange);
     
-    // Новый рейтинг с ограничением
-    const newRating = userRating.rating + limitedRatingChange;
+    // Новый рейтинг без ограничения
+    const newRating = userRating.rating + ratingChange;
     
     // Шаг 3: Определение нового отклонения рейтинга
     const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
@@ -438,7 +465,7 @@ function calculateNewRatings(userRating, puzzleRating, R) {
     return {
         userRating: newRating,
         userRD: newRD,
-        userVolatility: userRating.volatility // Оставляем волатильность без изменений
+        userVolatility: userRating.volatility
     };
 }
 
