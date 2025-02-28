@@ -122,9 +122,16 @@ pool.connect(async (err, client, release) => {
                 const color = p.fen.includes(' w ') ? 'w' : 'b';
                 // Проверяем тип задачи
                 const type = validTypes.includes(p.type) ? p.type : 'usual';
-                // Используем значения из базы данных или null для тегов
+                // Обрабатываем теги, заменяя null на пустую строку
+                const tag1 = p.tag1 === null ? '' : p.tag1;
+                const tag2 = p.tag2 === null ? '' : p.tag2;
+                const tag3 = p.tag3 === null ? '' : p.tag3;
+                const tag4 = p.tag4 === null ? '' : p.tag4;
+                const tag5 = p.tag5 === null ? '' : p.tag5;
+                const tag6 = p.tag6 === null ? '' : p.tag6;
+                
                 return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${type}', 
-                '${p.tag1 || ''}', '${p.tag2 || ''}', '${p.tag3 || ''}', '${p.tag4 || ''}', '${p.tag5 || ''}', '${p.tag6 || ''}',
+                '${tag1}', '${tag2}', '${tag3}', '${tag4}', '${tag5}', '${tag6}',
                 '${color}', 0)`;
             }).join(',');
             
