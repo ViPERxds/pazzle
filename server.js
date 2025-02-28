@@ -29,6 +29,10 @@ pool.connect(async (err, client, release) => {
     console.log('Successfully connected to database');
     
     try {
+        // Сначала получаем все задачи из PuzzlesList
+        const puzzles = await client.query('SELECT * FROM PuzzlesList');
+        console.log(`Found ${puzzles.rows.length} puzzles in PuzzlesList`);
+
         // Удаляем существующие таблицы
         await client.query(`
             DROP TABLE IF EXISTS Journal;
@@ -83,17 +87,7 @@ pool.connect(async (err, client, release) => {
                 success BOOLEAN,
                 UNIQUE(username, puzzle_fen)
             );
-        `);
-
-        // Добавляем тестового пользователя
-        await client.query(`
-            INSERT INTO Users (username)
-            VALUES ('test_user')
-            ON CONFLICT (username) DO NOTHING;
-        `);
-
-        // Добавляем таблицу SolvedPuzzles
-        await client.query(`
+            
             CREATE TABLE IF NOT EXISTS SolvedPuzzles (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(255),
@@ -103,8 +97,29 @@ pool.connect(async (err, client, release) => {
             );
         `);
 
+        // Добавляем тестового пользователя
+        await client.query(`
+            INSERT INTO Users (username)
+            VALUES ('test_user')
+            ON CONFLICT (username) DO NOTHING;
+        `);
+
+        // Копируем задачи из PuzzlesList в Puzzles
+        if (puzzles.rows.length > 0) {
+            const values = puzzles.rows.map(p => 
+                `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06)`
+            ).join(',');
+            
+            await client.query(`
+                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility)
+                VALUES ${values}
+            `);
+            console.log(`Copied ${puzzles.rows.length} puzzles to Puzzles table`);
+        }
+
     } catch (err) {
         console.error('Error creating tables:', err);
+        console.error(err.stack);
     } finally {
         release();
     }
