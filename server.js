@@ -809,7 +809,7 @@ function calculateNewPhi(phi, sigma, v) {
     return 1 / Math.sqrt(1 / (phi*phi + sigma*sigma) + 1/v);
 }
 
-// Обновляем функцию updateRating для обновления рейтинга и задачи, и пользователя
+// Обновляем функцию updateRating для использования правильного алгоритма Глико-2
 async function updateRating(username, puzzleId, success) {
     try {
         // Получаем текущий рейтинг пользователя
@@ -818,68 +818,98 @@ async function updateRating(username, puzzleId, success) {
         // Получаем рейтинг задачи
         const puzzleRating = await getPuzzleRating(puzzleId);
         
-        // Преобразуем рейтинги в шкалу Глико-2
+        // Шаг 1: Преобразуем рейтинги в шкалу Глико-2
         const { mu: userMu, phi: userPhi } = convertToGlicko2Scale(userRating.rating, userRating.rd);
         const { mu: puzzleMu, phi: puzzlePhi } = convertToGlicko2Scale(puzzleRating.rating, puzzleRating.rd);
         
-        // Обновляем рейтинг пользователя
-        const userOpponents = [{
+        // Формируем массив противников (в данном случае одна задача)
+        const opponents = [{
             mu: puzzleMu,
             phi: puzzlePhi,
             s: success ? 1 : 0
         }];
         
-        // Обновляем рейтинг задачи
-        const puzzleOpponents = [{
-            mu: userMu,
-            phi: userPhi,
-            s: success ? 0 : 1 // Инвертируем результат для задачи
-        }];
+        // Шаг 1: Вычисляем вспомогательные величины v и Δ
+        const v = calculateV(opponents, userMu);
+        const delta = calculateDelta(opponents, userMu);
         
-        // Вычисляем новые значения для пользователя
-        const userV = calculateV(userOpponents, userMu);
-        const userDelta = calculateDelta(userOpponents, userMu);
-        const userA = findA(userRating.volatility, userPhi, userV, userDelta);
-        const userNewVolatility = Math.exp(userA/2);
-        const userNewPhi = calculateNewPhi(userPhi, userNewVolatility, userV);
-        const userNewMu = calculateNewMu(userMu, userNewPhi, userOpponents);
+        // Шаг 2: Вычисляем новую волатильность
+        const sigma = userRating.volatility;
+        const A = findA(sigma, userPhi, v, delta);
+        const newVolatility = Math.exp(A/2);
         
-        // Вычисляем новые значения для задачи
-        const puzzleV = calculateV(puzzleOpponents, puzzleMu);
-        const puzzleDelta = calculateDelta(puzzleOpponents, puzzleMu);
-        const puzzleA = findA(puzzleRating.volatility, puzzlePhi, puzzleV, puzzleDelta);
-        const puzzleNewVolatility = Math.exp(puzzleA/2);
-        const puzzleNewPhi = calculateNewPhi(puzzlePhi, puzzleNewVolatility, puzzleV);
-        const puzzleNewMu = calculateNewMu(puzzleMu, puzzleNewPhi, puzzleOpponents);
+        // Шаг 3: Вычисляем новое φ'
+        const newPhi = calculateNewPhi(userPhi, newVolatility, v);
+        
+        // Шаг 4: Вычисляем новый рейтинг μ'
+        const newMu = calculateNewMu(userMu, newPhi, opponents);
         
         // Преобразуем обратно в обычную шкалу
-        const { rating: userFinalRating, rd: userFinalRD } = convertFromGlicko2Scale(userNewMu, userNewPhi);
-        const { rating: puzzleFinalRating, rd: puzzleFinalRD } = convertFromGlicko2Scale(puzzleNewMu, puzzleNewPhi);
+        const { rating: finalRating, rd: finalRD } = convertFromGlicko2Scale(newMu, newPhi);
+        
+        // Обновляем рейтинг в базе данных
+        await pool.query(
+            `INSERT INTO Journal 
+            (username, puzzle_id, success, time, rating, rd, volatility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                username,
+                puzzleId,
+                success,
+                0, // время пока не используем
+                finalRating,
+                Math.min(finalRD, 350),
+                newVolatility
+            ]
+        );
         
         // Добавляем задачу в список решённых
         await markPuzzleAsSolved(username, puzzleRating.fen);
         
-        // Обновляем рейтинг задачи в базе данных
-        await pool.query(
-            `UPDATE Puzzles 
-             SET rating = $1, rd = $2, volatility = $3 
-             WHERE id = $4`,
-            [
-                puzzleFinalRating,
-                Math.min(puzzleFinalRD, 350),
-                puzzleNewVolatility,
-                puzzleId
-            ]
-        );
-        
-        // Возвращаем обновленные значения пользователя
+        // Возвращаем обновленные значения
         return {
-            rating: userFinalRating,
-            rd: Math.min(userFinalRD, 350),
-            volatility: userNewVolatility
+            rating: finalRating,
+            rd: Math.min(finalRD, 350),
+            volatility: newVolatility
         };
     } catch (err) {
         console.error('Error updating rating:', err);
         throw err;
     }
+}
+
+// Обновляем функцию calculateV для точного соответствия формуле
+function calculateV(opponents, mu) {
+    let sum = 0;
+    for (const opp of opponents) {
+        const gPhiJ = gPhi(opp.phi);
+        const E = expectation(mu, opp.mu, opp.phi);
+        sum += Math.pow(gPhiJ, 2) * E * (1 - E);
+    }
+    return Math.pow(sum, -1);
+}
+
+// Обновляем функцию calculateDelta для точного соответствия формуле
+function calculateDelta(opponents, mu) {
+    let sum = 0;
+    for (const opp of opponents) {
+        const gPhiJ = gPhi(opp.phi);
+        const E = expectation(mu, opp.mu, opp.phi);
+        sum += gPhiJ * (opp.s - E);
+    }
+    return calculateV(opponents, mu) * sum;
+}
+
+// Обновляем функцию calculateNewPhi для точного соответствия формуле
+function calculateNewPhi(phi, sigma, v) {
+    return 1 / Math.sqrt(1 / (phi*phi + sigma*sigma) + 1/v);
+}
+
+// Обновляем функцию calculateNewMu для точного соответствия формуле
+function calculateNewMu(mu, phi, opponents) {
+    let sum = 0;
+    for (const opp of opponents) {
+        sum += gPhi(opp.phi) * (opp.s - expectation(mu, opp.mu, opp.phi));
+    }
+    return mu + Math.pow(phi, 2) * sum;
 }
