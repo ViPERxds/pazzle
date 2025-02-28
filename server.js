@@ -223,30 +223,53 @@ async function findPuzzleForUser(username) {
     try {
         console.log(`Finding puzzle for user: ${username}`);
         
-        // Получаем все задачи из PuzzlesList
-        const result = await pool.query('SELECT * FROM PuzzlesList LIMIT 1');
+        // Получаем список уже решённых задач пользователем
+        const solvedResult = await pool.query(
+            `SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1`,
+            [username]
+        );
+        const solvedFens = solvedResult.rows.map(row => row.puzzle_fen);
         
-        if (result.rows.length === 0) {
-            throw new Error('Нет доступных задач');
-        }
+        // Получаем случайную нерешённую задачу с учётом рейтинга пользователя
+        const userRating = await getUserRating(username);
+        const ratingRange = 300; // Диапазон рейтинга для подбора задач
         
-        const puzzle = result.rows[0];
-        console.log('Selected puzzle:', puzzle);
-        
-        // Определяем цвет
-        const color = puzzle.fen.includes(' w ') ? 'W' : 'B';
-        
-        // Создаем запись в таблице Puzzles
-        const insertResult = await pool.query(
-            `INSERT INTO Puzzles 
-            (rating, rd, volatility, fen, move_1, move_2, solution, type, color)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *`,
-            [1500, 350.0, 0.06, puzzle.fen, puzzle.move_1, puzzle.move_2, 
-             puzzle.solution, 'tactical', color]
+        const result = await pool.query(
+            `SELECT * FROM Puzzles 
+            WHERE fen NOT IN (
+                SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1
+            )
+            AND ABS(rating - $2) <= $3
+            ORDER BY RANDOM() 
+            LIMIT 1`,
+            [username, userRating.rating, ratingRange]
         );
         
-        return insertResult.rows[0];
+        // Если нет подходящих задач в диапазоне, расширяем диапазон
+        if (result.rows.length === 0) {
+            const widerResult = await pool.query(
+                `SELECT * FROM Puzzles 
+                WHERE fen NOT IN (
+                    SELECT puzzle_fen FROM SolvedPuzzles WHERE username = $1
+                )
+                ORDER BY ABS(rating - $2)
+                LIMIT 1`,
+                [username, userRating.rating]
+            );
+            
+            if (widerResult.rows.length === 0) {
+                // Если все задачи решены, сбрасываем историю решений
+                await pool.query(
+                    `DELETE FROM SolvedPuzzles WHERE username = $1`,
+                    [username]
+                );
+                return findPuzzleForUser(username); // Рекурсивный вызов после сброса
+            }
+            
+            return widerResult.rows[0];
+        }
+        
+        return result.rows[0];
     } catch (err) {
         console.error('Error in findPuzzleForUser:', err);
         throw err;
@@ -831,6 +854,9 @@ async function updateRating(username, puzzleId, success) {
         // Преобразуем обратно в обычную шкалу
         const { rating: userFinalRating, rd: userFinalRD } = convertFromGlicko2Scale(userNewMu, userNewPhi);
         const { rating: puzzleFinalRating, rd: puzzleFinalRD } = convertFromGlicko2Scale(puzzleNewMu, puzzleNewPhi);
+        
+        // Добавляем задачу в список решённых
+        await markPuzzleAsSolved(username, puzzleRating.fen);
         
         // Обновляем рейтинг задачи в базе данных
         await pool.query(
