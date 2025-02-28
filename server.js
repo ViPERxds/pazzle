@@ -29,6 +29,10 @@ pool.connect(async (err, client, release) => {
     console.log('Successfully connected to database');
     
     try {
+        // Сбрасываем последовательность в PuzzlesList
+        await client.query('ALTER SEQUENCE puzzleslist_id_seq RESTART WITH 1');
+        console.log('Reset PuzzlesList sequence');
+
         // Сначала получаем все задачи из PuzzlesList
         const puzzles = await client.query('SELECT * FROM PuzzlesList');
         console.log(`Found ${puzzles.rows.length} puzzles in PuzzlesList`);
