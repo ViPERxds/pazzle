@@ -269,7 +269,7 @@ async function findPuzzleForUser(username) {
                 SELECT puzzle_id FROM Journal WHERE username = $1
             )
             AND rating BETWEEN $2 AND $3
-            ORDER BY RANDOM() 
+            ORDER BY id ASC
             LIMIT 1`,
             [username, userRating.rating - 300, userRating.rating + 300]
         );
@@ -281,7 +281,7 @@ async function findPuzzleForUser(username) {
                 WHERE id NOT IN (
                     SELECT puzzle_id FROM Journal WHERE username = $1
                 )
-                ORDER BY RANDOM() 
+                ORDER BY id ASC
                 LIMIT 1`,
                 [username]
             );
