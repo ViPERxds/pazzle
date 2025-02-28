@@ -133,40 +133,20 @@ async function checkUserAccess(username) {
 // Временно заменяем функцию generatePuzzlesList для отладки
 async function generatePuzzlesList() {
     try {
-        const result = await pool.query('SELECT * FROM PuzzlesList');
+        const result = await pool.query('SELECT * FROM Puzzles');
         console.log(`Found ${result.rows.length} puzzles in database`);
         
         if (result.rows.length === 0) {
-            console.warn('No puzzles found in PuzzlesList table!');
-            // Возвращаем хотя бы одну тестовую задачу
-            return [{
-                fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
-                move_1: 'h5f7',
-                move_2: 'e8f7',
-                solution: 'Good',
-                type: 'tactical'
-            }];
+            console.warn('No puzzles found in Puzzles table!');
+            await initializePuzzles();
+            return pool.query('SELECT * FROM Puzzles');
         }
         
-        // Преобразуем результаты, убирая поле difficulty
-        return result.rows.map(puzzle => ({
-            fen: puzzle.fen,
-            move_1: puzzle.move_1,
-            move_2: puzzle.move_2,
-            solution: puzzle.solution,
-            type: puzzle.type || 'tactical'
-        }));
+        return result.rows;
     } catch (err) {
         console.error('Error getting puzzles from database:', err);
         console.error(err.stack);
-        // Возвращаем хотя бы одну тестовую задачу в случае ошибки
-        return [{
-            fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1',
-            move_1: 'h5f7',
-            move_2: 'e8f7',
-            solution: 'Good',
-            type: 'tactical'
-        }];
+        throw err;
     }
 }
 
