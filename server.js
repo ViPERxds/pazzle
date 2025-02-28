@@ -219,6 +219,9 @@ async function initializePuzzles() {
         // Проверяем, есть ли уже задачи
         const count = await pool.query('SELECT COUNT(*) FROM Puzzles');
         if (count.rows[0].count === '0') {
+            // Сбрасываем последовательность
+            await pool.query('ALTER SEQUENCE puzzles_id_seq RESTART WITH 1');
+            
             // Добавляем базовые задачи
             await pool.query(`
                 INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility) VALUES
