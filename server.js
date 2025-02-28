@@ -620,3 +620,239 @@ async function markPuzzleAsSolved(username, fen) {
         throw err; // Пробрасываем ошибку дальше
     }
 }
+
+// Функция для расчёта нового отклонения рейтинга (RD) по алгоритму Глико
+function calculateNewRD(RD0, t, c = 34.6) {
+    // Формула: RD = min(sqrt(RD0^2 + c^2*t), 350)
+    const newRD = Math.sqrt(Math.pow(RD0, 2) + Math.pow(c, 2) * t);
+    return Math.min(newRD, 350);
+}
+
+// Константа q для алгоритма Глико
+const q = Math.log(10) / 400; // = 0.00575646273
+
+// Функция g(RD) для алгоритма Глико
+function g(RD) {
+    return 1 / Math.sqrt(1 + 3 * q * q * RD * RD / (Math.PI * Math.PI));
+}
+
+// Функция E для алгоритма Глико
+function E(r0, ri, RDi) {
+    return 1 / (1 + Math.pow(10, (-g(RDi) * (r0 - ri)) / 400));
+}
+
+// Функция для расчёта d^2
+function calculateD2(opponents) {
+    let sum = 0;
+    for (const opp of opponents) {
+        const gRD = g(opp.RD);
+        const eValue = E(opp.r, opp.r0, opp.RD);
+        sum += Math.pow(gRD, 2) * eValue * (1 - eValue);
+    }
+    return 1 / (Math.pow(q, 2) * sum);
+}
+
+// Функция для расчёта нового рейтинга
+function calculateNewRating(r0, RD, opponents) {
+    // Рассчитываем d^2
+    const d2 = calculateD2(opponents);
+    
+    // Рассчитываем сумму в числителе
+    let sum = 0;
+    for (const opp of opponents) {
+        sum += g(opp.RD) * (opp.s - E(r0, opp.r, opp.RD));
+    }
+    
+    // Рассчитываем новый рейтинг по формуле
+    const newRating = r0 + (q / (1/Math.pow(RD, 2) + 1/d2)) * sum;
+    
+    return newRating;
+}
+
+// Функция для расчёта нового отклонения рейтинга по Глико-2
+function calculateNewRDPrime(RD, d2) {
+    // Формула: RD' = sqrt(1 / (1/RD² + 1/d²))
+    return Math.sqrt(1 / (1/Math.pow(RD, 2) + 1/d2));
+}
+
+// Функция g(φ) для Глико-2
+function gPhi(phi) {
+    return 1 / Math.sqrt(1 + 3 * Math.pow(phi, 2) / (Math.PI * Math.PI));
+}
+
+// Функция E(μ, μj, φj) для Глико-2
+function expectation(mu, muJ, phiJ) {
+    return 1 / (1 + Math.exp(-gPhi(phiJ) * (mu - muJ)));
+}
+
+// Функция для вычисления v (вспомогательная величина)
+function calculateV(opponents, mu) {
+    let sum = 0;
+    for (const opp of opponents) {
+        const gPhiJ = gPhi(opp.phi);
+        const E = expectation(mu, opp.mu, opp.phi);
+        sum += Math.pow(gPhiJ, 2) * E * (1 - E);
+    }
+    return Math.pow(sum, -1);
+}
+
+// Функция для вычисления Δ (вспомогательная величина)
+function calculateDelta(opponents, mu) {
+    let sum = 0;
+    for (const opp of opponents) {
+        const gPhiJ = gPhi(opp.phi);
+        const E = expectation(mu, opp.mu, opp.phi);
+        sum += gPhiJ * (opp.s - E);
+    }
+    return calculateV(opponents, mu) * sum;
+}
+
+// Функция для преобразования рейтинга в шкалу Глико-2
+function convertToGlicko2Scale(rating, rd) {
+    const mu = (rating - 1500) / 173.7178;
+    const phi = rd / 173.7178;
+    return { mu, phi };
+}
+
+// Функция для преобразования обратно в шкалу рейтинга
+function convertFromGlicko2Scale(mu, phi) {
+    const rating = 173.7178 * mu + 1500;
+    const rd = 173.7178 * phi;
+    return { rating, rd };
+}
+
+// Константа τ для алгоритма Глико-2
+const TAU = 0.2;
+const EPSILON = 0.000001;
+
+// Функция f(x) для итерационного процесса
+function f(x, delta, phi, v, sigma2, tau2) {
+    const ex = Math.exp(x);
+    return (ex * (delta*delta - phi*phi - v - ex)) / (2 * Math.pow(phi*phi + v + ex, 2)) - (x - Math.log(sigma2)) / tau2;
+}
+
+// Функция для поиска значения A методом половинного деления
+function findA(sigma, phi, v, delta) {
+    const tau2 = TAU * TAU;
+    const sigma2 = sigma * sigma;
+    
+    // Начальное значение a = ln(σ²)
+    const a = Math.log(sigma2);
+    
+    // Находим подходящее значение для b
+    let b;
+    if (delta*delta > phi*phi + v) {
+        b = Math.log(delta*delta - phi*phi - v);
+    } else {
+        k = 1;
+        while (f(a - k * TAU, delta, phi, v, sigma2, tau2) < 0) {
+            k = k + 1;
+        }
+        b = a - k * TAU;
+    }
+    
+    // Метод половинного деления
+    let c;
+    let fa = f(a, delta, phi, v, sigma2, tau2);
+    let fb = f(b, delta, phi, v, sigma2, tau2);
+    
+    while (Math.abs(b - a) > EPSILON) {
+        c = (a + b) / 2;
+        let fc = f(c, delta, phi, v, sigma2, tau2);
+        if (fc * fa < 0) {
+            b = c;
+            fb = fc;
+        } else {
+            a = c;
+            fa = fc;
+        }
+    }
+    
+    return (a + b) / 2;
+}
+
+// Функция для вычисления нового рейтинга μ'
+function calculateNewMu(mu, phi, opponents) {
+    let sum = 0;
+    for (const opp of opponents) {
+        sum += gPhi(opp.phi) * (opp.s - expectation(mu, opp.mu, opp.phi));
+    }
+    return mu + Math.pow(phi, 2) * sum;
+}
+
+// Функция для вычисления нового φ'
+function calculateNewPhi(phi, sigma, v) {
+    return 1 / Math.sqrt(1 / (phi*phi + sigma*sigma) + 1/v);
+}
+
+// Обновляем функцию updateRating для обновления рейтинга и задачи, и пользователя
+async function updateRating(username, puzzleId, success) {
+    try {
+        // Получаем текущий рейтинг пользователя
+        const userRating = await getUserRating(username);
+        
+        // Получаем рейтинг задачи
+        const puzzleRating = await getPuzzleRating(puzzleId);
+        
+        // Преобразуем рейтинги в шкалу Глико-2
+        const { mu: userMu, phi: userPhi } = convertToGlicko2Scale(userRating.rating, userRating.rd);
+        const { mu: puzzleMu, phi: puzzlePhi } = convertToGlicko2Scale(puzzleRating.rating, puzzleRating.rd);
+        
+        // Обновляем рейтинг пользователя
+        const userOpponents = [{
+            mu: puzzleMu,
+            phi: puzzlePhi,
+            s: success ? 1 : 0
+        }];
+        
+        // Обновляем рейтинг задачи
+        const puzzleOpponents = [{
+            mu: userMu,
+            phi: userPhi,
+            s: success ? 0 : 1 // Инвертируем результат для задачи
+        }];
+        
+        // Вычисляем новые значения для пользователя
+        const userV = calculateV(userOpponents, userMu);
+        const userDelta = calculateDelta(userOpponents, userMu);
+        const userA = findA(userRating.volatility, userPhi, userV, userDelta);
+        const userNewVolatility = Math.exp(userA/2);
+        const userNewPhi = calculateNewPhi(userPhi, userNewVolatility, userV);
+        const userNewMu = calculateNewMu(userMu, userNewPhi, userOpponents);
+        
+        // Вычисляем новые значения для задачи
+        const puzzleV = calculateV(puzzleOpponents, puzzleMu);
+        const puzzleDelta = calculateDelta(puzzleOpponents, puzzleMu);
+        const puzzleA = findA(puzzleRating.volatility, puzzlePhi, puzzleV, puzzleDelta);
+        const puzzleNewVolatility = Math.exp(puzzleA/2);
+        const puzzleNewPhi = calculateNewPhi(puzzlePhi, puzzleNewVolatility, puzzleV);
+        const puzzleNewMu = calculateNewMu(puzzleMu, puzzleNewPhi, puzzleOpponents);
+        
+        // Преобразуем обратно в обычную шкалу
+        const { rating: userFinalRating, rd: userFinalRD } = convertFromGlicko2Scale(userNewMu, userNewPhi);
+        const { rating: puzzleFinalRating, rd: puzzleFinalRD } = convertFromGlicko2Scale(puzzleNewMu, puzzleNewPhi);
+        
+        // Обновляем рейтинг задачи в базе данных
+        await pool.query(
+            `UPDATE Puzzles 
+             SET rating = $1, rd = $2, volatility = $3 
+             WHERE id = $4`,
+            [
+                puzzleFinalRating,
+                Math.min(puzzleFinalRD, 350),
+                puzzleNewVolatility,
+                puzzleId
+            ]
+        );
+        
+        // Возвращаем обновленные значения пользователя
+        return {
+            rating: userFinalRating,
+            rd: Math.min(userFinalRD, 350),
+            volatility: userNewVolatility
+        };
+    } catch (err) {
+        console.error('Error updating rating:', err);
+        throw err;
+    }
+}
