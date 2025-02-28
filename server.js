@@ -113,8 +113,10 @@ pool.connect(async (err, client, release) => {
         if (puzzles.rows.length > 0) {
             const values = puzzles.rows.map(p => {
                 // Проверяем и нормализуем цвет
-                const color = (p.color && p.color.toLowerCase() === 'b') ? 'b' : 'w';
-                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${p.type || 'Good'}', '${color}', '${p.difficulty || 'normal'}', 0)`;
+                const color = p.fen.includes(' w ') ? 'w' : 'b';
+                // Используем тип из базы данных или 'usual' по умолчанию
+                const type = p.type || 'usual';
+                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${type}', '${color}', '${p.difficulty || 'normal'}', 0)`;
             }).join(',');
             
             await client.query(`
