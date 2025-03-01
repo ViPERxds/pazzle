@@ -159,7 +159,8 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
-            initializeBoard();
+            // Убираем автоматическую инициализацию при загрузке
+            // initializeBoard();  // Комментируем эту строку
         } catch (err) {
             console.error('Error starting puzzle:', err);
             alert('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
@@ -288,7 +289,8 @@ document.addEventListener('DOMContentLoaded', function() {
             resultPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
             
-            initializeBoard(); // Здесь ориентация обновится автоматически
+            // Убираем автоматическую инициализацию при загрузке
+            // initializeBoard();  // Комментируем эту строку
         } catch (err) {
             console.error('Error loading next puzzle:', err);
             alert('Произошла ошибка при загрузке следующей задачи');
@@ -315,12 +317,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Конфигурация шахматной задачи
     const puzzleConfig = {
-        initialFen: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 0 1', // Пример FEN
-        preMove: 'e7d7', // Предварительный ход
-        evaluatedMove: 'c7b6', // Оцениваемый ход
-        orientation: 'white', // Ориентация доски
-        preMoveDelay: 2000, // Задержка перед предварительным ходом в мс
-        solution: 'Good' // Предполагаемый правильный ответ
+        initialFen: '', // Убираем тестовую позицию
+        preMove: '',
+        evaluatedMove: '',
+        orientation: 'white',
+        preMoveDelay: 2000,
+        solution: ''
     };
 
     let board = null;
@@ -492,9 +494,6 @@ document.addEventListener('DOMContentLoaded', function() {
             arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
         }
     });
-
-    // Инициализация при загрузке
-    initializeBoard();
 
     // Обновляем функцию handlePuzzleResult
     async function handlePuzzleResult(isCorrect) {
