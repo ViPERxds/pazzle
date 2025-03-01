@@ -373,10 +373,10 @@ document.addEventListener('DOMContentLoaded', function() {
             orientation: puzzleConfig.orientation,
             pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             draggable: true,
-            moveSpeed: 'slow',
+            moveSpeed: 300,
             snapSpeed: 100,
-            snapbackSpeed: 250,
-            trashSpeed: 100,
+            snapbackSpeed: 200,
+            appearSpeed: 200,
             showErrors: false,
             onDragStart: function(source, piece) {
                 return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
@@ -416,14 +416,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         promotion: 'q'
                     });
                     
-                    // Обновляем позицию с анимацией
-                    board.position(game.fen(), true);
+                    board.move(`${source}-${target}`);
                     
                     setTimeout(() => {
                         $('.highlight-square').removeClass('highlight-square');
                         $('.highlight-move').removeClass('highlight-move');
                         handlePuzzleResult(puzzleConfig.solution === 'Good');
-                    }, 600);
+                    }, 400);
                 } else {
                     $('.highlight-square').removeClass('highlight-square');
                     $('.highlight-move').removeClass('highlight-move');
@@ -431,7 +430,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             onSnapEnd: function() {
-                board.position(game.fen(), false);
+                board.position(game.fen());
             }
         });
 
@@ -447,7 +446,7 @@ document.addEventListener('DOMContentLoaded', function() {
             game.move({ from, to, promotion: 'q' });
             
             // Анимируем ход на доске
-            board.position(game.fen(), true); // true включает анимацию
+            board.move(`${from}-${to}`);
             
             // Убираем подсветку после завершения анимации
             setTimeout(() => {
@@ -455,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 $('.highlight-move').removeClass('highlight-move');
                 // После завершения анимации рисуем стрелку
                 drawArrow();
-            }, 600);
+            }, 400);
         }, 500);
 
         // Запускаем секундомер
