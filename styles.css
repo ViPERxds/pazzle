@@ -166,15 +166,25 @@ body {
 }
 
 .square-55d63 {
-    contain: layout size;
+    contain: layout size !important;
+    position: relative !important;
+    z-index: 1 !important;
 }
 
 .piece-417db {
-    transition-property: transform;
-    transition-timing-function: ease-in-out;
-    will-change: transform;
-    transform-origin: center;
+    transition: all 0.3s ease-in-out !important;
+    will-change: transform !important;
+    transform-origin: center !important;
     position: absolute !important;
+    z-index: 5 !important;
+}
+
+.highlight-square {
+    box-shadow: inset 0 0 3px 3px yellow !important;
+}
+
+.highlight-move {
+    box-shadow: inset 0 0 3px 3px green !important;
 }
 
 :root {
