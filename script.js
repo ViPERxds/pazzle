@@ -373,89 +373,37 @@ document.addEventListener('DOMContentLoaded', function() {
             orientation: puzzleConfig.orientation,
             pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             draggable: true,
-            moveSpeed: 'slow',
-            snapSpeed: 100,
-            snapbackSpeed: 250,
-            trashSpeed: 100,
-            showErrors: false,
+            moveSpeed: 200,
             onDragStart: function(source, piece) {
                 return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
             },
             onDrop: function(source, target) {
-                // Получаем фигуру, которая делает ход
-                const piece = game.get(source);
-                
-                // Подсвечиваем начальную и конечную клетки
-                $(`[data-square="${source}"]`).addClass('highlight-square');
-                $(`[data-square="${target}"]`).addClass('highlight-move');
-                
-                // Проверяем валидность хода
-                const move = game.move({
-                    from: source,
-                    to: target,
-                    promotion: 'q'
-                });
-
-                // Если ход невозможен по правилам шахмат
-                if (move === null) {
-                    $('.highlight-square').removeClass('highlight-square');
-                    $('.highlight-move').removeClass('highlight-move');
-                    return 'snapback';
-                }
-
-                // Отменяем ход, чтобы проверить, совпадает ли он с ожидаемым
-                game.undo();
-
-                // Проверяем, совпадает ли ход с ожидаемым
                 const moveString = source + target;
                 if (moveString === puzzleConfig.evaluatedMove) {
-                    // Делаем ход снова
                     game.move({
                         from: source,
                         to: target,
                         promotion: 'q'
                     });
                     
-                    // Обновляем позицию с анимацией
                     board.position(game.fen(), true);
                     
                     setTimeout(() => {
-                        $('.highlight-square').removeClass('highlight-square');
-                        $('.highlight-move').removeClass('highlight-move');
                         handlePuzzleResult(puzzleConfig.solution === 'Good');
-                    }, 600);
+                    }, 300);
                 } else {
-                    $('.highlight-square').removeClass('highlight-square');
-                    $('.highlight-move').removeClass('highlight-move');
                     return 'snapback';
                 }
-            },
-            onSnapEnd: function() {
-                board.position(game.fen(), false);
             }
         });
 
-        // Анимация предварительного хода с задержкой
+        // Анимация первого хода
         setTimeout(() => {
             const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-            
-            // Подсвечиваем начальную и конечную клетки
-            $(`[data-square="${from}"]`).addClass('highlight-square');
-            $(`[data-square="${to}"]`).addClass('highlight-move');
-            
-            // Делаем ход в игре
             game.move({ from, to, promotion: 'q' });
+            board.position(game.fen(), true);
             
-            // Анимируем ход на доске
-            board.position(game.fen(), true); // true включает анимацию
-            
-            // Убираем подсветку после завершения анимации
-            setTimeout(() => {
-                $('.highlight-square').removeClass('highlight-square');
-                $('.highlight-move').removeClass('highlight-move');
-                // После завершения анимации рисуем стрелку
-                drawArrow();
-            }, 600);
+            setTimeout(drawArrow, 300);
         }, 500);
 
         // Запускаем секундомер
