@@ -159,8 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
-            // Убираем автоматическую инициализацию при загрузке
-            // initializeBoard();  // Комментируем эту строку
+            initializeBoard();
         } catch (err) {
             console.error('Error starting puzzle:', err);
             alert('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
@@ -289,8 +288,7 @@ document.addEventListener('DOMContentLoaded', function() {
             resultPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
             
-            // Убираем автоматическую инициализацию при загрузке
-            // initializeBoard();  // Комментируем эту строку
+            initializeBoard(); // Здесь ориентация обновится автоматически
         } catch (err) {
             console.error('Error loading next puzzle:', err);
             alert('Произошла ошибка при загрузке следующей задачи');
@@ -317,12 +315,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Конфигурация шахматной задачи
     const puzzleConfig = {
-        initialFen: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 0 1',
-        preMove: 'e7d7',
-        evaluatedMove: 'c7b6',
-        orientation: 'white',
-        preMoveDelay: 2000,
-        solution: 'Good'
+        initialFen: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 0 1', // Пример FEN
+        preMove: 'e7d7', // Предварительный ход
+        evaluatedMove: 'c7b6', // Оцениваемый ход
+        orientation: 'white', // Ориентация доски
+        preMoveDelay: 2000, // Задержка перед предварительным ходом в мс
+        solution: 'Good' // Предполагаемый правильный ответ
     };
 
     let board = null;
@@ -332,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для определения ориентации доски
     function getBoardOrientation(fen) {
         const fenParts = fen.split(' ');
-        const colorToMove = fenParts[1];
+        const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
         return colorToMove === 'w' ? 'white' : 'black';
     }
 
@@ -362,7 +360,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const [fromSquare] = puzzleConfig.preMove.match(/.{2}/g);
         const piece = game.get(fromSquare);
         
-        // Устанавливаем ориентацию
+        // Устанавливаем ориентацию: тот, кто должен ответить на ход, будет внизу
+        // Если первый ход белых - черные отвечают и должны быть внизу
+        // Если первый ход черных - белые отвечают и должны быть внизу
         puzzleConfig.orientation = piece.color === 'w' ? 'black' : 'white';
         
         // Возвращаем позицию в исходное состояние
@@ -373,37 +373,89 @@ document.addEventListener('DOMContentLoaded', function() {
             orientation: puzzleConfig.orientation,
             pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             draggable: true,
-            moveSpeed: 200,
+            moveSpeed: 'slow',
+            snapSpeed: 100,
+            snapbackSpeed: 250,
+            trashSpeed: 100,
+            showErrors: false,
             onDragStart: function(source, piece) {
                 return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
             },
             onDrop: function(source, target) {
+                // Получаем фигуру, которая делает ход
+                const piece = game.get(source);
+                
+                // Подсвечиваем начальную и конечную клетки
+                $(`[data-square="${source}"]`).addClass('highlight-square');
+                $(`[data-square="${target}"]`).addClass('highlight-move');
+                
+                // Проверяем валидность хода
+                const move = game.move({
+                    from: source,
+                    to: target,
+                    promotion: 'q'
+                });
+
+                // Если ход невозможен по правилам шахмат
+                if (move === null) {
+                    $('.highlight-square').removeClass('highlight-square');
+                    $('.highlight-move').removeClass('highlight-move');
+                    return 'snapback';
+                }
+
+                // Отменяем ход, чтобы проверить, совпадает ли он с ожидаемым
+                game.undo();
+
+                // Проверяем, совпадает ли ход с ожидаемым
                 const moveString = source + target;
                 if (moveString === puzzleConfig.evaluatedMove) {
+                    // Делаем ход снова
                     game.move({
                         from: source,
                         to: target,
                         promotion: 'q'
                     });
                     
+                    // Обновляем позицию с анимацией
                     board.position(game.fen(), true);
                     
                     setTimeout(() => {
+                        $('.highlight-square').removeClass('highlight-square');
+                        $('.highlight-move').removeClass('highlight-move');
                         handlePuzzleResult(puzzleConfig.solution === 'Good');
-                    }, 300);
+                    }, 600);
                 } else {
+                    $('.highlight-square').removeClass('highlight-square');
+                    $('.highlight-move').removeClass('highlight-move');
                     return 'snapback';
                 }
+            },
+            onSnapEnd: function() {
+                board.position(game.fen(), false);
             }
         });
 
-        // Анимация первого хода
+        // Анимация предварительного хода с задержкой
         setTimeout(() => {
             const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-            game.move({ from, to, promotion: 'q' });
-            board.position(game.fen(), true);
             
-            setTimeout(drawArrow, 300);
+            // Подсвечиваем начальную и конечную клетки
+            $(`[data-square="${from}"]`).addClass('highlight-square');
+            $(`[data-square="${to}"]`).addClass('highlight-move');
+            
+            // Делаем ход в игре
+            game.move({ from, to, promotion: 'q' });
+            
+            // Анимируем ход на доске
+            board.position(game.fen(), true); // true включает анимацию
+            
+            // Убираем подсветку после завершения анимации
+            setTimeout(() => {
+                $('.highlight-square').removeClass('highlight-square');
+                $('.highlight-move').removeClass('highlight-move');
+                // После завершения анимации рисуем стрелку
+                drawArrow();
+            }, 600);
         }, 500);
 
         // Запускаем секундомер
@@ -492,6 +544,9 @@ document.addEventListener('DOMContentLoaded', function() {
             arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
         }
     });
+
+    // Инициализация при загрузке
+    initializeBoard();
 
     // Обновляем функцию handlePuzzleResult
     async function handlePuzzleResult(isCorrect) {
