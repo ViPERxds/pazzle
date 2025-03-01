@@ -168,16 +168,11 @@ body {
 
 .square-55d63 {
     position: relative !important;
-    z-index: 1 !important;
 }
 
 .piece-417db {
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    will-change: transform !important;
     transform-origin: center !important;
-    position: absolute !important;
-    z-index: 5 !important;
-    pointer-events: none !important;
+    transition: all 0.2s ease-out !important;
 }
 
 .piece-417db:active {
