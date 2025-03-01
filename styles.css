@@ -40,11 +40,12 @@ body {
 }
 
 #board {
-    position: absolute;
+    position: relative !important;
     width: 400px !important;
     height: 400px !important;
     top: 0;
     left: 0;
+    overflow: hidden !important;
 }
 
 .container {
@@ -160,23 +161,31 @@ body {
 
 .board-b72b1 {
     position: relative !important;
-    width: 400px !important;
-    height: 400px !important;
-    contain: layout size !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
 }
 
 .square-55d63 {
     position: relative !important;
+    float: left !important;
     z-index: 1 !important;
 }
 
 .piece-417db {
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    will-change: transform !important;
-    transform-origin: center !important;
     position: absolute !important;
-    z-index: 5 !important;
-    pointer-events: none !important;
+    width: 12.5% !important;
+    height: 12.5% !important;
+    transition: all 0.3s ease !important;
+    z-index: 2 !important;
+    cursor: grab !important;
+    pointer-events: auto !important;
+    transform-origin: center !important;
+    will-change: transform !important;
+}
+
+.piece-417db:active {
+    cursor: grabbing !important;
 }
 
 .highlight-square {
