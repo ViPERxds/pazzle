@@ -317,12 +317,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Конфигурация шахматной задачи
     const puzzleConfig = {
-        initialFen: '', // Убираем тестовую позицию
-        preMove: '',
-        evaluatedMove: '',
+        initialFen: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 0 1',
+        preMove: 'e7d7',
+        evaluatedMove: 'c7b6',
         orientation: 'white',
         preMoveDelay: 2000,
-        solution: ''
+        solution: 'Good'
     };
 
     let board = null;
@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для определения ориентации доски
     function getBoardOrientation(fen) {
         const fenParts = fen.split(' ');
-        const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
+        const colorToMove = fenParts[1];
         return colorToMove === 'w' ? 'white' : 'black';
     }
 
@@ -362,9 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const [fromSquare] = puzzleConfig.preMove.match(/.{2}/g);
         const piece = game.get(fromSquare);
         
-        // Устанавливаем ориентацию: тот, кто должен ответить на ход, будет внизу
-        // Если первый ход белых - черные отвечают и должны быть внизу
-        // Если первый ход черных - белые отвечают и должны быть внизу
+        // Устанавливаем ориентацию
         puzzleConfig.orientation = piece.color === 'w' ? 'black' : 'white';
         
         // Возвращаем позицию в исходное состояние
