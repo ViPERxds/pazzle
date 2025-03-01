@@ -373,9 +373,12 @@ document.addEventListener('DOMContentLoaded', function() {
             orientation: puzzleConfig.orientation,
             pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             draggable: true,
+            moveSpeed: 'slow',
+            snapSpeed: 100,
+            snapbackSpeed: 250,
+            trashSpeed: 100,
+            showErrors: false,
             onDragStart: function(source, piece) {
-                // Разрешаем перетаскивание только после предварительного хода
-                // и только для фигур того цвета, чей ход
                 return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
             },
             onDrop: function(source, target) {
@@ -395,7 +398,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Если ход невозможен по правилам шахмат
                 if (move === null) {
-                    // Убираем подсветку
                     $('.highlight-square').removeClass('highlight-square');
                     $('.highlight-move').removeClass('highlight-move');
                     return 'snapback';
@@ -407,28 +409,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Проверяем, совпадает ли ход с ожидаемым
                 const moveString = source + target;
                 if (moveString === puzzleConfig.evaluatedMove) {
-                    // Делаем ход снова с анимацией
+                    // Делаем ход снова
                     game.move({
                         from: source,
                         to: target,
                         promotion: 'q'
                     });
                     
-                    // Убираем подсветку после завершения анимации
+                    // Обновляем позицию с анимацией
+                    board.position(game.fen(), true);
+                    
                     setTimeout(() => {
                         $('.highlight-square').removeClass('highlight-square');
                         $('.highlight-move').removeClass('highlight-move');
                         handlePuzzleResult(puzzleConfig.solution === 'Good');
-                    }, 400);
+                    }, 600);
                 } else {
-                    // Убираем подсветку
                     $('.highlight-square').removeClass('highlight-square');
                     $('.highlight-move').removeClass('highlight-move');
                     return 'snapback';
                 }
             },
             onSnapEnd: function() {
-                board.position(game.fen());
+                board.position(game.fen(), false);
             }
         });
 
@@ -443,11 +446,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Делаем ход в игре
             game.move({ from, to, promotion: 'q' });
             
-            // Анимируем ход на доске с увеличенной длительностью
-            board.move(`${from}-${to}`, {
-                animated: true,
-                duration: 300 // 300 миллисекунд для анимации
-            });
+            // Анимируем ход на доске
+            board.position(game.fen(), true); // true включает анимацию
             
             // Убираем подсветку после завершения анимации
             setTimeout(() => {
@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 $('.highlight-move').removeClass('highlight-move');
                 // После завершения анимации рисуем стрелку
                 drawArrow();
-            }, 400);
+            }, 600);
         }, 500);
 
         // Запускаем секундомер
