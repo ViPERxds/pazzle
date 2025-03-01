@@ -161,27 +161,23 @@ body {
 
 .board-b72b1 {
     position: relative !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow: hidden !important;
+    width: 400px !important;
+    height: 400px !important;
+    contain: layout size !important;
 }
 
 .square-55d63 {
     position: relative !important;
-    float: left !important;
     z-index: 1 !important;
 }
 
 .piece-417db {
-    position: absolute !important;
-    width: 12.5% !important;
-    height: 12.5% !important;
-    transition: all 0.3s ease !important;
-    z-index: 2 !important;
-    cursor: grab !important;
-    pointer-events: auto !important;
-    transform-origin: center !important;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform !important;
+    transform-origin: center !important;
+    position: absolute !important;
+    z-index: 5 !important;
+    pointer-events: none !important;
 }
 
 .piece-417db:active {
