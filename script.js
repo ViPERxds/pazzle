@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     if (!currentPuzzle || !currentPuzzle.id) {
                         console.error('No current puzzle!');
-                        showError('Ошибка: нет активной задачи');
+                        alert('Ошибка: нет активной задачи');
                         return;
                     }
                     
@@ -236,22 +236,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     const [minutes, seconds] = timeDisplay.split(':').map(Number);
                     const totalSeconds = minutes * 60 + seconds;
                     
+                    const data = {
+                        puzzle_id: currentPuzzle.id,
+                        user_id: 1,
+                        success: true,
+                        time: totalSeconds,
+                        complexity_id: 4
+                    };
+                    
+                    console.log('Sending data:', data);
+                    
                     await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            id: null,
-                            user_id: 1,
-                            puzzle_id: parseInt(currentPuzzle.id),
-                            success: true,
-                            time: parseFloat(totalSeconds.toFixed(1)),
-                            puzzle_rating_before: 1500,
-                            user_rating_after: null,
-                            complexity_id: 4,
-                            date: new Date().toISOString()
-                        })
+                        body: JSON.stringify(data)
                     });
 
                     // Обновляем интерфейс
@@ -260,11 +260,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
                     resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
                     
-                    await updateRatingDisplay(currentUsername);
-                    
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    alert('Произошла ошибка при записи решения: ' + err.message);
+                    alert('Ошибка при записи решения: ' + err.message);
                 }
             });
         }
@@ -274,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     if (!currentPuzzle || !currentPuzzle.id) {
                         console.error('No current puzzle!');
-                        showError('Ошибка: нет активной задачи');
+                        alert('Ошибка: нет активной задачи');
                         return;
                     }
                     
@@ -287,22 +285,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     const [minutes, seconds] = timeDisplay.split(':').map(Number);
                     const totalSeconds = minutes * 60 + seconds;
                     
+                    const data = {
+                        puzzle_id: currentPuzzle.id,
+                        user_id: 1,
+                        success: false,
+                        time: totalSeconds,
+                        complexity_id: 4
+                    };
+                    
+                    console.log('Sending data:', data);
+                    
                     await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            id: null,
-                            user_id: 1,
-                            puzzle_id: parseInt(currentPuzzle.id),
-                            success: false,
-                            time: parseFloat(totalSeconds.toFixed(1)),
-                            puzzle_rating_before: 1500,
-                            user_rating_after: null,
-                            complexity_id: 4,
-                            date: new Date().toISOString()
-                        })
+                        body: JSON.stringify(data)
                     });
 
                     // Обновляем интерфейс
@@ -311,11 +309,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
                     resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
                     
-                    await updateRatingDisplay(currentUsername);
-                    
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    alert('Произошла ошибка при записи решения: ' + err.message);
+                    alert('Ошибка при записи решения: ' + err.message);
                 }
             });
         }
@@ -645,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!currentPuzzle || !currentPuzzle.id) {
             console.error('No valid puzzle data');
-            showError('Ошибка: нет данных о текущей задаче');
+            alert('Ошибка: нет данных о текущей задаче');
             return;
         }
         
@@ -654,22 +650,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalSeconds = minutes * 60 + seconds;
 
         try {
+            const data = {
+                puzzle_id: currentPuzzle.id,
+                user_id: 1,
+                success: isCorrect,
+                time: totalSeconds,
+                complexity_id: 4
+            };
+            
+            console.log('Sending data:', data);
+            
             await fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    id: null,
-                    user_id: 1,
-                    puzzle_id: parseInt(currentPuzzle.id),
-                    success: isCorrect,
-                    time: parseFloat(totalSeconds.toFixed(1)),
-                    puzzle_rating_before: 1500,
-                    user_rating_after: null,
-                    complexity_id: 4,
-                    date: new Date().toISOString()
-                })
+                body: JSON.stringify(data)
             });
 
             resultText.textContent = isCorrect ? 'Right!' : 'Wrong!';
@@ -677,10 +673,9 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
 
-            await updateRatingDisplay(currentUsername);
         } catch (err) {
             console.error('Error recording solution:', err);
-            showError('Произошла ошибка при сохранении результата: ' + err.message);
+            alert('Ошибка при сохранении результата: ' + err.message);
         }
     }
 
