@@ -31,9 +31,12 @@ app.use(express.json());
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: process.env.NODE_ENV === 'development' 
+        ? false 
+        : {
+            rejectUnauthorized: false,
+            ca: process.env.CA_CERT
+        }
 });
 
 // Проверяем подключение при запуске
@@ -517,26 +520,32 @@ async function initializeUserRating(username) {
 // Функция для получения рейтинга пользователя
 async function getUserRating(username) {
     try {
-        const result = await pool.query(
-            `SELECT rating, rd, volatility 
-            FROM Users 
-            WHERE username = $1`,
+        // Проверяем, существует ли пользователь
+        let result = await pool.query(
+            'SELECT username, rating, rd, volatility FROM Users WHERE username = $1',
             [username]
         );
 
+        // Если пользователь не найден, создаем его
         if (result.rows.length === 0) {
-            // Если пользователь не найден, возвращаем начальные значения
-            return {
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000
-            };
+            console.log(`Creating new user: ${username}`);
+            result = await pool.query(
+                `INSERT INTO Users (username, rating, rd, volatility, status) 
+                 VALUES ($1, 1500.00, 350.00, 0.06000000, true)
+                 RETURNING username, rating, rd, volatility`,
+                [username]
+            );
         }
 
         return result.rows[0];
     } catch (err) {
         console.error('Error getting user rating:', err);
-        throw err;
+        // Возвращаем значения по умолчанию в случае ошибки
+        return {
+            rating: 1500.00,
+            rd: 350.00,
+            volatility: 0.06000000
+        };
     }
 }
 
@@ -1093,3 +1102,29 @@ function calculateNewMu(mu, phi, opponents) {
     }
     return mu + Math.pow(phi, 2) * sum;
 }
+
+// Добавляем API endpoint для получения рейтинга пользователя
+app.get('/api/user-rating/:username', async (req, res) => {
+    try {
+        const username = req.params.username;
+        console.log(`Getting rating for user: ${username}`);
+        
+        const userRating = await getUserRating(username);
+        
+        // Форматируем ответ
+        const response = {
+            rating: parseFloat(userRating.rating),
+            rd: parseFloat(userRating.rd),
+            volatility: parseFloat(userRating.volatility)
+        };
+        
+        console.log(`Successfully got rating for user: ${username}`, response);
+        res.json(response);
+    } catch (err) {
+        console.error('Error in /api/user-rating:', err);
+        res.status(500).json({ 
+            error: err.message,
+            details: 'Ошибка при получении рейтинга пользователя'
+        });
+    }
+});
