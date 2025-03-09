@@ -40,20 +40,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const API_URL = window.CONFIG.API_URL;
 
     async function fetchWithAuth(url, options = {}) {
-        const tg = window.Telegram.WebApp;
-        const headers = {
-            ...options.headers,
-            'Content-Type': 'application/json',
-            'X-Telegram-Init-Data': tg.initData
-        };
-        
-        return fetch(url, { ...options, headers });
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+            };
+
+            const response = await fetch(url, { 
+                ...options, 
+                headers: {
+                    ...headers,
+                    ...options.headers
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (err) {
+            console.error('Fetch error:', err);
+            throw err;
+        }
     }
 
     // Функция для обновления отображения рейтинга
-    async function updateRatingDisplay() {
+    async function updateRatingDisplay(username) {
         try {
-            const response = await fetchWithAuth(`${API_URL}/user-rating/${currentUsername}`);
+            const response = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -74,10 +89,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Вызываем обновление рейтинга при загрузке страницы
-    updateRatingDisplay();
+    updateRatingDisplay(currentUsername);
     
     // Обновляем рейтинг каждые 5 секунд
-    setInterval(updateRatingDisplay, 5000);
+    setInterval(() => updateRatingDisplay(currentUsername), 5000);
 
     function startStopwatch() {
         let seconds = 0;
@@ -180,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const timeSpent = Math.max(0, 180 - seconds);
                     
-                    const response = await fetch(`${API_URL}/record-solution`, {
+                    const response = await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -202,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
                     resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
                     
-                    await updateRatingDisplay();
+                    await updateRatingDisplay(currentUsername);
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
@@ -225,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const timeSpent = Math.max(0, 180 - seconds);
                     
-                    const response = await fetch(`${API_URL}/record-solution`, {
+                    const response = await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -247,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
                     resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
                     
-                    await updateRatingDisplay();
+                    await updateRatingDisplay(currentUsername);
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
@@ -582,7 +597,7 @@ document.addEventListener('DOMContentLoaded', function() {
             resultPage.classList.remove('hidden');
 
             // Обновляем рейтинг
-            await updateRatingDisplay();
+            await updateRatingDisplay(currentUsername);
         } catch (err) {
             console.error('Error recording solution:', err);
             alert('Произошла ошибка при сохранении результата');
