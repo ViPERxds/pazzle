@@ -23,11 +23,18 @@ if (process.env.NODE_ENV !== 'development' && !process.env.BOT_TOKEN) {
 }
 
 app.use(cors({
-    origin: '*',
+    origin: ['https://retapro.com', 'http://localhost:3000', 'https://chess-puzzles-bot.onrender.com'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
+    credentials: true
 }));
 app.use(express.json());
+
+// Добавляем middleware для логирования запросов
+app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+});
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -713,9 +720,9 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
         const response = {
             id: puzzle.id,
             unique_task: puzzle.unique_task,
-            rating: puzzle.rating,
-            rd: puzzle.rd,
-            volatility: puzzle.volatility,
+            rating: parseFloat(puzzle.rating),
+            rd: parseFloat(puzzle.rd),
+            volatility: parseFloat(puzzle.volatility),
             fen1: puzzle.fen1,
             fen2: puzzle.fen2,
             move1: puzzle.move1,
@@ -730,8 +737,9 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
     } catch (err) {
         console.error('Error in /api/random-puzzle:', err);
         res.status(500).json({ 
-            error: err.message,
-            details: 'Ошибка при получении задачи'
+            error: 'Failed to get puzzle',
+            message: err.message,
+            details: err.stack
         });
     }
 });
@@ -1124,4 +1132,14 @@ app.get('/api/user-rating/:username', async (req, res) => {
             message: err.message
         });
     }
+});
+
+// Обновляем обработчик ошибок
+app.use((err, req, res, next) => {
+    console.error('Global error handler:', err);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
 });
