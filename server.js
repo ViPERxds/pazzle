@@ -25,7 +25,8 @@ if (process.env.NODE_ENV !== 'development' && !process.env.BOT_TOKEN) {
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
+    credentials: false,
     optionsSuccessStatus: 200
 }));
 app.use(express.json());
