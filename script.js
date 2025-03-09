@@ -239,10 +239,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            username: currentUsername,
-                            puzzleId: currentPuzzle.id,
+                            user_id: parseInt(currentUsername) || 1,
+                            puzzle_id: currentPuzzle.id,
                             success: true,
-                            time: totalSeconds
+                            time: totalSeconds,
+                            puzzle_rating_before: currentPuzzle.rating || 1500,
+                            complexity_id: currentPuzzle.complexity || 4
                         })
                     });
 
@@ -285,10 +287,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            username: currentUsername,
-                            puzzleId: currentPuzzle.id,
+                            user_id: parseInt(currentUsername) || 1,
+                            puzzle_id: currentPuzzle.id,
                             success: false,
-                            time: totalSeconds
+                            time: totalSeconds,
+                            puzzle_rating_before: currentPuzzle.rating || 1500,
+                            complexity_id: currentPuzzle.complexity || 4
                         })
                     });
 
@@ -647,10 +651,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    username: currentUsername,
-                    puzzleId: currentPuzzle.id,
+                    user_id: parseInt(currentUsername) || 1,
+                    puzzle_id: currentPuzzle.id,
                     success: isCorrect,
-                    time: totalSeconds
+                    time: totalSeconds,
+                    puzzle_rating_before: currentPuzzle.rating || 1500,
+                    complexity_id: currentPuzzle.complexity || 4
                 })
             });
 
