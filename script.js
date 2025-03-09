@@ -80,16 +80,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const userRating = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
             console.log('Received user rating:', userRating);
             
+            const rating = userRating?.rating || 1500;
             ratingElements.forEach(el => {
-                el.textContent = Math.round(userRating.rating || 1500);
+                el.textContent = Math.round(rating);
                 el.style.color = 'black';
             });
+            return rating;
         } catch (err) {
             console.error('Error updating rating:', err);
             ratingElements.forEach(el => {
                 el.textContent = '1500';
                 el.style.color = 'red';
             });
+            return 1500;
         }
     }
 
@@ -216,99 +219,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация кнопок
     function initializeButtons() {
         if (goodButton) {
-            goodButton.addEventListener('click', async () => {
-                try {
-                    if (!currentPuzzle || !currentPuzzle.id) {
-                        console.error('No current puzzle!');
-                        showError('Ошибка: нет активной задачи');
-                        return;
-                    }
-                    
-                    // Останавливаем таймер
-                    if (window.timerInterval) {
-                        clearInterval(window.timerInterval);
-                    }
-                    
-                    const timeDisplay = timerElement.textContent;
-                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
-                    const totalSeconds = minutes * 60 + seconds;
-                    
-                    await fetchWithAuth(`${API_URL}/record-solution`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            user_id: parseInt(currentUsername) || 1,
-                            puzzle_id: currentPuzzle.id,
-                            success: true,
-                            time: totalSeconds,
-                            puzzle_rating_before: currentPuzzle.rating || 1500,
-                            complexity_id: currentPuzzle.complexity || 4
-                        })
-                    });
-
-                    // Обновляем интерфейс
-                    puzzlePage.classList.add('hidden');
-                    resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
-                    
-                    await updateRatingDisplay(currentUsername);
-                    
-                } catch (err) {
-                    console.error('Error recording solution:', err);
-                    showError('Произошла ошибка при записи решения: ' + err.message);
-                }
-            });
+            goodButton.addEventListener('click', () => handlePuzzleResult(true));
         }
 
         if (blunderButton) {
-            blunderButton.addEventListener('click', async () => {
-                try {
-                    if (!currentPuzzle || !currentPuzzle.id) {
-                        console.error('No current puzzle!');
-                        showError('Ошибка: нет активной задачи');
-                        return;
-                    }
-                    
-                    // Останавливаем таймер
-                    if (window.timerInterval) {
-                        clearInterval(window.timerInterval);
-                    }
-                    
-                    const timeDisplay = timerElement.textContent;
-                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
-                    const totalSeconds = minutes * 60 + seconds;
-                    
-                    await fetchWithAuth(`${API_URL}/record-solution`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            user_id: parseInt(currentUsername) || 1,
-                            puzzle_id: currentPuzzle.id,
-                            success: false,
-                            time: totalSeconds,
-                            puzzle_rating_before: currentPuzzle.rating || 1500,
-                            complexity_id: currentPuzzle.complexity || 4
-                        })
-                    });
-
-                    // Обновляем интерфейс
-                    puzzlePage.classList.add('hidden');
-                    resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
-                    
-                    await updateRatingDisplay(currentUsername);
-                    
-                } catch (err) {
-                    console.error('Error recording solution:', err);
-                    showError('Произошла ошибка при записи решения: ' + err.message);
-                }
-            });
+            blunderButton.addEventListener('click', () => handlePuzzleResult(false));
         }
 
         // Добавляем обработчик для кнопки Next
@@ -645,6 +560,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalSeconds = minutes * 60 + seconds;
 
         try {
+            const currentRating = await updateRatingDisplay(currentUsername);
+            
             await fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
                 headers: {
@@ -652,11 +569,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     user_id: parseInt(currentUsername) || 1,
-                    puzzle_id: currentPuzzle.id,
+                    puzzle_id: parseInt(currentPuzzle.id),
                     success: isCorrect,
-                    time: totalSeconds,
-                    puzzle_rating_before: currentPuzzle.rating || 1500,
-                    complexity_id: currentPuzzle.complexity || 4
+                    time: parseFloat(totalSeconds.toFixed(1)),
+                    puzzle_rating_before: parseFloat(currentPuzzle.rating || currentRating || 1500),
+                    complexity_id: parseInt(currentPuzzle.complexity || 4)
                 })
             });
 
@@ -668,7 +585,7 @@ document.addEventListener('DOMContentLoaded', function() {
             await updateRatingDisplay(currentUsername);
         } catch (err) {
             console.error('Error recording solution:', err);
-            showError('Произошла ошибка при сохранении результата');
+            showError('Произошла ошибка при сохранении результата: ' + err.message);
         }
     }
 
