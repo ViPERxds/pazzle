@@ -219,11 +219,103 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация кнопок
     function initializeButtons() {
         if (goodButton) {
-            goodButton.addEventListener('click', () => handlePuzzleResult(true));
+            goodButton.addEventListener('click', async () => {
+                try {
+                    if (!currentPuzzle || !currentPuzzle.id) {
+                        console.error('No current puzzle!');
+                        showError('Ошибка: нет активной задачи');
+                        return;
+                    }
+                    
+                    // Останавливаем таймер
+                    if (window.timerInterval) {
+                        clearInterval(window.timerInterval);
+                    }
+                    
+                    const timeDisplay = timerElement.textContent;
+                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
+                    const totalSeconds = minutes * 60 + seconds;
+                    
+                    const currentRating = await updateRatingDisplay(currentUsername);
+                    
+                    await fetchWithAuth(`${API_URL}/record-solution`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            user_id: 1, // Фиксированное значение для теста
+                            puzzle_id: parseInt(currentPuzzle.id),
+                            success: true,
+                            time: parseFloat(totalSeconds.toFixed(1)),
+                            puzzle_rating_before: parseFloat(currentPuzzle.rating || currentRating || 1500),
+                            complexity_id: 4 // Фиксированное значение для теста
+                        })
+                    });
+
+                    // Обновляем интерфейс
+                    puzzlePage.classList.add('hidden');
+                    resultPage.classList.remove('hidden');
+                    resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
+                    
+                    await updateRatingDisplay(currentUsername);
+                    
+                } catch (err) {
+                    console.error('Error recording solution:', err);
+                    alert('Произошла ошибка при записи решения: ' + err.message);
+                }
+            });
         }
 
         if (blunderButton) {
-            blunderButton.addEventListener('click', () => handlePuzzleResult(false));
+            blunderButton.addEventListener('click', async () => {
+                try {
+                    if (!currentPuzzle || !currentPuzzle.id) {
+                        console.error('No current puzzle!');
+                        showError('Ошибка: нет активной задачи');
+                        return;
+                    }
+                    
+                    // Останавливаем таймер
+                    if (window.timerInterval) {
+                        clearInterval(window.timerInterval);
+                    }
+                    
+                    const timeDisplay = timerElement.textContent;
+                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
+                    const totalSeconds = minutes * 60 + seconds;
+                    
+                    const currentRating = await updateRatingDisplay(currentUsername);
+                    
+                    await fetchWithAuth(`${API_URL}/record-solution`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            user_id: 1, // Фиксированное значение для теста
+                            puzzle_id: parseInt(currentPuzzle.id),
+                            success: false,
+                            time: parseFloat(totalSeconds.toFixed(1)),
+                            puzzle_rating_before: parseFloat(currentPuzzle.rating || currentRating || 1500),
+                            complexity_id: 4 // Фиксированное значение для теста
+                        })
+                    });
+
+                    // Обновляем интерфейс
+                    puzzlePage.classList.add('hidden');
+                    resultPage.classList.remove('hidden');
+                    resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
+                    
+                    await updateRatingDisplay(currentUsername);
+                    
+                } catch (err) {
+                    console.error('Error recording solution:', err);
+                    alert('Произошла ошибка при записи решения: ' + err.message);
+                }
+            });
         }
 
         // Добавляем обработчик для кнопки Next
