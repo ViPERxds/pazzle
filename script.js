@@ -264,29 +264,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const response = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            currentPuzzle = await response.json();
+            currentPuzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
             if (!currentPuzzle) {
                 throw new Error('No puzzle received');
             }
 
+            // Определяем, кто должен ходить из FEN позиции
+            const fenParts = currentPuzzle.fen1.split(' ');
+            const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
+            
             // Обновляем конфигурацию
             puzzleConfig.initialFen = currentPuzzle.fen1;
             puzzleConfig.preMove = currentPuzzle.move1;
             puzzleConfig.evaluatedMove = currentPuzzle.move2;
+            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
             resultPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
             
-            initializeBoard(); // Здесь ориентация обновится автоматически
+            initializeBoard();
         } catch (err) {
             console.error('Error loading next puzzle:', err);
-            alert('Произошла ошибка при загрузке следующей задачи');
+            window.Telegram?.WebApp?.showAlert('Произошла ошибка при загрузке следующей задачи');
         }
     });
 
