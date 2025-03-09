@@ -1,18 +1,18 @@
 const API_BASE_URL = 'https://chess-puzzles-bot.onrender.com/api';
 
 async function handleApiResponse(response) {
-    const contentType = response.headers.get('content-type');
     if (!response.ok) {
+        const contentType = response.headers.get('content-type');
         let errorMessage;
         try {
             if (contentType && contentType.includes('application/json')) {
                 const errorData = await response.json();
-                errorMessage = errorData.error || errorData.message || 'Unknown error';
+                errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`;
             } else {
-                errorMessage = await response.text();
+                errorMessage = await response.text() || `HTTP error! status: ${response.status}`;
             }
         } catch (e) {
-            errorMessage = response.statusText;
+            errorMessage = `HTTP error! status: ${response.status}`;
         }
         console.error('API Error:', {
             status: response.status,
@@ -22,15 +22,16 @@ async function handleApiResponse(response) {
         });
         throw new Error(errorMessage);
     }
-    
+
+    const contentType = response.headers.get('content-type');
     try {
         if (contentType && contentType.includes('application/json')) {
-            return response.json();
+            return await response.json();
         }
-        return response.text();
+        return await response.text();
     } catch (error) {
         console.error('Error parsing response:', error);
-        throw error;
+        throw new Error('Failed to parse server response');
     }
 }
 
