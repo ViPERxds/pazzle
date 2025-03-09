@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentPuzzle = null;
     let timer = null;
     let startTime = null;
-    let seconds = 180; // 3 минуты
+    let seconds = 180; 
 
     // Инициализация Telegram WebApp
     const tg = window.Telegram.WebApp;
