@@ -663,7 +663,6 @@ app.use('/api', (req, res, next) => {
     }
 
     const initData = req.headers['x-telegram-init-data'];
-    console.log('Checking authorization with init data:', initData ? 'present' : 'missing');
     
     if (!initData) {
         console.log('Authorization failed: missing init data');
@@ -680,7 +679,10 @@ app.use('/api', (req, res, next) => {
         next();
     } catch (err) {
         console.error('Error during authorization:', err);
-        return res.status(401).json({ error: 'Unauthorized - Invalid init data', details: err.message });
+        return res.status(401).json({ 
+            error: 'Unauthorized - Invalid init data', 
+            details: err.message 
+        });
     }
 });
 
@@ -806,7 +808,6 @@ app.use('/api', (req, res, next) => {
     }
 
     const initData = req.headers['x-telegram-init-data'];
-    console.log('Checking authorization with init data:', initData ? 'present' : 'missing');
     
     if (!initData) {
         console.log('Authorization failed: missing init data');
