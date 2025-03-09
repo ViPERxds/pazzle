@@ -180,42 +180,37 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                clearInterval(timer);
+                if (timer) {
+                    clearInterval(timer);
+                }
                 
                 try {
-                    const timeSpent = Math.max(0, 180 - seconds);
+                    const timeDisplay = timerElement.textContent;
+                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
+                    const totalSeconds = minutes * 60 + seconds;
                     
-                    const response = await fetchWithAuth(`${API_URL}/record-solution`, {
+                    await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
                         body: JSON.stringify({
                             username: currentUsername,
                             puzzleId: currentPuzzle.id,
-                            success: currentPuzzle.solution === 'Good',
-                            time: timeSpent
+                            success: true,
+                            time: totalSeconds
                         })
                     });
 
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-
                     puzzlePage.classList.add('hidden');
                     resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
+                    resultText.textContent = currentPuzzle.solution ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution ? '#4CAF50' : '#FF0000';
                     
                     await updateRatingDisplay(currentUsername);
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    alert('Произошла ошибка при записи решения');
+                    window.Telegram?.WebApp?.showAlert('Произошла ошибка при записи решения');
                 }
             });
-        } else {
-            console.error('Good button not found!');
         }
 
         if (blunderButton) {
@@ -225,42 +220,37 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                clearInterval(timer);
+                if (timer) {
+                    clearInterval(timer);
+                }
                 
                 try {
-                    const timeSpent = Math.max(0, 180 - seconds);
+                    const timeDisplay = timerElement.textContent;
+                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
+                    const totalSeconds = minutes * 60 + seconds;
                     
-                    const response = await fetchWithAuth(`${API_URL}/record-solution`, {
+                    await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
                         body: JSON.stringify({
                             username: currentUsername,
                             puzzleId: currentPuzzle.id,
-                            success: currentPuzzle.solution === 'Blunder',
-                            time: timeSpent
+                            success: false,
+                            time: totalSeconds
                         })
                     });
 
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-
                     puzzlePage.classList.add('hidden');
                     resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
+                    resultText.textContent = !currentPuzzle.solution ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = !currentPuzzle.solution ? '#4CAF50' : '#FF0000';
                     
                     await updateRatingDisplay(currentUsername);
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    alert('Произошла ошибка при записи решения');
+                    window.Telegram?.WebApp?.showAlert('Произошла ошибка при записи решения');
                 }
             });
-        } else {
-            console.error('Blunder button not found!');
         }
     }
 
@@ -566,6 +556,9 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             await fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     username: currentUsername,
                     puzzleId: currentPuzzle.id,
