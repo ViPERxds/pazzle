@@ -217,22 +217,27 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializeButtons() {
         if (goodButton) {
             goodButton.addEventListener('click', async () => {
-                if (!currentPuzzle) {
-                    console.error('No current puzzle!');
-                    return;
-                }
-                
-                if (timer) {
-                    clearInterval(timer);
-                }
-                
                 try {
+                    if (!currentPuzzle || !currentPuzzle.id) {
+                        console.error('No current puzzle!');
+                        showError('Ошибка: нет активной задачи');
+                        return;
+                    }
+                    
+                    // Останавливаем таймер
+                    if (window.timerInterval) {
+                        clearInterval(window.timerInterval);
+                    }
+                    
                     const timeDisplay = timerElement.textContent;
                     const [minutes, seconds] = timeDisplay.split(':').map(Number);
                     const totalSeconds = minutes * 60 + seconds;
                     
                     await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             username: currentUsername,
                             puzzleId: currentPuzzle.id,
@@ -241,38 +246,44 @@ document.addEventListener('DOMContentLoaded', function() {
                         })
                     });
 
+                    // Обновляем интерфейс
                     puzzlePage.classList.add('hidden');
                     resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution ? '#4CAF50' : '#FF0000';
+                    resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
                     
                     await updateRatingDisplay(currentUsername);
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    showError('Произошла ошибка при записи решения');
+                    showError('Произошла ошибка при записи решения: ' + err.message);
                 }
             });
         }
 
         if (blunderButton) {
             blunderButton.addEventListener('click', async () => {
-                if (!currentPuzzle) {
-                    console.error('No current puzzle!');
-                    return;
-                }
-                
-                if (timer) {
-                    clearInterval(timer);
-                }
-                
                 try {
+                    if (!currentPuzzle || !currentPuzzle.id) {
+                        console.error('No current puzzle!');
+                        showError('Ошибка: нет активной задачи');
+                        return;
+                    }
+                    
+                    // Останавливаем таймер
+                    if (window.timerInterval) {
+                        clearInterval(window.timerInterval);
+                    }
+                    
                     const timeDisplay = timerElement.textContent;
                     const [minutes, seconds] = timeDisplay.split(':').map(Number);
                     const totalSeconds = minutes * 60 + seconds;
                     
                     await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             username: currentUsername,
                             puzzleId: currentPuzzle.id,
@@ -281,16 +292,56 @@ document.addEventListener('DOMContentLoaded', function() {
                         })
                     });
 
+                    // Обновляем интерфейс
                     puzzlePage.classList.add('hidden');
                     resultPage.classList.remove('hidden');
-                    resultText.textContent = !currentPuzzle.solution ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = !currentPuzzle.solution ? '#4CAF50' : '#FF0000';
+                    resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
+                    resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
                     
                     await updateRatingDisplay(currentUsername);
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    showError('Произошла ошибка при записи решения');
+                    showError('Произошла ошибка при записи решения: ' + err.message);
+                }
+            });
+        }
+
+        // Добавляем обработчик для кнопки Next
+        const nextButton = document.querySelector('.next-btn');
+        if (nextButton) {
+            nextButton.addEventListener('click', async () => {
+                try {
+                    // Останавливаем таймер если есть
+                    if (window.timerInterval) {
+                        clearInterval(window.timerInterval);
+                    }
+                    
+                    currentPuzzle = await loadPuzzle(currentUsername);
+                    
+                    // Определяем, кто должен ходить из FEN позиции
+                    const fenParts = currentPuzzle.fen1.split(' ');
+                    const colorToMove = fenParts[1];
+                    
+                    // Обновляем конфигурацию
+                    puzzleConfig.initialFen = currentPuzzle.fen1;
+                    puzzleConfig.preMove = currentPuzzle.move1;
+                    puzzleConfig.evaluatedMove = currentPuzzle.move2;
+                    puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+                    puzzleConfig.solution = currentPuzzle.solution;
+
+                    resultPage.classList.add('hidden');
+                    puzzlePage.classList.remove('hidden');
+                    
+                    // Сбрасываем состояние игры
+                    game = new Chess();
+                    await initializeBoard();
+                } catch (err) {
+                    console.error('Error loading next puzzle:', err);
+                    showError('Ошибка при загрузке следующей задачи: ' + err.message);
+                    // Возвращаемся на страницу результата при ошибке
+                    puzzlePage.classList.add('hidden');
+                    resultPage.classList.remove('hidden');
                 }
             });
         }
@@ -298,41 +349,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Вызываем инициализацию кнопок после загрузки DOM
     initializeButtons();
-
-    document.querySelector('.next-btn').addEventListener('click', async () => {
-        if (timer) {
-            clearInterval(timer);
-            timer = null;
-        }
-        
-        try {
-            currentPuzzle = await loadPuzzle(currentUsername);
-            
-            // Определяем, кто должен ходить из FEN позиции
-            const fenParts = currentPuzzle.fen1.split(' ');
-            const colorToMove = fenParts[1];
-            
-            // Обновляем конфигурацию
-            puzzleConfig.initialFen = currentPuzzle.fen1;
-            puzzleConfig.preMove = currentPuzzle.move1;
-            puzzleConfig.evaluatedMove = currentPuzzle.move2;
-            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
-            puzzleConfig.solution = currentPuzzle.solution;
-
-            resultPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
-            
-            // Сбрасываем состояние игры
-            game = new Chess();
-            await initializeBoard();
-        } catch (err) {
-            console.error('Error loading next puzzle:', err);
-            showError('Ошибка при загрузке следующей задачи: ' + err.message);
-            // Возвращаемся на страницу результата при ошибке
-            puzzlePage.classList.add('hidden');
-            resultPage.classList.remove('hidden');
-        }
-    });
 
     document.querySelector('.analyze-btn').addEventListener('click', () => {
         // Используем FEN позиции после предварительного хода
