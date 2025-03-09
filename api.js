@@ -1,17 +1,37 @@
 const API_BASE_URL = 'https://chess-puzzles-bot.onrender.com/api';
 
 async function handleApiResponse(response) {
+    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-        const errorText = await response.text();
+        let errorMessage;
+        try {
+            if (contentType && contentType.includes('application/json')) {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.message || 'Unknown error';
+            } else {
+                errorMessage = await response.text();
+            }
+        } catch (e) {
+            errorMessage = response.statusText;
+        }
         console.error('API Error:', {
             status: response.status,
             statusText: response.statusText,
             url: response.url,
-            body: errorText
+            error: errorMessage
         });
-        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+        throw new Error(errorMessage);
     }
-    return response.json();
+    
+    try {
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        }
+        return response.text();
+    } catch (error) {
+        console.error('Error parsing response:', error);
+        throw error;
+    }
 }
 
 export async function getUserRating(username) {
@@ -20,10 +40,8 @@ export async function getUserRating(username) {
         const response = await fetch(`${API_BASE_URL}/user-rating/${username}`, {
             method: 'GET',
             headers: {
-                'Accept': 'application/json',
-                'Origin': window.location.origin
-            },
-            mode: 'cors'
+                'Accept': 'application/json'
+            }
         });
         return handleApiResponse(response);
     } catch (error) {
@@ -38,10 +56,8 @@ export async function getRandomPuzzle(username) {
         const response = await fetch(`${API_BASE_URL}/random-puzzle/${username}`, {
             method: 'GET',
             headers: {
-                'Accept': 'application/json',
-                'Origin': window.location.origin
-            },
-            mode: 'cors'
+                'Accept': 'application/json'
+            }
         });
         return handleApiResponse(response);
     } catch (error) {
@@ -57,10 +73,8 @@ export async function recordSolution(username, puzzleId, success, time) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Origin': window.location.origin
+                'Accept': 'application/json'
             },
-            mode: 'cors',
             body: JSON.stringify({
                 username,
                 puzzleId,
