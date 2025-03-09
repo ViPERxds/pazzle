@@ -25,7 +25,7 @@ if (process.env.NODE_ENV !== 'development' && !process.env.BOT_TOKEN) {
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-telegram-init-data']
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
@@ -306,43 +306,6 @@ pool.on('error', (err) => {
     process.exit(-1);
 });
 
-// Добавляем middleware для проверки авторизации
-app.use('/api', (req, res, next) => {
-    // В режиме разработки пропускаем проверку
-    if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: skipping authorization check');
-        return next();
-    }
-
-    // Для OPTIONS запросов пропускаем проверку
-    if (req.method === 'OPTIONS') {
-        return next();
-    }
-
-    const initData = req.headers['x-telegram-init-data'];
-    
-    if (!initData) {
-        console.log('Authorization failed: missing init data');
-        return res.status(401).json({ error: 'Unauthorized - Missing init data' });
-    }
-
-    try {
-        if (!validateTelegramWebAppData(initData)) {
-            console.log('Authorization failed: invalid init data');
-            return res.status(401).json({ error: 'Unauthorized - Invalid init data' });
-        }
-
-        console.log('Authorization successful');
-        next();
-    } catch (err) {
-        console.error('Error during authorization:', err);
-        return res.status(401).json({ 
-            error: 'Unauthorized - Invalid init data', 
-            details: err.message 
-        });
-    }
-});
-
 // Функция для проверки доступа пользователя
 async function checkUserAccess(username) {
     try {
@@ -362,10 +325,10 @@ async function checkUserAccess(username) {
             );
         }
 
-        return result.rows[0].status;
+        return true; // Всегда возвращаем true, пока нет авторизации
     } catch (err) {
         console.error('Error checking user access:', err);
-        return false;
+        return true; // Всегда возвращаем true, пока нет авторизации
     }
 }
 
@@ -1115,57 +1078,4 @@ function calculateNewMu(mu, phi, opponents) {
         sum += gPhi(opp.phi) * (opp.s - expectation(mu, opp.mu, opp.phi));
     }
     return mu + Math.pow(phi, 2) * sum;
-}
-
-// Функция проверки данных от Telegram
-function validateTelegramWebAppData(telegramInitData) {
-    try {
-        console.log('Validating Telegram data...');
-        
-        // Если мы в режиме разработки, пропускаем проверку
-        if (process.env.NODE_ENV === 'development') {
-            console.log('Development mode: skipping Telegram data validation');
-            return true;
-        }
-
-        const initData = new URLSearchParams(telegramInitData);
-        const hash = initData.get('hash');
-        const botToken = process.env.BOT_TOKEN;
-
-        if (!hash || !botToken) {
-            console.log('Missing hash or bot token:', { hash: !!hash, botToken: !!botToken });
-            return false;
-        }
-
-        // Удаляем hash из проверяемых данных
-        initData.delete('hash');
-        
-        // Сортируем оставшиеся поля
-        const dataCheckString = Array.from(initData.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => `${key}=${value}`)
-            .join('\n');
-
-        console.log('Data check string:', dataCheckString);
-
-        // Создаем HMAC-SHA256
-        const secret = crypto.createHmac('sha256', 'WebAppData')
-            .update(botToken)
-            .digest();
-        
-        const calculatedHash = crypto.createHmac('sha256', secret)
-            .update(dataCheckString)
-            .digest('hex');
-
-        console.log('Hash comparison:', { 
-            received: hash,
-            calculated: calculatedHash,
-            match: calculatedHash === hash
-        });
-
-        return calculatedHash === hash;
-    } catch (err) {
-        console.error('Error validating Telegram data:', err);
-        return false;
-    }
 }
