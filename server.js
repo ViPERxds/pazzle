@@ -31,19 +31,17 @@ app.use(express.json());
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'development' 
-        ? false 
-        : {
-            rejectUnauthorized: false,
-            ca: process.env.CA_CERT
-        }
+    ssl: {
+        rejectUnauthorized: false,
+        sslmode: 'require'
+    }
 });
 
 // Проверяем подключение при запуске
 pool.connect(async (err, client, release) => {
     if (err) {
         console.error('Error connecting to the database:', err);
-        return;
+        process.exit(1); // Завершаем процесс при ошибке подключения
     }
     console.log('Successfully connected to database');
     
@@ -62,6 +60,8 @@ pool.connect(async (err, client, release) => {
             DROP TABLE IF EXISTS Complexity CASCADE;
         `);
 
+        console.log('Старые таблицы успешно удалены');
+        
         console.log('Создаем базовые таблицы...');
         
         // Создаем базовые таблицы без внешних ключей
@@ -520,9 +520,11 @@ async function initializeUserRating(username) {
 // Функция для получения рейтинга пользователя
 async function getUserRating(username) {
     try {
+        console.log(`Getting rating for user: ${username}`);
+        
         // Проверяем, существует ли пользователь
         let result = await pool.query(
-            'SELECT username, rating, rd, volatility FROM Users WHERE username = $1',
+            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
             [username]
         );
 
@@ -532,20 +534,22 @@ async function getUserRating(username) {
             result = await pool.query(
                 `INSERT INTO Users (username, rating, rd, volatility, status) 
                  VALUES ($1, 1500.00, 350.00, 0.06000000, true)
-                 RETURNING username, rating, rd, volatility`,
+                 RETURNING rating, rd, volatility`,
                 [username]
             );
         }
 
-        return result.rows[0];
+        const userRating = result.rows[0];
+        console.log(`User rating data:`, userRating);
+        
+        return {
+            rating: parseFloat(userRating.rating),
+            rd: parseFloat(userRating.rd),
+            volatility: parseFloat(userRating.volatility)
+        };
     } catch (err) {
         console.error('Error getting user rating:', err);
-        // Возвращаем значения по умолчанию в случае ошибки
-        return {
-            rating: 1500.00,
-            rd: 350.00,
-            volatility: 0.06000000
-        };
+        throw err;
     }
 }
 
@@ -1107,24 +1111,17 @@ function calculateNewMu(mu, phi, opponents) {
 app.get('/api/user-rating/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        console.log(`Getting rating for user: ${username}`);
+        console.log(`API request for user rating: ${username}`);
         
         const userRating = await getUserRating(username);
+        console.log(`Sending rating response for ${username}:`, userRating);
         
-        // Форматируем ответ
-        const response = {
-            rating: parseFloat(userRating.rating),
-            rd: parseFloat(userRating.rd),
-            volatility: parseFloat(userRating.volatility)
-        };
-        
-        console.log(`Successfully got rating for user: ${username}`, response);
-        res.json(response);
+        res.json(userRating);
     } catch (err) {
         console.error('Error in /api/user-rating:', err);
         res.status(500).json({ 
-            error: err.message,
-            details: 'Ошибка при получении рейтинга пользователя'
+            error: 'Internal server error',
+            message: err.message
         });
     }
 });
