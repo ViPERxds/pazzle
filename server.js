@@ -23,10 +23,11 @@ if (process.env.NODE_ENV !== 'development' && !process.env.BOT_TOKEN) {
 }
 
 app.use(cors({
-    origin: ['https://retapro.com', 'http://localhost:3000', 'https://chess-puzzles-bot.onrender.com'],
+    origin: ['https://retapro.com', 'http://localhost:3000', 'https://chess-puzzles-bot.onrender.com', 'https://retapro.github.io'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
-    credentials: true
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
 app.use(express.json());
 
