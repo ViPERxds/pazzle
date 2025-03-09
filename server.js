@@ -296,11 +296,11 @@ pool.connect(async (err, client, release) => {
         // Добавляем задачи с тегами
         await client.query(`
             INSERT INTO PuzzlesTags (id, puzzle_id, tag_id) VALUES
-            (1, 10, 5),
-            (2, 20, 9),
-            (3, 24, 10),
-            (4, 28, 11),
-            (5, 30, 12)
+            (1, 1, 5),
+            (2, 2, 9),
+            (3, 3, 10),
+            (4, 4, 11),
+            (5, 5, 12)
             ON CONFLICT (id) DO UPDATE 
             SET puzzle_id = EXCLUDED.puzzle_id,
                 tag_id = EXCLUDED.tag_id;
