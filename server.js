@@ -45,40 +45,35 @@ pool.connect(async (err, client, release) => {
     console.log('Successfully connected to database');
     
     try {
-        console.log('Starting database initialization...');
-        
         // Удаляем существующие таблицы
-        console.log('Dropping existing tables...');
         await client.query(`
-            DROP TABLE IF EXISTS Journal CASCADE;
-            DROP TABLE IF EXISTS PuzzlesTags CASCADE;
-            DROP TABLE IF EXISTS PuzzleAttempts CASCADE;
-            DROP TABLE IF EXISTS SolvedPuzzles CASCADE;
-            DROP TABLE IF EXISTS Puzzles CASCADE;
-            DROP TABLE IF EXISTS Users CASCADE;
-            DROP TABLE IF EXISTS Settings CASCADE;
-            DROP TABLE IF EXISTS Tags CASCADE;
-            DROP TABLE IF EXISTS Types CASCADE;
-            DROP TABLE IF EXISTS Complexity CASCADE;
+            DROP TABLE IF EXISTS Journal;
+            DROP TABLE IF EXISTS PuzzlesTags;
+            DROP TABLE IF EXISTS Puzzles;
+            DROP TABLE IF EXISTS Users;
+            DROP TABLE IF EXISTS Settings;
+            DROP TABLE IF EXISTS PuzzleAttempts;
+            DROP TABLE IF EXISTS SolvedPuzzles;
+            DROP TABLE IF EXISTS Tags;
+            DROP TABLE IF EXISTS Types;
+            DROP TABLE IF EXISTS Complexity;
         `);
-        console.log('Tables dropped successfully');
 
         // Создаем таблицы заново
-        console.log('Creating new tables...');
         await client.query(`
             CREATE TABLE IF NOT EXISTS Types (
                 id SERIAL PRIMARY KEY,
                 type TEXT NOT NULL
             );
-            
+
             CREATE TABLE IF NOT EXISTS Tags (
                 id SERIAL PRIMARY KEY,
                 tag TEXT NOT NULL
             );
-            
+
             CREATE TABLE IF NOT EXISTS Users (
                 id SERIAL PRIMARY KEY,
-                username VARCHAR(255) NOT NULL UNIQUE,
+                username VARCHAR(255) NOT NULL,
                 telegram_id BIGINT,
                 rating NUMERIC(12,8) DEFAULT 1500.00,
                 rd NUMERIC(12,8) DEFAULT 350.00,
@@ -102,40 +97,120 @@ pool.connect(async (err, client, release) => {
                 type_id INTEGER REFERENCES Types(id),
                 color BOOLEAN
             );
-        `);
-        console.log('Tables created successfully');
+            
+            CREATE TABLE IF NOT EXISTS Journal (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES Users(id),
+                puzzle_id INTEGER REFERENCES Puzzles(id),
+                success BOOLEAN,
+                time NUMERIC(5,2),
+                puzzle_rating_before NUMERIC(12,8),
+                user_rating_after NUMERIC(12,8),
+                complexity_id INTEGER,
+                date TIMESTAMP
+            );
+            
+            CREATE TABLE IF NOT EXISTS Settings (
+                id SERIAL PRIMARY KEY,
+                setting VARCHAR(255),
+                meaning NUMERIC(10,3)
+            );
 
-        // Добавляем типы
-        console.log('Inserting types...');
+            CREATE TABLE IF NOT EXISTS PuzzleAttempts (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255),
+                puzzle_fen TEXT,
+                attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                success BOOLEAN,
+                UNIQUE(username, puzzle_fen)
+            );
+            
+            CREATE TABLE IF NOT EXISTS SolvedPuzzles (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255),
+                puzzle_fen TEXT,
+                solved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(username, puzzle_fen)
+            );
+
+            CREATE TABLE IF NOT EXISTS Complexity (
+                id SERIAL PRIMARY KEY,
+                complexity_type TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS PuzzlesTags (
+                id SERIAL PRIMARY KEY,
+                puzzle_id INTEGER REFERENCES Puzzles(id),
+                tag_id INTEGER REFERENCES Tags(id)
+            );
+        `);
+
+        // Инициализируем настройки
         await client.query(`
-            INSERT INTO Types (id, type) VALUES
-            (1, 'лучший'),
-            (2, 'защита'),
-            (3, 'обычный'),
-            (4, 'пропуск'),
-            (5, 'фейк'),
-            (6, 'нет защиты'),
-            (7, 'подстава')
+            INSERT INTO Settings (id, setting, meaning) VALUES
+            (1, 'Period, days', 5),
+            (2, 'Минимальное количество задач для расчета перформанса', 5),
+            (3, 'Минимальный перформанс для сравнения', 100),
+            (4, 'Коэффициент понижения базовой вероятности', 0.5),
+            (5, 'Норма решения 1 задачи, секунд', 30),
+            (6, 'Базовая вероятность критерия "лучший"', 0.150),
+            (7, 'Базовая вероятность критерия "защита"', 0.350),
+            (8, 'Базовая вероятность критерия "обычный"', 0.500),
+            (9, 'Базовая вероятность критерия "пропуск"', 0.250),
+            (10, 'Базовая вероятность критерия "фейк"', 0.250),
+            (11, 'Базовая вероятность критерия "нет защиты"', 0.250),
+            (12, 'Базовая вероятность критерия "подстава"', 0.250),
+            (13, 'Базовая вероятность критерия "супер легкая"', 0.025),
+            (14, 'Базовая вероятность критерия "очень легкая"', 0.100),
+            (15, 'Базовая вероятность критерия "легкая"', 0.200),
+            (16, 'Базовая вероятность критерия "средняя"', 0.350),
+            (17, 'Базовая вероятность критерия "сложная"', 0.200),
+            (18, 'Базовая вероятность критерия "очень сложная"', 0.100),
+            (19, 'Базовая вероятность критерия "супер сложная"', 0.025),
+            (20, 'Стандартное отклонение', 100),
+            (21, 'Время до предварительного хода, секунд', 1),
+            (22, 'Время анализа 1 линии, секунд', 1),
+            (23, 'Количество задач в день, которое может решать активный пользователь', 100),
+            (24, 'Количество задач в день, которое может решать неактивный пользователь', 3)
             ON CONFLICT (id) DO UPDATE 
-            SET type = EXCLUDED.type;
+            SET setting = EXCLUDED.setting, 
+                meaning = EXCLUDED.meaning
         `);
-        console.log('Types inserted successfully');
 
-        // Добавляем тестового пользователя
-        console.log('Inserting test user...');
+        // Добавляем пользователей
         await client.query(`
-            INSERT INTO Users (username, rating, rd, volatility, status) 
-            VALUES ('test_user', 1500.00, 350.00, 0.06000000, true)
-            ON CONFLICT (username) DO NOTHING;
+            INSERT INTO Users (id, username, telegram_id, rating, rd, volatility, status, performance) VALUES
+            (1, 'goodwillchess', 1931999392, 1500.00, 350.00, 0.06000000, true, 1353.195496),
+            (2, 'antiblunderchess', 5395535292, 1500.00, 350.00, 0.06000000, true, 1446.496565),
+            (3, 'alexxldm', 6685769779, 1500.00, 350.00, 0.06000000, true, 1446.496565)
+            ON CONFLICT (id) DO UPDATE 
+            SET username = EXCLUDED.username,
+                telegram_id = EXCLUDED.telegram_id,
+                rating = EXCLUDED.rating,
+                rd = EXCLUDED.rd,
+                volatility = EXCLUDED.volatility,
+                status = EXCLUDED.status,
+                performance = EXCLUDED.performance;
         `);
-        console.log('Test user inserted successfully');
 
-        // Добавляем базовые задачи
-        console.log('Inserting puzzles...');
+        // Добавляем базовые задачи с разными цветами
         await client.query(`
             INSERT INTO Puzzles (id, unique_task, rating, rd, volatility, number, fen1, fen2, move1, move2, solution, type_id, color) VALUES
             (1, 1, 1500.0000, 350.0000, 0.06000000, 0, '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2', '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2', 'e7d6', 'c8a6', false, 4, true),
-            (2, 2, 1500.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2', 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2', 'd5e4', 'd2e4', true, 3, true)
+            (2, 2, 1500.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2', 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2', 'd5e4', 'd2e4', true, 3, true),
+            (3, 2, 1500.0000, 350.0000, 0.06000000, 0, 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1', 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1', 'd4e5', 'd7e5', false, 5, false),
+            (4, 3, 1500.0000, 350.0000, 0.06000000, 0, 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1', 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1', 'f3d4', 'e6c4', false, 7, false),
+            (5, 4, 1500.0000, 350.0000, 0.06000000, 0, 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 1 2', 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 1 2', 'g4e6', 'e1e6', true, 1, true),
+            (6, 5, 1500.0000, 350.0000, 0.06000000, 0, '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 1 1', '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 1 1', 'f2g1', 'd7e7', false, 4, false),
+            (7, 6, 1500.0000, 350.0000, 0.06000000, 0, 'rn1qkbnr/pp3ppp/2pp4/4p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5', 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6', 'b7b5', 'c4f7', false, 5, true),
+            (8, 6, 1400.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/4P3/2PP4/PP3PPP/RN1QKBNR w KQkq - 0 5', 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 5', 'b2b4', 'c5b4', true, 2, false),
+            (9, 6, 1200.0000, 350.0000, 0.06000000, 0, 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6', 'rn1qkbnr/p4Bpp/2pp4/1p2p3/4P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 6', 'c4f7', 'e8f7', true, 1, false),
+            (10, 6, 1500.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 6', 'r1bqk2r/ppp2ppp/2np1n2/4p1B1/1P2P3/2PP4/P4bPP/RN1QKBNR w KQkq - 0 7', 'c5f2', 'g5f6', false, 4, true),
+            (11, 7, 1200.0000, 350.0000, 0.06000000, 0, '8/3b2p1/pppBk2p/2P5/1P6/P7/5PPP/4K3 w - - 0 26', '8/3b2p1/pPpBk2p/8/1P6/P7/5PPP/4K3 b - - 0 26', 'c5b6', 'd7b5', true, 1, false),
+            (12, 7, 1500.0000, 350.0000, 0.06000000, 0, '4k3/5ppp/p7/1p6/2p5/PPPbK2P/3B2P1/8 b - - 0 26', '4k3/5ppp/p7/1p6/8/PpPbK2P/3B2P1/8 w - - 0 27', 'c4b3', 'e3d3', false, 4, true),
+            (13, 8, 1500.0000, 350.0000, 0.06000000, 0, '3RR3/1kr5/1ppB1r2/8/p1P4P/P7/1P3bK1/8 b - - 0 1', '3RR3/1k4r1/1ppB1r2/8/p1P4P/P7/1P3bK1/8 w - - 1 2', 'r5g7', 'e8e7', false, 7, true),
+            (14, 9, 1500.0000, 350.0000, 0.06000000, 0, '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/P3QPP1/3R2K1 w - - 0 1', '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/PQ3PP1/3R2K1 b - - 1 1', 'e2b2', 'c5c1', false, 7, false),
+            (15, 10, 1500.0000, 350.0000, 0.06000000, 0, '1r6/kb1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 b - - 0 1', 'kr6/1b1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 w - - 1 2', 'b8a8', 'c5c7', false, 4, true)
             ON CONFLICT (id) DO UPDATE 
             SET unique_task = EXCLUDED.unique_task,
                 rating = EXCLUDED.rating,
@@ -150,15 +225,75 @@ pool.connect(async (err, client, release) => {
                 type_id = EXCLUDED.type_id,
                 color = EXCLUDED.color;
         `);
-        console.log('Puzzles inserted successfully');
 
-        // Проверяем количество задач
-        const puzzleCount = await client.query('SELECT COUNT(*) FROM Puzzles');
-        console.log(`Total puzzles in database: ${puzzleCount.rows[0].count}`);
+        // Добавляем теги
+        await client.query(`
+            INSERT INTO Tags (id, tag) VALUES
+            (1, 'бесплатное взятие'),
+            (2, 'выгодный размен'),
+            (3, 'анализ'),
+            (4, 'связка'),
+            (5, 'вилка'),
+            (6, 'рентген'),
+            (7, 'скрытое нападение'),
+            (8, 'капкан'),
+            (9, 'мат'),
+            (10, 'последняя горизонталь'),
+            (11, 'уничтожение защитника'),
+            (12, 'отвлечение'),
+            (13, 'перекрытие'),
+            (14, 'завлечение'),
+            (15, 'освобождение'),
+            (16, 'превращение пешки'),
+            (17, 'пат'),
+            (18, 'повторение')
+            ON CONFLICT (id) DO UPDATE 
+            SET tag = EXCLUDED.tag;
+        `);
 
-        console.log('Database initialization completed successfully');
+        // Добавляем типы
+        await client.query(`
+            INSERT INTO Types (id, type) VALUES
+            (1, 'лучший'),
+            (2, 'защита'),
+            (3, 'обычный'),
+            (4, 'пропуск'),
+            (5, 'фейк'),
+            (6, 'нет защиты'),
+            (7, 'подстава')
+            ON CONFLICT (id) DO UPDATE 
+            SET type = EXCLUDED.type;
+        `);
+
+        // Добавляем сложность задач
+        await client.query(`
+            INSERT INTO Complexity (id, complexity_type) VALUES
+            (1, 'супер легкая'),
+            (2, 'очень легкая'),
+            (3, 'легкая'),
+            (4, 'средняя'),
+            (5, 'сложная'),
+            (6, 'очень сложная'),
+            (7, 'супер сложная')
+            ON CONFLICT (id) DO UPDATE 
+            SET complexity_type = EXCLUDED.complexity_type;
+        `);
+
+        // Добавляем задачи с тегами
+        await client.query(`
+            INSERT INTO PuzzlesTags (id, puzzle_id, tag_id) VALUES
+            (1, 10, 5),
+            (2, 20, 9),
+            (3, 24, 10),
+            (4, 28, 11),
+            (5, 30, 12)
+            ON CONFLICT (id) DO UPDATE 
+            SET puzzle_id = EXCLUDED.puzzle_id,
+                tag_id = EXCLUDED.tag_id;
+        `);
+
     } catch (err) {
-        console.error('Error during database initialization:', err);
+        console.error('Error creating tables:', err);
         console.error(err.stack);
     } finally {
         release();
@@ -171,31 +306,66 @@ pool.on('error', (err) => {
     process.exit(-1);
 });
 
+// Добавляем middleware для проверки авторизации
+app.use('/api', (req, res, next) => {
+    // В режиме разработки пропускаем проверку
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Development mode: skipping authorization check');
+        return next();
+    }
+
+    // Для OPTIONS запросов пропускаем проверку
+    if (req.method === 'OPTIONS') {
+        return next();
+    }
+
+    const initData = req.headers['x-telegram-init-data'];
+    
+    if (!initData) {
+        console.log('Authorization failed: missing init data');
+        return res.status(401).json({ error: 'Unauthorized - Missing init data' });
+    }
+
+    try {
+        if (!validateTelegramWebAppData(initData)) {
+            console.log('Authorization failed: invalid init data');
+            return res.status(401).json({ error: 'Unauthorized - Invalid init data' });
+        }
+
+        console.log('Authorization successful');
+        next();
+    } catch (err) {
+        console.error('Error during authorization:', err);
+        return res.status(401).json({ 
+            error: 'Unauthorized - Invalid init data', 
+            details: err.message 
+        });
+    }
+});
+
 // Функция для проверки доступа пользователя
 async function checkUserAccess(username) {
     try {
-        // Проверяем существование пользователя
-        const userResult = await pool.query(
+        let result = await pool.query(
             'SELECT username, status FROM Users WHERE username = $1',
             [username]
         );
 
         // Если пользователь не найден, создаем его
-        if (userResult.rows.length === 0) {
+        if (result.rows.length === 0) {
             console.log(`Creating new user: ${username}`);
-            await pool.query(
+            result = await pool.query(
                 `INSERT INTO Users (username, rating, rd, volatility, status) 
-                 VALUES ($1, 1500.00, 350.00, 0.06000000, true)`,
+                 VALUES ($1, 1500.00, 350.00, 0.06000000, true)
+                 RETURNING username, status`,
                 [username]
             );
-            return true;
         }
 
-        return userResult.rows[0].status;
+        return result.rows[0].status;
     } catch (err) {
         console.error('Error checking user access:', err);
-        // В случае ошибки разрешаем доступ в режиме разработки
-        return process.env.NODE_ENV === 'development';
+        return false;
     }
 }
 
@@ -266,7 +436,12 @@ async function findPuzzleForUser(username) {
         console.log(`Finding puzzle for user: ${username}`);
         
         // Получаем рейтинг пользователя
-        const userRating = await getUserRating(username);
+        const userResult = await pool.query(
+            'SELECT rating FROM Users WHERE username = $1',
+            [username]
+        );
+        
+        const userRating = userResult.rows.length > 0 ? userResult.rows[0].rating : 1500;
         
         // Получаем случайную задачу в пределах ±300 от рейтинга пользователя
         const result = await pool.query(
@@ -274,28 +449,28 @@ async function findPuzzleForUser(username) {
             FROM Puzzles p 
             LEFT JOIN Types t ON p.type_id = t.id
             WHERE p.id NOT IN (
-                SELECT j.puzzle_id 
-                FROM Journal j 
-                JOIN Users u ON j.user_id = u.id 
-                WHERE u.username = $1
+                SELECT DISTINCT puzzle_id 
+                FROM PuzzleAttempts pa 
+                JOIN Puzzles pz ON pa.puzzle_fen = pz.fen1 
+                WHERE pa.username = $1
             )
             AND p.rating BETWEEN $2 AND $3
             ORDER BY RANDOM()
             LIMIT 1`,
-            [username, userRating.rating - 300, userRating.rating + 300]
+            [username, userRating - 300, userRating + 300]
         );
         
         if (result.rows.length === 0) {
-            // Если не нашли задачу в диапазоне, расширяем диапазон
+            // Если не нашли задачу в диапазоне, берем любую нерешенную
             const resultWider = await pool.query(
                 `SELECT p.*, t.type as type_name 
                 FROM Puzzles p 
                 LEFT JOIN Types t ON p.type_id = t.id
                 WHERE p.id NOT IN (
-                    SELECT j.puzzle_id 
-                    FROM Journal j 
-                    JOIN Users u ON j.user_id = u.id 
-                    WHERE u.username = $1
+                    SELECT DISTINCT puzzle_id 
+                    FROM PuzzleAttempts pa 
+                    JOIN Puzzles pz ON pa.puzzle_fen = pz.fen1 
+                    WHERE pa.username = $1
                 )
                 ORDER BY RANDOM()
                 LIMIT 1`,
@@ -303,19 +478,9 @@ async function findPuzzleForUser(username) {
             );
             
             if (resultWider.rows.length === 0) {
-                // Если все задачи решены, очищаем только самые старые 50% решений
-                await pool.query(`
-                    DELETE FROM Journal 
-                    WHERE user_id IN (SELECT id FROM Users WHERE username = $1)
-                    AND id IN (
-                        SELECT id FROM (
-                            SELECT id, ROW_NUMBER() OVER (ORDER BY date ASC) as rn,
-                            COUNT(*) OVER () as total
-                            FROM Journal 
-                            WHERE user_id IN (SELECT id FROM Users WHERE username = $1)
-                        ) t 
-                        WHERE rn <= total/2
-                    )`,
+                // Если все задачи решены, очищаем историю попыток
+                await pool.query(
+                    'DELETE FROM PuzzleAttempts WHERE username = $1',
                     [username]
                 );
                 return findPuzzleForUser(username);
@@ -447,35 +612,53 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
     try {
         await client.query('BEGIN');
 
-        // Получаем id пользователя
-        const userResult = await client.query(
-            'SELECT id FROM Users WHERE username = $1',
+        // Получаем или создаем пользователя
+        let userResult = await client.query(
+            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
             [username]
         );
         
         if (userResult.rows.length === 0) {
-            throw new Error('User not found');
+            userResult = await client.query(
+                `INSERT INTO Users (username, rating, rd, volatility, status) 
+                 VALUES ($1, 1500.00, 350.00, 0.06000000, true)
+                 RETURNING id, rating, rd, volatility`,
+                [username]
+            );
         }
+        
         const userId = userResult.rows[0].id;
+        const userRating = userResult.rows[0];
+
+        // Получаем задачу
+        const puzzleResult = await client.query(
+            'SELECT id, fen1, rating, rd, volatility FROM Puzzles WHERE id = $1',
+            [puzzleId]
+        );
+        
+        if (puzzleResult.rows.length === 0) {
+            throw new Error('Puzzle not found');
+        }
+        
+        const puzzle = puzzleResult.rows[0];
 
         // Проверяем, не решал ли пользователь эту задачу раньше
         const existingAttempt = await client.query(
-            'SELECT id FROM Journal WHERE user_id = $1 AND puzzle_id = $2',
-            [userId, puzzleId]
+            'SELECT id FROM PuzzleAttempts WHERE username = $1 AND puzzle_fen = $2',
+            [username, puzzle.fen1]
         );
 
         if (existingAttempt.rows.length > 0) {
             throw new Error('Эта задача уже была решена');
         }
 
-        // Получаем текущий рейтинг пользователя и задачи
-        const userRating = await getUserRating(username);
-        const puzzleRating = await getPuzzleRating(puzzleId);
-        
-        // Рассчитываем новые рейтинги
-        const newUserRating = calculateNewRatings(userRating, puzzleRating, success ? 1 : 0);
-        const newPuzzleRating = calculateNewRatings(puzzleRating, userRating, success ? 0 : 1);
-        
+        // Записываем попытку решения
+        await client.query(
+            `INSERT INTO PuzzleAttempts (username, puzzle_fen, success) 
+             VALUES ($1, $2, $3)`,
+            [username, puzzle.fen1, success]
+        );
+
         // Если задача решена успешно, увеличиваем счетчик решений
         if (success) {
             await client.query(
@@ -483,19 +666,7 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 [puzzleId]
             );
         }
-        
-        // Обновляем рейтинг задачи
-        await client.query(
-            'UPDATE Puzzles SET rating = $1, rd = $2, volatility = $3 WHERE id = $4',
-            [newPuzzleRating.userRating, newPuzzleRating.userRD, newPuzzleRating.userVolatility, puzzleId]
-        );
-        
-        // Обновляем рейтинг пользователя
-        await client.query(
-            'UPDATE Users SET rating = $1, rd = $2, volatility = $3 WHERE id = $4',
-            [newUserRating.userRating, newUserRating.userRD, newUserRating.userVolatility, userId]
-        );
-        
+
         // Записываем результат в журнал
         const journalResult = await client.query(
             `INSERT INTO Journal 
@@ -507,63 +678,26 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 puzzleId,
                 success,
                 time,
-                puzzleRating.rating,
-                newUserRating.userRating,
+                puzzle.rating,
+                userRating.rating,
                 4, // средняя сложность по умолчанию
-                // CURRENT_TIMESTAMP добавляется автоматически
             ]
         );
 
         await client.query('COMMIT');
-        return journalResult.rows[0];
+        return {
+            success: true,
+            newRating: userRating.rating,
+            ratingChange: 0 // рейтинг пока не меняем
+        };
     } catch (err) {
         await client.query('ROLLBACK');
-        if (err.message === 'Эта задача уже была решена' || err.message === 'User not found') {
-            throw err;
-        }
         console.error('Error recording solution:', err);
-        throw new Error('Ошибка при записи решения');
+        throw err;
     } finally {
         client.release();
     }
 }
-
-// Добавляем middleware для проверки авторизации
-app.use('/api', (req, res, next) => {
-    // В режиме разработки пропускаем проверку
-    if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: skipping authorization check');
-        return next();
-    }
-
-    // Для OPTIONS запросов пропускаем проверку
-    if (req.method === 'OPTIONS') {
-        return next();
-    }
-
-    const initData = req.headers['x-telegram-init-data'];
-    
-    if (!initData) {
-        console.log('Authorization failed: missing init data');
-        return res.status(401).json({ error: 'Unauthorized - Missing init data' });
-    }
-
-    try {
-        if (!validateTelegramWebAppData(initData)) {
-            console.log('Authorization failed: invalid init data');
-            return res.status(401).json({ error: 'Unauthorized - Invalid init data' });
-        }
-
-        console.log('Authorization successful');
-        next();
-    } catch (err) {
-        console.error('Error during authorization:', err);
-        return res.status(401).json({ 
-            error: 'Unauthorized - Invalid init data', 
-            details: err.message 
-        });
-    }
-});
 
 // Обновляем API endpoint для получения случайной задачи
 app.get('/api/random-puzzle/:username', async (req, res) => {
@@ -676,30 +810,6 @@ app.use(express.static(path.join(__dirname)));
 // Добавляем маршрут для index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Добавляем middleware для проверки авторизации
-app.use('/api', (req, res, next) => {
-    // В режиме разработки пропускаем проверку
-    if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: skipping authorization check');
-        return next();
-    }
-
-    const initData = req.headers['x-telegram-init-data'];
-    
-    if (!initData) {
-        console.log('Authorization failed: missing init data');
-        return res.status(401).json({ error: 'Unauthorized - Missing init data' });
-    }
-
-    if (!validateTelegramWebAppData(initData)) {
-        console.log('Authorization failed: invalid init data');
-        return res.status(401).json({ error: 'Unauthorized - Invalid init data' });
-    }
-
-    console.log('Authorization successful');
-    next();
 });
 
 // Изменим порт на переменную окружения
@@ -1011,6 +1121,13 @@ function calculateNewMu(mu, phi, opponents) {
 function validateTelegramWebAppData(telegramInitData) {
     try {
         console.log('Validating Telegram data...');
+        
+        // Если мы в режиме разработки, пропускаем проверку
+        if (process.env.NODE_ENV === 'development') {
+            console.log('Development mode: skipping Telegram data validation');
+            return true;
+        }
+
         const initData = new URLSearchParams(telegramInitData);
         const hash = initData.get('hash');
         const botToken = process.env.BOT_TOKEN;
