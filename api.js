@@ -7,17 +7,7 @@ async function handleApiResponse(response) {
             statusText: response.statusText,
             url: response.url
         });
-        
-        let errorData;
-        try {
-            errorData = await response.json();
-        } catch (e) {
-            errorData = {
-                error: 'Unknown error',
-                message: response.statusText
-            };
-        }
-        throw new Error(errorData.message || errorData.error || `API request failed: ${response.status}`);
+        throw new Error(`API request failed: ${response.status}`);
     }
     return response.json();
 }
@@ -27,15 +17,11 @@ export async function getUserRating(username) {
         console.log(`Fetching rating for user: ${username}`);
         const response = await fetch(`${API_BASE_URL}/user-rating/${username}`, {
             method: 'GET',
-            credentials: 'include',
             headers: {
-                'Accept': 'application/json',
-                'Origin': window.location.origin
+                'Accept': 'application/json'
             }
         });
-        const data = await handleApiResponse(response);
-        console.log(`Rating data received:`, data);
-        return data;
+        return handleApiResponse(response);
     } catch (error) {
         console.error('Error getting user rating:', error);
         throw error;
@@ -47,15 +33,11 @@ export async function getRandomPuzzle(username) {
         console.log(`Fetching random puzzle for user: ${username}`);
         const response = await fetch(`${API_BASE_URL}/random-puzzle/${username}`, {
             method: 'GET',
-            credentials: 'include',
             headers: {
-                'Accept': 'application/json',
-                'Origin': window.location.origin
+                'Accept': 'application/json'
             }
         });
-        const data = await handleApiResponse(response);
-        console.log(`Puzzle data received:`, data);
-        return data;
+        return handleApiResponse(response);
     } catch (error) {
         console.error('Error getting random puzzle:', error);
         throw error;
@@ -67,11 +49,9 @@ export async function recordSolution(username, puzzleId, success, time) {
         console.log(`Recording solution:`, { username, puzzleId, success, time });
         const response = await fetch(`${API_BASE_URL}/record-solution`, {
             method: 'POST',
-            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Origin': window.location.origin
+                'Accept': 'application/json'
             },
             body: JSON.stringify({
                 username,
@@ -80,9 +60,7 @@ export async function recordSolution(username, puzzleId, success, time) {
                 time
             })
         });
-        const data = await handleApiResponse(response);
-        console.log(`Solution recorded:`, data);
-        return data;
+        return handleApiResponse(response);
     } catch (error) {
         console.error('Error recording solution:', error);
         throw error;
