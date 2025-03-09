@@ -2,12 +2,14 @@ const API_BASE_URL = 'https://chess-puzzles-bot.onrender.com/api';
 
 async function handleApiResponse(response) {
     if (!response.ok) {
+        const errorText = await response.text();
         console.error('API Error:', {
             status: response.status,
             statusText: response.statusText,
-            url: response.url
+            url: response.url,
+            body: errorText
         });
-        throw new Error(`API request failed: ${response.status}`);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
     }
     return response.json();
 }
@@ -18,8 +20,10 @@ export async function getUserRating(username) {
         const response = await fetch(`${API_BASE_URL}/user-rating/${username}`, {
             method: 'GET',
             headers: {
-                'Accept': 'application/json'
-            }
+                'Accept': 'application/json',
+                'Origin': window.location.origin
+            },
+            mode: 'cors'
         });
         return handleApiResponse(response);
     } catch (error) {
@@ -34,8 +38,10 @@ export async function getRandomPuzzle(username) {
         const response = await fetch(`${API_BASE_URL}/random-puzzle/${username}`, {
             method: 'GET',
             headers: {
-                'Accept': 'application/json'
-            }
+                'Accept': 'application/json',
+                'Origin': window.location.origin
+            },
+            mode: 'cors'
         });
         return handleApiResponse(response);
     } catch (error) {
@@ -51,8 +57,10 @@ export async function recordSolution(username, puzzleId, success, time) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Origin': window.location.origin
             },
+            mode: 'cors',
             body: JSON.stringify({
                 username,
                 puzzleId,
