@@ -37,13 +37,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
     // Используем глобальную конфигурацию
-    const API_URL = window.CONFIG.API_URL;
+    const API_URL = 'https://chess-puzzles-bot.onrender.com/api';
 
     async function fetchWithAuth(url, options = {}) {
         try {
             const headers = {
                 'Content-Type': 'application/json',
-                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                'Accept': 'application/json'
             };
 
             const response = await fetch(url, { 
@@ -54,11 +54,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
+            const data = await response.json();
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
-
-            return await response.json();
+            return data;
         } catch (err) {
             console.error('Fetch error:', err);
             throw err;
@@ -68,11 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            const response = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const userRating = await response.json();
+            const userRating = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
             console.log('Received user rating:', userRating);
             
             ratingElements.forEach(el => {
@@ -83,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error updating rating:', err);
             ratingElements.forEach(el => {
                 el.textContent = '1500';
-                el.style.color = 'black';
+                el.style.color = 'red';
             });
         }
     }
@@ -152,32 +148,26 @@ document.addEventListener('DOMContentLoaded', function() {
             startPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
             
-            const response = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            currentPuzzle = await response.json();
+            currentPuzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
             if (!currentPuzzle) {
                 throw new Error('No puzzle received');
             }
 
             // Определяем, кто должен ходить из FEN позиции
-            const fenParts = currentPuzzle.fen.split(' ');
+            const fenParts = currentPuzzle.fen1.split(' ');
             const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
             
             // Обновляем конфигурацию
-            puzzleConfig.initialFen = currentPuzzle.fen;
-            puzzleConfig.preMove = currentPuzzle.move_1;
-            puzzleConfig.evaluatedMove = currentPuzzle.move_2;
-            // Тот, кто ходит, должен быть внизу
+            puzzleConfig.initialFen = currentPuzzle.fen1;
+            puzzleConfig.preMove = currentPuzzle.move1;
+            puzzleConfig.evaluatedMove = currentPuzzle.move2;
             puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
             initializeBoard();
         } catch (err) {
             console.error('Error starting puzzle:', err);
-            alert('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
+            window.Telegram?.WebApp?.showAlert('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
         }
     });
 
@@ -295,9 +285,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Обновляем конфигурацию
-            puzzleConfig.initialFen = currentPuzzle.fen;
-            puzzleConfig.preMove = currentPuzzle.move_1;
-            puzzleConfig.evaluatedMove = currentPuzzle.move_2;
+            puzzleConfig.initialFen = currentPuzzle.fen1;
+            puzzleConfig.preMove = currentPuzzle.move1;
+            puzzleConfig.evaluatedMove = currentPuzzle.move2;
             puzzleConfig.solution = currentPuzzle.solution;
 
             resultPage.classList.add('hidden');
@@ -565,19 +555,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обновляем функцию handlePuzzleResult
     async function handlePuzzleResult(isCorrect) {
-        // Останавливаем секундомер
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
         }
         
-        // Получаем прошедшее время
         const timeDisplay = timerElement.textContent;
         const [minutes, seconds] = timeDisplay.split(':').map(Number);
         const totalSeconds = minutes * 60 + seconds;
 
         try {
-            // Отправляем результат на сервер
-            const response = await fetchWithAuth(`${API_URL}/record-solution`, {
+            await fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
                 body: JSON.stringify({
                     username: currentUsername,
@@ -587,20 +574,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            // Показываем результат
             resultText.textContent = isCorrect ? 'Right!' : 'Wrong!';
+            resultText.style.color = isCorrect ? '#4CAF50' : '#FF0000';
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
 
-            // Обновляем рейтинг
             await updateRatingDisplay(currentUsername);
         } catch (err) {
             console.error('Error recording solution:', err);
-            alert('Произошла ошибка при сохранении результата');
+            window.Telegram?.WebApp?.showAlert('Произошла ошибка при сохранении результата');
         }
     }
 }); 
