@@ -45,21 +45,23 @@ pool.connect(async (err, client, release) => {
     console.log('Successfully connected to database');
     
     try {
-        // Удаляем существующие таблицы
+        // Удаляем существующие таблицы в правильном порядке
         await client.query(`
-            DROP TABLE IF EXISTS Journal;
-            DROP TABLE IF EXISTS PuzzlesTags;
-            DROP TABLE IF EXISTS Puzzles;
-            DROP TABLE IF EXISTS Users;
-            DROP TABLE IF EXISTS Settings;
-            DROP TABLE IF EXISTS PuzzleAttempts;
-            DROP TABLE IF EXISTS SolvedPuzzles;
-            DROP TABLE IF EXISTS Tags;
-            DROP TABLE IF EXISTS Types;
-            DROP TABLE IF EXISTS Complexity;
+            DROP TABLE IF EXISTS Journal CASCADE;
+            DROP TABLE IF EXISTS PuzzlesTags CASCADE;
+            DROP TABLE IF EXISTS PuzzleAttempts CASCADE;
+            DROP TABLE IF EXISTS SolvedPuzzles CASCADE;
+            DROP TABLE IF EXISTS Puzzles CASCADE;
+            DROP TABLE IF EXISTS Users CASCADE;
+            DROP TABLE IF EXISTS Settings CASCADE;
+            DROP TABLE IF EXISTS Tags CASCADE;
+            DROP TABLE IF EXISTS Types CASCADE;
+            DROP TABLE IF EXISTS Complexity CASCADE;
         `);
 
-        // Создаем таблицы заново
+        console.log('Создаем базовые таблицы...');
+        
+        // Создаем базовые таблицы без внешних ключей
         await client.query(`
             CREATE TABLE IF NOT EXISTS Types (
                 id SERIAL PRIMARY KEY,
@@ -73,7 +75,7 @@ pool.connect(async (err, client, release) => {
 
             CREATE TABLE IF NOT EXISTS Users (
                 id SERIAL PRIMARY KEY,
-                username VARCHAR(255) NOT NULL,
+                username VARCHAR(255) UNIQUE NOT NULL,
                 telegram_id BIGINT,
                 rating NUMERIC(12,8) DEFAULT 1500.00,
                 rd NUMERIC(12,8) DEFAULT 350.00,
@@ -81,7 +83,70 @@ pool.connect(async (err, client, release) => {
                 status BOOLEAN DEFAULT true,
                 performance NUMERIC(12,8)
             );
-            
+
+            CREATE TABLE IF NOT EXISTS Complexity (
+                id SERIAL PRIMARY KEY,
+                complexity_type TEXT NOT NULL
+            );
+        `);
+
+        console.log('Заполняем базовые таблицы...');
+
+        // Заполняем базовые таблицы
+        await client.query(`
+            INSERT INTO Types (id, type) VALUES
+            (1, 'лучший'),
+            (2, 'защита'),
+            (3, 'обычный'),
+            (4, 'пропуск'),
+            (5, 'фейк'),
+            (6, 'нет защиты'),
+            (7, 'подстава')
+            ON CONFLICT (id) DO UPDATE 
+            SET type = EXCLUDED.type;
+        `);
+
+        await client.query(`
+            INSERT INTO Tags (id, tag) VALUES
+            (1, 'бесплатное взятие'),
+            (2, 'выгодный размен'),
+            (3, 'анализ'),
+            (4, 'связка'),
+            (5, 'вилка'),
+            (6, 'рентген'),
+            (7, 'скрытое нападение'),
+            (8, 'капкан'),
+            (9, 'мат'),
+            (10, 'последняя горизонталь'),
+            (11, 'уничтожение защитника'),
+            (12, 'отвлечение'),
+            (13, 'перекрытие'),
+            (14, 'завлечение'),
+            (15, 'освобождение'),
+            (16, 'превращение пешки'),
+            (17, 'пат'),
+            (18, 'повторение')
+            ON CONFLICT (id) DO UPDATE 
+            SET tag = EXCLUDED.tag;
+        `);
+
+        await client.query(`
+            INSERT INTO Complexity (id, complexity_type) VALUES
+            (1, 'супер легкая'),
+            (2, 'очень легкая'),
+            (3, 'легкая'),
+            (4, 'средняя'),
+            (5, 'сложная'),
+            (6, 'очень сложная'),
+            (7, 'супер сложная')
+            ON CONFLICT (id) DO UPDATE 
+            SET complexity_type = EXCLUDED.complexity_type;
+        `);
+
+        console.log('Создаем таблицы с внешними ключами...');
+
+        // Создаем таблицы с внешними ключами
+        await client.query(`
             CREATE TABLE IF NOT EXISTS Puzzles (
                 id SERIAL PRIMARY KEY,
                 unique_task INTEGER NOT NULL,
@@ -107,7 +172,7 @@ pool.connect(async (err, client, release) => {
                 puzzle_rating_before NUMERIC(12,8),
                 user_rating_after NUMERIC(12,8),
                 complexity_id INTEGER,
-                date TIMESTAMP
+                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             
             CREATE TABLE IF NOT EXISTS Settings (
@@ -118,7 +183,7 @@ pool.connect(async (err, client, release) => {
 
             CREATE TABLE IF NOT EXISTS PuzzleAttempts (
                 id SERIAL PRIMARY KEY,
-                username VARCHAR(255),
+                username VARCHAR(255) REFERENCES Users(username),
                 puzzle_fen TEXT,
                 attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 success BOOLEAN,
@@ -127,15 +192,10 @@ pool.connect(async (err, client, release) => {
             
             CREATE TABLE IF NOT EXISTS SolvedPuzzles (
                 id SERIAL PRIMARY KEY,
-                username VARCHAR(255),
+                username VARCHAR(255) REFERENCES Users(username),
                 puzzle_fen TEXT,
                 solved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(username, puzzle_fen)
-            );
-
-            CREATE TABLE IF NOT EXISTS Complexity (
-                id SERIAL PRIMARY KEY,
-                complexity_type TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS PuzzlesTags (
@@ -145,7 +205,26 @@ pool.connect(async (err, client, release) => {
             );
         `);
 
-        // Инициализируем настройки
+        console.log('Добавляем пользователей...');
+
+        // Добавляем пользователей
+        await client.query(`
+            INSERT INTO Users (username, telegram_id, rating, rd, volatility, status, performance) VALUES
+            ('goodwillchess', 1931999392, 1500.00, 350.00, 0.06000000, true, 1353.195496),
+            ('antiblunderchess', 5395535292, 1500.00, 350.00, 0.06000000, true, 1446.496565),
+            ('alexxldm', 6685769779, 1500.00, 350.00, 0.06000000, true, 1446.496565)
+            ON CONFLICT (username) DO UPDATE 
+            SET telegram_id = EXCLUDED.telegram_id,
+                rating = EXCLUDED.rating,
+                rd = EXCLUDED.rd,
+                volatility = EXCLUDED.volatility,
+                status = EXCLUDED.status,
+                performance = EXCLUDED.performance;
+        `);
+
+        console.log('Добавляем настройки...');
+
+        // Добавляем настройки
         await client.query(`
             INSERT INTO Settings (id, setting, meaning) VALUES
             (1, 'Period, days', 5),
@@ -174,26 +253,12 @@ pool.connect(async (err, client, release) => {
             (24, 'Количество задач в день, которое может решать неактивный пользователь', 3)
             ON CONFLICT (id) DO UPDATE 
             SET setting = EXCLUDED.setting, 
-                meaning = EXCLUDED.meaning
+                meaning = EXCLUDED.meaning;
         `);
 
-        // Добавляем пользователей
-        await client.query(`
-            INSERT INTO Users (id, username, telegram_id, rating, rd, volatility, status, performance) VALUES
-            (1, 'goodwillchess', 1931999392, 1500.00, 350.00, 0.06000000, true, 1353.195496),
-            (2, 'antiblunderchess', 5395535292, 1500.00, 350.00, 0.06000000, true, 1446.496565),
-            (3, 'alexxldm', 6685769779, 1500.00, 350.00, 0.06000000, true, 1446.496565)
-            ON CONFLICT (id) DO UPDATE 
-            SET username = EXCLUDED.username,
-                telegram_id = EXCLUDED.telegram_id,
-                rating = EXCLUDED.rating,
-                rd = EXCLUDED.rd,
-                volatility = EXCLUDED.volatility,
-                status = EXCLUDED.status,
-                performance = EXCLUDED.performance;
-        `);
+        console.log('Добавляем задачи...');
 
-        // Добавляем базовые задачи с разными цветами
+        // Добавляем задачи
         await client.query(`
             INSERT INTO Puzzles (id, unique_task, rating, rd, volatility, number, fen1, fen2, move1, move2, solution, type_id, color) VALUES
             (1, 1, 1500.0000, 350.0000, 0.06000000, 0, '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2', '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2', 'e7d6', 'c8a6', false, 4, true),
@@ -226,58 +291,7 @@ pool.connect(async (err, client, release) => {
                 color = EXCLUDED.color;
         `);
 
-        // Добавляем теги
-        await client.query(`
-            INSERT INTO Tags (id, tag) VALUES
-            (1, 'бесплатное взятие'),
-            (2, 'выгодный размен'),
-            (3, 'анализ'),
-            (4, 'связка'),
-            (5, 'вилка'),
-            (6, 'рентген'),
-            (7, 'скрытое нападение'),
-            (8, 'капкан'),
-            (9, 'мат'),
-            (10, 'последняя горизонталь'),
-            (11, 'уничтожение защитника'),
-            (12, 'отвлечение'),
-            (13, 'перекрытие'),
-            (14, 'завлечение'),
-            (15, 'освобождение'),
-            (16, 'превращение пешки'),
-            (17, 'пат'),
-            (18, 'повторение')
-            ON CONFLICT (id) DO UPDATE 
-            SET tag = EXCLUDED.tag;
-        `);
-
-        // Добавляем типы
-        await client.query(`
-            INSERT INTO Types (id, type) VALUES
-            (1, 'лучший'),
-            (2, 'защита'),
-            (3, 'обычный'),
-            (4, 'пропуск'),
-            (5, 'фейк'),
-            (6, 'нет защиты'),
-            (7, 'подстава')
-            ON CONFLICT (id) DO UPDATE 
-            SET type = EXCLUDED.type;
-        `);
-
-        // Добавляем сложность задач
-        await client.query(`
-            INSERT INTO Complexity (id, complexity_type) VALUES
-            (1, 'супер легкая'),
-            (2, 'очень легкая'),
-            (3, 'легкая'),
-            (4, 'средняя'),
-            (5, 'сложная'),
-            (6, 'очень сложная'),
-            (7, 'супер сложная')
-            ON CONFLICT (id) DO UPDATE 
-            SET complexity_type = EXCLUDED.complexity_type;
-        `);
+        console.log('Добавляем связи задач с тегами...');
 
         // Добавляем задачи с тегами
         await client.query(`
@@ -291,6 +305,8 @@ pool.connect(async (err, client, release) => {
             SET puzzle_id = EXCLUDED.puzzle_id,
                 tag_id = EXCLUDED.tag_id;
         `);
+
+        console.log('Инициализация базы данных завершена успешно');
 
     } catch (err) {
         console.error('Error creating tables:', err);
@@ -411,11 +427,10 @@ async function findPuzzleForUser(username) {
             `SELECT p.*, t.type as type_name 
             FROM Puzzles p 
             LEFT JOIN Types t ON p.type_id = t.id
-            WHERE p.id NOT IN (
-                SELECT DISTINCT puzzle_id 
-                FROM PuzzleAttempts pa 
-                JOIN Puzzles pz ON pa.puzzle_fen = pz.fen1 
-                WHERE pa.username = $1
+            WHERE p.fen1 NOT IN (
+                SELECT puzzle_fen 
+                FROM PuzzleAttempts 
+                WHERE username = $1
             )
             AND p.rating BETWEEN $2 AND $3
             ORDER BY RANDOM()
@@ -429,11 +444,10 @@ async function findPuzzleForUser(username) {
                 `SELECT p.*, t.type as type_name 
                 FROM Puzzles p 
                 LEFT JOIN Types t ON p.type_id = t.id
-                WHERE p.id NOT IN (
-                    SELECT DISTINCT puzzle_id 
-                    FROM PuzzleAttempts pa 
-                    JOIN Puzzles pz ON pa.puzzle_fen = pz.fen1 
-                    WHERE pa.username = $1
+                WHERE p.fen1 NOT IN (
+                    SELECT puzzle_fen 
+                    FROM PuzzleAttempts 
+                    WHERE username = $1
                 )
                 ORDER BY RANDOM()
                 LIMIT 1`,
