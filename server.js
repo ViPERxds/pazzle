@@ -6,10 +6,26 @@ const path = require('path');
 const crypto = require('crypto');
 const app = express();
 
+// Проверяем наличие необходимых переменных окружения
+if (!process.env.NODE_ENV) {
+    console.log('NODE_ENV not set, defaulting to development');
+    process.env.NODE_ENV = 'development';
+}
+
+if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is required');
+    process.exit(1);
+}
+
+if (process.env.NODE_ENV !== 'development' && !process.env.BOT_TOKEN) {
+    console.error('BOT_TOKEN is required in production mode');
+    process.exit(1);
+}
+
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-telegram-init-data']
 }));
 app.use(express.json());
 
@@ -515,11 +531,7 @@ async function getPuzzleRating(puzzleId) {
             throw new Error('Puzzle not found');
         }
         
-        return {
-            rating: result.rows[0].rating,
-            rd: result.rows[0].rd,
-            volatility: result.rows[0].volatility
-        };
+        return result.rows[0];
     } catch (err) {
         console.error('Error getting puzzle rating:', err);
         throw err;
@@ -637,6 +649,41 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
     }
 }
 
+// Добавляем middleware для проверки авторизации
+app.use('/api', (req, res, next) => {
+    // В режиме разработки пропускаем проверку
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Development mode: skipping authorization check');
+        return next();
+    }
+
+    // Для OPTIONS запросов пропускаем проверку
+    if (req.method === 'OPTIONS') {
+        return next();
+    }
+
+    const initData = req.headers['x-telegram-init-data'];
+    console.log('Checking authorization with init data:', initData ? 'present' : 'missing');
+    
+    if (!initData) {
+        console.log('Authorization failed: missing init data');
+        return res.status(401).json({ error: 'Unauthorized - Missing init data' });
+    }
+
+    try {
+        if (!validateTelegramWebAppData(initData)) {
+            console.log('Authorization failed: invalid init data');
+            return res.status(401).json({ error: 'Unauthorized - Invalid init data' });
+        }
+
+        console.log('Authorization successful');
+        next();
+    } catch (err) {
+        console.error('Error during authorization:', err);
+        return res.status(401).json({ error: 'Unauthorized - Invalid init data', details: err.message });
+    }
+});
+
 // Обновляем API endpoint для получения случайной задачи
 app.get('/api/random-puzzle/:username', async (req, res) => {
     try {
@@ -646,12 +693,14 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
         // Проверяем доступ пользователя
         const hasAccess = await checkUserAccess(username);
         if (!hasAccess) {
+            console.log(`Access denied for user: ${username}`);
             return res.status(403).json({ error: 'Access denied' });
         }
         
         // Получаем случайную задачу
         const puzzle = await findPuzzleForUser(username);
         if (!puzzle) {
+            console.log(`No available puzzles found for user: ${username}`);
             return res.status(404).json({ error: 'No available puzzles found' });
         }
         
@@ -671,12 +720,12 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
             color: puzzle.color
         };
         
+        console.log(`Successfully found puzzle for user: ${username}`, response);
         res.json(response);
     } catch (err) {
         console.error('Error in /api/random-puzzle:', err);
         res.status(500).json({ 
             error: err.message,
-            stack: err.stack,
             details: 'Ошибка при получении задачи'
         });
     }
@@ -686,9 +735,18 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
 app.post('/api/record-solution', async (req, res) => {
     try {
         const { username, puzzleId, success, time } = req.body;
+        console.log(`Recording solution for user: ${username}, puzzle: ${puzzleId}, success: ${success}`);
         
         if (!username || !puzzleId || success === undefined || !time) {
+            console.log('Missing required parameters:', { username, puzzleId, success, time });
             return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        
+        // Проверяем доступ пользователя
+        const hasAccess = await checkUserAccess(username);
+        if (!hasAccess) {
+            console.log(`Access denied for user: ${username}`);
+            return res.status(403).json({ error: 'Access denied' });
         }
         
         // Получаем задачу
@@ -698,6 +756,7 @@ app.post('/api/record-solution', async (req, res) => {
         );
         
         if (!puzzleResult.rows[0]) {
+            console.log(`Puzzle not found: ${puzzleId}`);
             return res.status(404).json({ error: 'Puzzle not found' });
         }
 
@@ -714,12 +773,13 @@ app.post('/api/record-solution', async (req, res) => {
         // Записываем результат решения
         const result = await recordPuzzleSolution(username, puzzleId, success, time);
         
+        console.log(`Successfully recorded solution for user: ${username}`);
         res.json(result);
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
         res.status(500).json({ 
             error: err.message,
-            details: err.stack
+            details: 'Ошибка при записи решения'
         });
     }
 });
@@ -737,82 +797,28 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Добавляем функцию getSettings
-async function getSettings() {
-    try {
-        const result = await pool.query('SELECT id, setting, meaning FROM Settings ORDER BY id');
-        if (result.rows.length === 0) {
-            // Возвращаем значения по умолчанию, если настройки не найдены
-            return {
-                'Period, days': 5,
-                'Норма решения 1 задачи, секунд': 30,
-                'Стандартное отклонение': 100,
-                'Время до предварительного хода, секунд': 1,
-                'Время анализа 1 линии, секунд': 1
-            };
-        }
-        return result.rows.reduce((acc, row) => {
-            acc[row.setting] = row.meaning;
-            return acc;
-        }, {});
-    } catch (err) {
-        console.error('Error getting settings:', err);
-        throw err;
-    }
-}
-
-// Добавляем функцию getPuzzleRating
-async function getPuzzleRating(puzzleId) {
-    try {
-        const result = await pool.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        return result.rows[0];
-    } catch (err) {
-        console.error('Error getting puzzle rating:', err);
-        throw err;
-    }
-}
-
-// Функция проверки данных от Telegram
-function validateTelegramWebAppData(telegramInitData) {
-    const initData = new URLSearchParams(telegramInitData);
-    const hash = initData.get('hash');
-    const botToken = process.env.BOT_TOKEN; // Токен вашего бота
-
-    // Удаляем hash из проверяемых данных
-    initData.delete('hash');
-    
-    // Сортируем оставшиеся поля
-    const dataCheckString = Array.from(initData.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => `${key}=${value}`)
-        .join('\n');
-
-    // Создаем HMAC-SHA256
-    const secret = crypto.createHmac('sha256', 'WebAppData')
-        .update(botToken)
-        .digest();
-    
-    const calculatedHash = crypto.createHmac('sha256', secret)
-        .update(dataCheckString)
-        .digest('hex');
-
-    return calculatedHash === hash;
-}
-
 // Добавляем middleware для проверки авторизации
 app.use('/api', (req, res, next) => {
-    const initData = req.headers['x-telegram-init-data'];
-    
-    if (!initData || !validateTelegramWebAppData(initData)) {
-        // В режиме разработки пропускаем проверку
-        if (process.env.NODE_ENV === 'development') {
-            return next();
-        }
-        return res.status(401).json({ error: 'Unauthorized' });
+    // В режиме разработки пропускаем проверку
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Development mode: skipping authorization check');
+        return next();
     }
+
+    const initData = req.headers['x-telegram-init-data'];
+    console.log('Checking authorization with init data:', initData ? 'present' : 'missing');
+    
+    if (!initData) {
+        console.log('Authorization failed: missing init data');
+        return res.status(401).json({ error: 'Unauthorized - Missing init data' });
+    }
+
+    if (!validateTelegramWebAppData(initData)) {
+        console.log('Authorization failed: invalid init data');
+        return res.status(401).json({ error: 'Unauthorized - Invalid init data' });
+    }
+
+    console.log('Authorization successful');
     next();
 });
 
@@ -1119,4 +1125,50 @@ function calculateNewMu(mu, phi, opponents) {
         sum += gPhi(opp.phi) * (opp.s - expectation(mu, opp.mu, opp.phi));
     }
     return mu + Math.pow(phi, 2) * sum;
+}
+
+// Функция проверки данных от Telegram
+function validateTelegramWebAppData(telegramInitData) {
+    try {
+        console.log('Validating Telegram data...');
+        const initData = new URLSearchParams(telegramInitData);
+        const hash = initData.get('hash');
+        const botToken = process.env.BOT_TOKEN;
+
+        if (!hash || !botToken) {
+            console.log('Missing hash or bot token:', { hash: !!hash, botToken: !!botToken });
+            return false;
+        }
+
+        // Удаляем hash из проверяемых данных
+        initData.delete('hash');
+        
+        // Сортируем оставшиеся поля
+        const dataCheckString = Array.from(initData.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, value]) => `${key}=${value}`)
+            .join('\n');
+
+        console.log('Data check string:', dataCheckString);
+
+        // Создаем HMAC-SHA256
+        const secret = crypto.createHmac('sha256', 'WebAppData')
+            .update(botToken)
+            .digest();
+        
+        const calculatedHash = crypto.createHmac('sha256', secret)
+            .update(dataCheckString)
+            .digest('hex');
+
+        console.log('Hash comparison:', { 
+            received: hash,
+            calculated: calculatedHash,
+            match: calculatedHash === hash
+        });
+
+        return calculatedHash === hash;
+    } catch (err) {
+        console.error('Error validating Telegram data:', err);
+        return false;
+    }
 }
