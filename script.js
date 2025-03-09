@@ -236,20 +236,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     const [minutes, seconds] = timeDisplay.split(':').map(Number);
                     const totalSeconds = minutes * 60 + seconds;
                     
-                    const currentRating = await updateRatingDisplay(currentUsername);
-                    
                     await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            user_id: 1, // Фиксированное значение для теста
+                            id: null,
+                            user_id: 1,
                             puzzle_id: parseInt(currentPuzzle.id),
                             success: true,
                             time: parseFloat(totalSeconds.toFixed(1)),
-                            puzzle_rating_before: parseFloat(currentPuzzle.rating || currentRating || 1500),
-                            complexity_id: 4 // Фиксированное значение для теста
+                            puzzle_rating_before: 1500,
+                            user_rating_after: null,
+                            complexity_id: 4,
+                            date: new Date().toISOString()
                         })
                     });
 
@@ -286,20 +287,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     const [minutes, seconds] = timeDisplay.split(':').map(Number);
                     const totalSeconds = minutes * 60 + seconds;
                     
-                    const currentRating = await updateRatingDisplay(currentUsername);
-                    
                     await fetchWithAuth(`${API_URL}/record-solution`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            user_id: 1, // Фиксированное значение для теста
+                            id: null,
+                            user_id: 1,
                             puzzle_id: parseInt(currentPuzzle.id),
                             success: false,
                             time: parseFloat(totalSeconds.toFixed(1)),
-                            puzzle_rating_before: parseFloat(currentPuzzle.rating || currentRating || 1500),
-                            complexity_id: 4 // Фиксированное значение для теста
+                            puzzle_rating_before: 1500,
+                            user_rating_after: null,
+                            complexity_id: 4,
+                            date: new Date().toISOString()
                         })
                     });
 
@@ -652,20 +654,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalSeconds = minutes * 60 + seconds;
 
         try {
-            const currentRating = await updateRatingDisplay(currentUsername);
-            
             await fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    user_id: parseInt(currentUsername) || 1,
+                    id: null,
+                    user_id: 1,
                     puzzle_id: parseInt(currentPuzzle.id),
                     success: isCorrect,
                     time: parseFloat(totalSeconds.toFixed(1)),
-                    puzzle_rating_before: parseFloat(currentPuzzle.rating || currentRating || 1500),
-                    complexity_id: parseInt(currentPuzzle.complexity || 4)
+                    puzzle_rating_before: 1500,
+                    user_rating_after: null,
+                    complexity_id: 4,
+                    date: new Date().toISOString()
                 })
             });
 
