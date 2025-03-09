@@ -54,10 +54,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            const data = await response.json();
             if (!response.ok) {
-                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                let errorMessage;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.error || `HTTP error! status: ${response.status}`;
+                } catch {
+                    errorMessage = errorText || `HTTP error! status: ${response.status}`;
+                }
+                throw new Error(errorMessage);
             }
+
+            const data = await response.json();
             return data;
         } catch (err) {
             console.error('Fetch error:', err);
@@ -149,8 +158,8 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzlePage.classList.remove('hidden');
             
             currentPuzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
-            if (!currentPuzzle) {
-                throw new Error('No puzzle received');
+            if (!currentPuzzle || !currentPuzzle.fen1 || !currentPuzzle.move1 || !currentPuzzle.move2) {
+                throw new Error('Invalid puzzle data received');
             }
 
             // Определяем, кто должен ходить из FEN позиции
@@ -164,10 +173,12 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
             puzzleConfig.solution = currentPuzzle.solution;
 
+            // Сбрасываем состояние игры
+            game = new Chess();
             initializeBoard();
         } catch (err) {
             console.error('Error starting puzzle:', err);
-            window.Telegram?.WebApp?.showAlert('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
+            showError('Произошла ошибка при загрузке задачи. Попробуйте обновить страницу.');
         }
     });
 
@@ -208,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    window.Telegram?.WebApp?.showAlert('Произошла ошибка при записи решения');
+                    showError('Произошла ошибка при записи решения');
                 }
             });
         }
@@ -248,7 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                 } catch (err) {
                     console.error('Error recording solution:', err);
-                    window.Telegram?.WebApp?.showAlert('Произошла ошибка при записи решения');
+                    showError('Произошла ошибка при записи решения');
                 }
             });
         }
@@ -265,8 +276,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             currentPuzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${currentUsername}`);
-            if (!currentPuzzle) {
-                throw new Error('No puzzle received');
+            if (!currentPuzzle || !currentPuzzle.fen1) {
+                throw new Error('Invalid puzzle data received');
             }
 
             // Определяем, кто должен ходить из FEN позиции
@@ -283,10 +294,12 @@ document.addEventListener('DOMContentLoaded', function() {
             resultPage.classList.add('hidden');
             puzzlePage.classList.remove('hidden');
             
+            // Сбрасываем состояние игры
+            game = new Chess();
             initializeBoard();
         } catch (err) {
             console.error('Error loading next puzzle:', err);
-            window.Telegram?.WebApp?.showAlert('Произошла ошибка при загрузке следующей задачи');
+            showError('Произошла ошибка при загрузке следующей задачи');
         }
     });
 
@@ -349,9 +362,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            // Загружаем позицию
-            if (!game.load(puzzleConfig.initialFen)) {
+            // Проверяем валидность FEN и ходов
+            if (!puzzleConfig.initialFen || !game.load(puzzleConfig.initialFen)) {
                 throw new Error('Invalid FEN position');
+            }
+
+            if (!puzzleConfig.preMove || !puzzleConfig.preMove.match(/^[a-h][1-8][a-h][1-8]$/)) {
+                throw new Error('Invalid premove format');
             }
 
             board = Chessboard('board', {
@@ -370,6 +387,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 onDrop: function(source, target) {
                     // Получаем фигуру, которая делает ход
                     const piece = game.get(source);
+                    if (!piece) return 'snapback';
                     
                     // Подсвечиваем начальную и конечную клетки
                     $(`[data-square="${source}"]`).addClass('highlight-square');
@@ -429,17 +447,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+                if (!from || !to) {
+                    console.error('Invalid premove format');
+                    return;
+                }
+                
+                // Проверяем валидность хода
+                const move = game.move({ from, to, promotion: 'q' });
+                if (!move) {
+                    console.error('Invalid premove:', from, to);
+                    showError('Ошибка: некорректный предварительный ход');
+                    return;
+                }
                 
                 // Подсвечиваем начальную и конечную клетки
                 $(`[data-square="${from}"]`).addClass('highlight-square');
                 $(`[data-square="${to}"]`).addClass('highlight-move');
-                
-                // Делаем ход в игре
-                const move = game.move({ from, to, promotion: 'q' });
-                if (!move) {
-                    console.error('Invalid premove');
-                    return;
-                }
                 
                 // Анимируем ход на доске
                 board.position(game.fen(), true);
@@ -459,7 +482,7 @@ document.addEventListener('DOMContentLoaded', function() {
             startStopwatch();
         } catch (err) {
             console.error('Error initializing board:', err);
-            window.Telegram?.WebApp?.showAlert('Ошибка при инициализации доски. Попробуйте обновить страницу.');
+            showError('Ошибка при инициализации доски: ' + err.message);
         }
     }
 
@@ -555,6 +578,12 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(window.timerInterval);
         }
         
+        if (!currentPuzzle || !currentPuzzle.id) {
+            console.error('No valid puzzle data');
+            showError('Ошибка: нет данных о текущей задаче');
+            return;
+        }
+        
         const timeDisplay = timerElement.textContent;
         const [minutes, seconds] = timeDisplay.split(':').map(Number);
         const totalSeconds = minutes * 60 + seconds;
@@ -581,7 +610,19 @@ document.addEventListener('DOMContentLoaded', function() {
             await updateRatingDisplay(currentUsername);
         } catch (err) {
             console.error('Error recording solution:', err);
-            window.Telegram?.WebApp?.showAlert('Произошла ошибка при сохранении результата');
+            showError('Произошла ошибка при сохранении результата');
+        }
+    }
+
+    // Заменяем showAlert на showPopup где это возможно
+    function showError(message) {
+        if (window.Telegram?.WebApp?.showPopup) {
+            window.Telegram.WebApp.showPopup({
+                message: message,
+                buttons: [{type: 'close'}]
+            });
+        } else {
+            alert(message);
         }
     }
 }); 
