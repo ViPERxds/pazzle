@@ -31,9 +31,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Добавляем middleware для логирования запросов
+// Обновляем middleware для логирования запросов
 app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
+    console.log(`${req.method} ${req.url}`, {
+        body: req.body,
+        query: req.query,
+        params: req.params
+    });
     next();
 });
 
@@ -698,26 +702,16 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
 }
 
 // Обновляем API endpoint для получения случайной задачи
-app.get('/api/random-puzzle/:username', async (req, res) => {
+app.get('/api/random-puzzle/:username', async (req, res, next) => {
     try {
         const username = req.params.username;
         console.log(`Getting random puzzle for user: ${username}`);
         
-        // Проверяем доступ пользователя
-        const hasAccess = await checkUserAccess(username);
-        if (!hasAccess) {
-            console.log(`Access denied for user: ${username}`);
-            return res.status(403).json({ error: 'Access denied' });
-        }
-        
-        // Получаем случайную задачу
         const puzzle = await findPuzzleForUser(username);
         if (!puzzle) {
-            console.log(`No available puzzles found for user: ${username}`);
             return res.status(404).json({ error: 'No available puzzles found' });
         }
         
-        // Форматируем ответ
         const response = {
             id: puzzle.id,
             unique_task: puzzle.unique_task,
@@ -733,68 +727,26 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
             color: puzzle.color
         };
         
-        console.log(`Successfully found puzzle for user: ${username}`, response);
         res.json(response);
     } catch (err) {
-        console.error('Error in /api/random-puzzle:', err);
-        res.status(500).json({ 
-            error: 'Failed to get puzzle',
-            message: err.message,
-            details: err.stack
-        });
+        next(err);
     }
 });
 
 // Обновляем API endpoint для записи решения
-app.post('/api/record-solution', async (req, res) => {
+app.post('/api/record-solution', async (req, res, next) => {
     try {
         const { username, puzzleId, success, time } = req.body;
-        console.log(`Recording solution for user: ${username}, puzzle: ${puzzleId}, success: ${success}`);
+        console.log(`Recording solution:`, { username, puzzleId, success, time });
         
         if (!username || !puzzleId || success === undefined || !time) {
-            console.log('Missing required parameters:', { username, puzzleId, success, time });
             return res.status(400).json({ error: 'Missing required parameters' });
         }
         
-        // Проверяем доступ пользователя
-        const hasAccess = await checkUserAccess(username);
-        if (!hasAccess) {
-            console.log(`Access denied for user: ${username}`);
-            return res.status(403).json({ error: 'Access denied' });
-        }
-        
-        // Получаем задачу
-        const puzzleResult = await pool.query(
-            'SELECT fen1 FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (!puzzleResult.rows[0]) {
-            console.log(`Puzzle not found: ${puzzleId}`);
-            return res.status(404).json({ error: 'Puzzle not found' });
-        }
-
-        // Записываем попытку решения
-        await pool.query(
-            `INSERT INTO PuzzleAttempts (username, puzzle_fen, success) 
-             VALUES ($1, $2, $3) 
-             ON CONFLICT (username, puzzle_fen) DO UPDATE SET 
-             success = $3, 
-             attempted_at = CURRENT_TIMESTAMP`,
-            [username, puzzleResult.rows[0].fen1, success]
-        );
-        
-        // Записываем результат решения
         const result = await recordPuzzleSolution(username, puzzleId, success, time);
-        
-        console.log(`Successfully recorded solution for user: ${username}`);
         res.json(result);
     } catch (err) {
-        console.error('Error in /api/record-solution:', err);
-        res.status(500).json({ 
-            error: err.message,
-            details: 'Ошибка при записи решения'
-        });
+        next(err);
     }
 });
 
@@ -1117,7 +1069,7 @@ function calculateNewMu(mu, phi, opponents) {
 }
 
 // Добавляем API endpoint для получения рейтинга пользователя
-app.get('/api/user-rating/:username', async (req, res) => {
+app.get('/api/user-rating/:username', async (req, res, next) => {
     try {
         const username = req.params.username;
         console.log(`API request for user rating: ${username}`);
@@ -1125,22 +1077,27 @@ app.get('/api/user-rating/:username', async (req, res) => {
         const userRating = await getUserRating(username);
         console.log(`Sending rating response for ${username}:`, userRating);
         
-        res.json(userRating);
-    } catch (err) {
-        console.error('Error in /api/user-rating:', err);
-        res.status(500).json({ 
-            error: 'Internal server error',
-            message: err.message
+        res.json({
+            rating: parseFloat(userRating.rating),
+            rd: parseFloat(userRating.rd),
+            volatility: parseFloat(userRating.volatility)
         });
+    } catch (err) {
+        next(err);
     }
 });
 
 // Обновляем обработчик ошибок
 app.use((err, req, res, next) => {
-    console.error('Global error handler:', err);
-    res.status(500).json({
-        error: 'Internal Server Error',
-        message: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    console.error('Error handling request:', {
+        method: req.method,
+        url: req.url,
+        error: err.message,
+        stack: err.stack
+    });
+    
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error',
+        details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
 });
