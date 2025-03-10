@@ -187,6 +187,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Получаем прошедшее время в секундах
+            const timeDisplay = timerElement.textContent;
+            const [minutes, seconds] = timeDisplay.split(':').map(Number);
+            const elapsedTime = minutes * 60 + seconds;
+            
             console.log('Sending data:', { puzzle_id: currentPuzzle.id, user_id: currentUsername, success: success, time: elapsedTime, complexity_id: currentPuzzle.complexity || 1 });
             
             // Вместо отправки на сервер, просто логируем результат
