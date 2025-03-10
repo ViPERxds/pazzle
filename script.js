@@ -241,10 +241,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Проверяем валидность предварительного хода
             try {
-                const [fromPre, toPre] = puzzle.move1.match(/.{2}/g) || [];
-                if (!fromPre || !toPre) {
+                // Проверяем формат хода (должен быть 4 символа без пробела)
+                if (!puzzle.move1.match(/^[a-h][1-8][a-h][1-8]$/)) {
                     throw new Error('Неверный формат предварительного хода');
                 }
+                
+                const fromPre = puzzle.move1.substring(0, 2);
+                const toPre = puzzle.move1.substring(2, 4);
                 
                 // Проверяем, есть ли фигура на начальной позиции
                 const piece = tempGame.get(fromPre);
@@ -262,10 +265,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Проверяем валидность оцениваемого хода
             try {
-                const [fromEval, toEval] = puzzle.move2.match(/.{2}/g) || [];
-                if (!fromEval || !toEval) {
+                // Проверяем формат хода (должен быть 4 символа без пробела)
+                if (!puzzle.move2.match(/^[a-h][1-8][a-h][1-8]$/)) {
                     throw new Error('Неверный формат оцениваемого хода');
                 }
+                
+                const fromEval = puzzle.move2.substring(0, 2);
+                const toEval = puzzle.move2.substring(2, 4);
                 
                 // Проверяем, есть ли фигура на начальной позиции
                 const piece = tempGame.get(fromEval);
@@ -498,6 +504,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializeBoard() {
         return new Promise((resolve, reject) => {
             try {
+                console.log('Initializing board with config:', puzzleConfig);
+                
                 // Очищаем предыдущий таймер если есть
                 if (window.timerInterval) {
                     clearInterval(window.timerInterval);
@@ -517,17 +525,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 // Проверяем валидность FEN и ходов
-                if (!puzzleConfig.initialFen || !game.load(puzzleConfig.initialFen)) {
-                    throw new Error('Invalid FEN position');
+                if (!puzzleConfig.initialFen) {
+                    throw new Error('Отсутствует FEN позиция');
+                }
+                
+                try {
+                    if (!game.load(puzzleConfig.initialFen)) {
+                        throw new Error('Некорректная FEN позиция');
+                    }
+                } catch (e) {
+                    throw new Error('Ошибка при загрузке позиции: ' + e.message);
                 }
 
+                // Проверяем формат предварительного хода (должен быть 4 символа без пробела)
                 if (!puzzleConfig.preMove || !puzzleConfig.preMove.match(/^[a-h][1-8][a-h][1-8]$/)) {
-                    throw new Error('Invalid premove format');
+                    throw new Error('Некорректный формат предварительного хода');
                 }
 
                 board = Chessboard('board', {
                     position: puzzleConfig.initialFen,
-                    orientation: puzzleConfig.orientation,
+                    orientation: puzzleConfig.orientation || 'white',
                     pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
                     draggable: true,
                     moveSpeed: 'slow',
@@ -545,98 +562,73 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Подсвечиваем начальную и конечную клетки
                         $(`[data-square="${source}"]`).addClass('highlight-square');
-                        $(`[data-square="${target}"]`).addClass('highlight-move');
+                        $(`[data-square="${target}"]`).addClass('highlight-square');
                         
-                        // Проверяем валидность хода
-                        const move = game.move({
-                            from: source,
-                            to: target,
-                            promotion: 'q'
-                        });
-
-                        // Если ход невозможен по правилам шахмат
-                        if (move === null) {
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.highlight-move').removeClass('highlight-move');
-                            return 'snapback';
-                        }
-
-                        // Отменяем ход, чтобы проверить, совпадает ли он с ожидаемым
-                        game.undo();
-
-                        // Проверяем, совпадает ли ход с ожидаемым
-                        const moveString = source + target;
-                        if (moveString === puzzleConfig.evaluatedMove) {
-                            // Делаем ход снова
-                            game.move({
+                        // Проверяем, совпадает ли ход с оцениваемым ходом
+                        const fromEval = puzzleConfig.evaluatedMove.substring(0, 2);
+                        const toEval = puzzleConfig.evaluatedMove.substring(2, 4);
+                        
+                        if (source === fromEval && target === toEval) {
+                            // Ход совпадает с оцениваемым
+                            const move = game.move({
                                 from: source,
                                 to: target,
-                                promotion: 'q'
+                                promotion: 'q' // Всегда превращаем в ферзя для простоты
                             });
                             
-                            // Обновляем позицию с анимацией
-                            board.position(game.fen(), true);
+                            if (move === null) return 'snapback';
                             
-                            setTimeout(() => {
-                                $('.highlight-square').removeClass('highlight-square');
-                                $('.highlight-move').removeClass('highlight-move');
-                                handlePuzzleResult(puzzleConfig.solution === 'Good');
-                            }, 600);
-                        } else {
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.highlight-move').removeClass('highlight-move');
-                            return 'snapback';
+                            // Обновляем доску
+                            board.position(game.fen());
+                            
+                            // Останавливаем таймер
+                            if (window.timerInterval) {
+                                clearInterval(window.timerInterval);
+                            }
+                            
+                            // Показываем результат
+                            handlePuzzleResult(puzzleConfig.solution === 'Good');
+                            
+                            return;
                         }
-                    },
-                    onSnapEnd: function() {
-                        board.position(game.fen(), false);
+                        
+                        // Если ход не совпадает с оцениваемым, отменяем его
+                        return 'snapback';
                     }
                 });
-
-                // Анимация предварительного хода с задержкой
-                setTimeout(() => {
-                    if (!puzzleConfig.preMove) {
-                        console.error('No premove defined');
-                        reject(new Error('No premove defined'));
-                        return;
-                    }
-
-                    const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                    if (!from || !to) {
-                        console.error('Invalid premove format');
-                        reject(new Error('Invalid premove format'));
-                        return;
+                
+                // Выполняем предварительный ход
+                try {
+                    const fromPre = puzzleConfig.preMove.substring(0, 2);
+                    const toPre = puzzleConfig.preMove.substring(2, 4);
+                    
+                    if (!fromPre || !toPre) {
+                        throw new Error('Некорректный формат предварительного хода');
                     }
                     
-                    // Проверяем валидность хода
-                    const move = game.move({ from, to, promotion: 'q' });
-                    if (!move) {
-                        console.error('Invalid premove:', from, to);
-                        reject(new Error('Invalid premove'));
-                        return;
+                    const moveResult = game.move({
+                        from: fromPre,
+                        to: toPre,
+                        promotion: 'q'
+                    });
+                    
+                    if (!moveResult) {
+                        throw new Error('Невозможно выполнить предварительный ход');
                     }
                     
-                    // Подсвечиваем начальную и конечную клетки
-                    $(`[data-square="${from}"]`).addClass('highlight-square');
-                    $(`[data-square="${to}"]`).addClass('highlight-move');
+                    // Обновляем доску
+                    board.position(game.fen());
                     
-                    // Анимируем ход на доске
-                    board.position(game.fen(), true);
+                    // Рисуем стрелку для предварительного хода
+                    drawArrow(fromPre, toPre, 'blue');
                     
-                    // Убираем подсветку после завершения анимации
-                    setTimeout(() => {
-                        $('.highlight-square').removeClass('highlight-square');
-                        $('.highlight-move').removeClass('highlight-move');
-                        // После завершения анимации рисуем стрелку
-                        if (puzzleConfig.evaluatedMove) {
-                            drawArrow();
-                        }
-                        resolve();
-                    }, 600);
-                }, 500);
-
-                // Запускаем секундомер
-                startStopwatch();
+                    // Запускаем секундомер
+                    startStopwatch();
+                    
+                    resolve();
+                } catch (e) {
+                    reject(new Error('Ошибка при выполнении предварительного хода: ' + e.message));
+                }
             } catch (err) {
                 console.error('Error initializing board:', err);
                 reject(err);
@@ -644,10 +636,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function drawArrow() {
-        console.log('Drawing arrow for move:', puzzleConfig.evaluatedMove); // Добавляем лог
-        
-        const [from, to] = puzzleConfig.evaluatedMove.match(/.{2}/g);
+    function drawArrow(from, to, color) {
+        console.log('Drawing arrow for move:', from + to); // Добавляем лог
         
         // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
@@ -705,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
-        path.setAttribute("fill", "#00ff00");
+        path.setAttribute("fill", color);
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
