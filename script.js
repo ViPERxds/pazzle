@@ -679,15 +679,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Заменяем showAlert на showPopup где это возможно
+    // Заменяем showError на простой alert
     function showError(message) {
-        if (window.Telegram?.WebApp?.showPopup) {
-            window.Telegram.WebApp.showPopup({
-                message: message,
-                buttons: [{type: 'close'}]
-            });
-        } else {
-            alert(message);
-        }
+        alert(message);
     }
 }); 
