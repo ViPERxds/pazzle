@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const goodButton = document.querySelector('.good-btn');
     const blunderButton = document.querySelector('.blunder-btn');
     const timerElement = document.querySelector('.timer');
+    const nextButton = document.getElementById('nextButton');
     
     // Проверяем, найдены ли элементы
     console.log('Elements found:', {
@@ -18,39 +19,83 @@ document.addEventListener('DOMContentLoaded', function() {
         resultPage
     });
 
+    // Локальные данные для работы без сервера
+    const LOCAL_DATA = {
+        userRating: {
+            rating: 1500,
+            rd: 350,
+            volatility: 0.06,
+            change: 0
+        },
+        puzzles: [
+            {
+                id: 1,
+                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+                move1: 'd2d4',
+                move2: 'c6d4',
+                solution: 'Good',
+                rating: 1500,
+                complexity: 4
+            },
+            {
+                id: 2,
+                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+                move1: 'g1f3',
+                move2: 'd7d5',
+                solution: 'Blunder',
+                rating: 1600,
+                complexity: 3
+            }
+        ]
+    };
+
     let currentPuzzle = null;
-    let timer = null;
-    let startTime = null;
-    let seconds = 180; 
+    let currentUsername = 'test_user';
+    let board = null;
+    let game = new Chess();
+    let elapsedTime = 0;
 
-    // Инициализация Telegram WebApp
-    const tg = window.Telegram.WebApp;
-    tg.expand(); // Раскрываем на весь экран
-    
-    // Получаем имя пользователя из Telegram
-    let currentUsername = tg.initDataUnsafe?.user?.username || 'test_user';
-    
-    // Добавляем цвета из темы Telegram
-    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
-    document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
-    document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
-    document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
+    // Конфигурация для текущей задачи
+    const puzzleConfig = {
+        initialFen: '',
+        preMove: '',
+        evaluatedMove: '',
+        orientation: 'white',
+        solution: '',
+        preMoveDelay: 2000
+    };
 
-    // Определяем API URL
-    const API_URL = 'https://yoblogger.ru:10000/api';
-
-    // Функция для выполнения запросов с авторизацией
+    // Функция для эмуляции запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
             console.log('Fetching:', url);
-            const response = await fetch(url, options);
             
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+            // Эмулируем задержку сети
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Эмулируем ответы API на основе URL
+            if (url.includes('user-rating')) {
+                return { ...LOCAL_DATA.userRating };
             }
             
-            const data = await response.json();
-            return data;
+            if (url.includes('random-puzzle')) {
+                const randomIndex = Math.floor(Math.random() * LOCAL_DATA.puzzles.length);
+                return { ...LOCAL_DATA.puzzles[randomIndex] };
+            }
+            
+            if (url.includes('record-solution')) {
+                const data = JSON.parse(options.body);
+                
+                // Обновляем рейтинг в локальных данных
+                const ratingChange = data.success ? 10 : -5;
+                LOCAL_DATA.userRating.rating += ratingChange;
+                LOCAL_DATA.userRating.change = ratingChange;
+                
+                return { success: true };
+            }
+            
+            // Для других запросов возвращаем успешный ответ
+            return { success: true };
         } catch (error) {
             console.error('Fetch error:', error);
             throw error;
@@ -60,8 +105,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            // Получаем рейтинг пользователя из БД
-            const ratingData = await fetchWithAuth(`${API_URL}/user-rating?username=${username}`);
+            // Получаем рейтинг пользователя из локальных данных
+            const ratingData = await fetchWithAuth(`/api/user-rating?username=${username}`);
             
             if (ratingData && ratingData.rating) {
                 // Обновляем отображение рейтинга
@@ -71,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Показываем изменение рейтинга
                 const ratingChangeElement = document.getElementById('ratingChange');
-                if (ratingChangeElement && ratingData.change) {
+                if (ratingChangeElement && ratingData.change !== undefined) {
                     ratingChangeElement.textContent = `${ratingData.change > 0 ? '+' : ''}${Math.round(ratingData.change)}`;
                     ratingChangeElement.className = ratingData.change > 0 ? 'success' : 'failure';
                 }
@@ -88,41 +133,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Вызываем обновление рейтинга при загрузке страницы
-    updateRatingDisplay(currentUsername);
-    
-    // Обновляем рейтинг каждые 5 секунд
-    setInterval(() => updateRatingDisplay(currentUsername), 5000);
-
+    // Функция для запуска секундомера
     function startStopwatch() {
         let seconds = 0;
-        const maxTime = 180; // 3 минуты в секундах
+        let minutes = 0;
         
-        // Очищаем предыдущий интервал если он был
+        // Очищаем предыдущий таймер если есть
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
         }
-
-        // Обновляем отображение времени каждую секунду
+        
+        // Обновляем таймер каждую секунду
         window.timerInterval = setInterval(() => {
             seconds++;
-            
-            // Форматируем время в MM:SS
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-            
-            timerElement.textContent = timeString;
-            
-            // Если прошло 3 минуты, останавливаем секундомер
-            if (seconds >= maxTime) {
-                clearInterval(window.timerInterval);
-                // Автоматически отправляем текущее решение как неверное
-                handlePuzzleResult(false);
+            if (seconds >= 60) {
+                minutes++;
+                seconds = 0;
             }
+            
+            // Форматируем время
+            const formattedMinutes = minutes.toString().padStart(2, '0');
+            const formattedSeconds = seconds.toString().padStart(2, '0');
+            
+            // Обновляем отображение
+            timerElement.textContent = `${formattedMinutes}:${formattedSeconds}`;
+            
+            // Обновляем общее время в секундах
+            elapsedTime = minutes * 60 + seconds;
         }, 1000);
-
-        return seconds;
     }
 
     // Функция для отправки решения
@@ -133,11 +171,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError('Нет текущей задачи!');
                 return;
             }
-            
-            // Получаем прошедшее время в секундах
-            const timeDisplay = timerElement.textContent;
-            const [minutes, seconds] = timeDisplay.split(':').map(Number);
-            const elapsedTime = minutes * 60 + seconds;
             
             // Создаем объект с данными для отправки
             const data = {
@@ -150,8 +183,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Sending data:', data);
             
-            // Отправляем данные на сервер
-            fetchWithAuth(`${API_URL}/record-solution`, {
+            // Отправляем данные на "сервер" (локально)
+            fetchWithAuth(`/api/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -160,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }).then(() => {
                 console.log('Solution recorded successfully');
             }).catch(error => {
-                console.error('Error recording solution on server:', error);
+                console.error('Error recording solution:', error);
                 // Продолжаем показывать результат даже при ошибке отправки
             });
             
@@ -192,22 +225,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Функция для отображения задачи
     function showPuzzle(puzzle) {
-        // ... существующий код ...
+        if (!puzzle) {
+            console.error('No puzzle data provided');
+            return;
+        }
         
-        // Запускаем секундомер вместо таймера
-        startStopwatch();
+        // Обновляем текущую задачу
+        currentPuzzle = puzzle;
         
-        // ... остальной код ...
+        // Определяем, кто должен ходить из FEN позиции
+        const fenParts = puzzle.fen1.split(' ');
+        const colorToMove = fenParts[1];
+        
+        // Обновляем конфигурацию
+        puzzleConfig.initialFen = puzzle.fen1;
+        puzzleConfig.preMove = puzzle.move1;
+        puzzleConfig.evaluatedMove = puzzle.move2;
+        puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+        puzzleConfig.solution = puzzle.solution;
+        
+        // Инициализируем доску
+        initializeBoard().catch(error => {
+            console.error('Error initializing board:', error);
+            showError('Ошибка при инициализации доски: ' + error.message);
+        });
     }
 
-    // Функция загрузки задачи из БД
+    // Функция загрузки задачи из локальных данных
     async function loadPuzzle(username) {
         try {
             console.log('Loading puzzle for user:', username);
             
-            // Получаем случайную задачу из БД через API
-            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle`);
+            // Получаем случайную задачу из локальных данных
+            const puzzle = await fetchWithAuth(`/api/random-puzzle`);
             console.log('Received puzzle data:', puzzle);
             
             if (!puzzle) {
@@ -290,38 +342,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Обработчик кнопки START
-    startButton.addEventListener('click', async () => {
-        try {
-            startPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
-            
-            currentPuzzle = await loadPuzzle(currentUsername);
-            
-            // Определяем, кто должен ходить из FEN позиции
-            const fenParts = currentPuzzle.fen1.split(' ');
-            const colorToMove = fenParts[1];
-            
-            // Обновляем конфигурацию
-            puzzleConfig.initialFen = currentPuzzle.fen1;
-            puzzleConfig.preMove = currentPuzzle.move1;
-            puzzleConfig.evaluatedMove = currentPuzzle.move2;
-            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
-            puzzleConfig.solution = currentPuzzle.solution;
-
-            // Сбрасываем состояние игры
-            game = new Chess();
-            await initializeBoard();
-        } catch (err) {
-            console.error('Error starting puzzle:', err);
-            showError('Ошибка при загрузке задачи: ' + err.message);
-            startPage.classList.remove('hidden');
-            puzzlePage.classList.add('hidden');
-        }
-    });
-
     // Инициализация кнопок
     function initializeButtons() {
+        // Обработчик кнопки START
+        if (startButton) {
+            startButton.addEventListener('click', async () => {
+                try {
+                    startPage.classList.add('hidden');
+                    puzzlePage.classList.remove('hidden');
+                    
+                    // Загружаем задачу
+                    currentPuzzle = await loadPuzzle(currentUsername);
+                    
+                    // Показываем задачу
+                    showPuzzle(currentPuzzle);
+                } catch (err) {
+                    console.error('Error starting puzzle:', err);
+                    showError('Ошибка при загрузке задачи: ' + err.message);
+                    startPage.classList.remove('hidden');
+                    puzzlePage.classList.add('hidden');
+                }
+            });
+        }
+
+        // Обработчик кнопки "Хорошо"
         if (goodButton) {
             goodButton.addEventListener('click', () => {
                 if (!currentPuzzle) {
@@ -340,6 +384,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        // Обработчик кнопки "Зевок"
         if (blunderButton) {
             blunderButton.addEventListener('click', () => {
                 if (!currentPuzzle) {
@@ -358,8 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Добавляем обработчик для кнопки Next
-        const nextButton = document.querySelector('.next-btn');
+        // Обработчик кнопки "Следующая задача"
         if (nextButton) {
             nextButton.addEventListener('click', async () => {
                 try {
@@ -369,20 +413,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Загружаем новую задачу
                     currentPuzzle = await loadPuzzle(currentUsername);
                     
-                    // Определяем, кто должен ходить из FEN позиции
-                    const fenParts = currentPuzzle.fen1.split(' ');
-                    const colorToMove = fenParts[1];
-                    
-                    // Обновляем конфигурацию
-                    puzzleConfig.initialFen = currentPuzzle.fen1;
-                    puzzleConfig.preMove = currentPuzzle.move1;
-                    puzzleConfig.evaluatedMove = currentPuzzle.move2;
-                    puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
-                    puzzleConfig.solution = currentPuzzle.solution;
-                    
-                    // Сбрасываем состояние игры
-                    game = new Chess();
-                    await initializeBoard();
+                    // Показываем задачу
+                    showPuzzle(currentPuzzle);
                 } catch (err) {
                     console.error('Error loading next puzzle:', err);
                     showError('Ошибка при загрузке следующей задачи: ' + err.message);
@@ -393,48 +425,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Вызываем инициализацию кнопок после загрузки DOM
-    initializeButtons();
-
-    document.querySelector('.analyze-btn').addEventListener('click', () => {
-        // Используем FEN позиции после предварительного хода
-        const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-        game.load(puzzleConfig.initialFen); // Загружаем начальную позицию
-        game.move({ from, to, promotion: 'q' }); // Делаем предварительный ход
-        
-        // Получаем FEN после предварительного хода и форматируем его для URL
-        const fen = game.fen().replace(/ /g, '_');
-        const color = puzzleConfig.orientation;
-        
-        // Открываем страницу анализа на lichess
-        window.open(`https://lichess.org/analysis/${fen}?color=${color}`, '_blank');
-        
-        // Возвращаем доску к текущей позиции
-        game.load(puzzleConfig.initialFen);
-        game.move({ from, to, promotion: 'q' });
-    });
-
-    // Конфигурация шахматной задачи
-    const puzzleConfig = {
-        initialFen: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 0 1', // Пример FEN
-        preMove: 'e7d7', // Предварительный ход
-        evaluatedMove: 'c7b6', // Оцениваемый ход
-        orientation: 'white', // Ориентация доски
-        preMoveDelay: 2000, // Задержка перед предварительным ходом в мс
-        solution: 'Good' // Предполагаемый правильный ответ
-    };
-
-    let board = null;
-    let game = new Chess();
-    let arrow = null;
-
-    // Функция для определения ориентации доски
+    // Определяем ориентацию доски на основе FEN
     function getBoardOrientation(fen) {
-        const fenParts = fen.split(' ');
-        const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
-        return colorToMove === 'w' ? 'white' : 'black';
+        const parts = fen.split(' ');
+        return parts[1] === 'w' ? 'white' : 'black';
     }
 
+    // Инициализация шахматной доски
     function initializeBoard() {
         return new Promise((resolve, reject) => {
             try {
@@ -447,6 +444,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Сбрасываем время
                 timerElement.textContent = '00:00';
+                elapsedTime = 0;
                 
                 // Очищаем предыдущую стрелку
                 const oldArrow = document.querySelector('.arrow');
@@ -570,13 +568,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Функция для рисования стрелки
     function drawArrow(from, to, color) {
-        console.log('Drawing arrow for move:', from + to); // Добавляем лог
+        console.log('Drawing arrow for move:', from + to);
         
         // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
-        if (oldArrow) oldArrow.remove();
-
+        if (oldArrow) {
+            oldArrow.remove();
+        }
+        
+        // Создаем SVG элемент
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("class", "arrow");
         svg.style.position = 'absolute';
@@ -595,6 +597,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const fromSquare = document.querySelector(`[data-square="${from}"]`);
         const toSquare = document.querySelector(`[data-square="${to}"]`);
+        
+        if (!fromSquare || !toSquare) {
+            console.error('Square elements not found', from, to);
+            return;
+        }
+        
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
@@ -629,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
-        path.setAttribute("fill", color);
+        path.setAttribute("fill", color || '#00ff00');
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
@@ -642,17 +650,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const rank = 8 - parseInt(square[1]);
         return { x: file, y: rank };
     }
-
-    // Обработчик клика по доске для показа/скрытия стрелки
-    $('#board').on('click', function() {
-        const arrow = document.querySelector('.arrow');
-        if (arrow) {
-            arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
-        }
-    });
-
-    // Инициализация при загрузке
-    initializeBoard();
 
     // Обработчик результата задачи
     async function handlePuzzleResult(isCorrect) {
@@ -674,4 +671,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function showError(message) {
         alert(message);
     }
+    
+    // Инициализируем кнопки
+    initializeButtons();
+    
+    // Обновляем рейтинг при загрузке
+    updateRatingDisplay(currentUsername).catch(error => {
+        console.error('Error updating initial rating display:', error);
+    });
 }); 
