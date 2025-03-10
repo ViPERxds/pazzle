@@ -565,103 +565,77 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function drawArrow(from, to, color = '#00ff00') {
+    function drawArrow(from, to, color) {
         console.log('Drawing arrow for move:', from, to);
         
         // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
-        if (oldArrow) {
-            oldArrow.remove();
-        }
-        
-        if (!from || !to) {
-            console.error('Invalid arrow parameters');
-            return;
-        }
-        
-        const fromCoords = getSquareCoords(from);
-        const toCoords = getSquareCoords(to);
-        
-        if (!fromCoords || !toCoords) {
-            console.error('Could not get coordinates for squares', from, to);
-            return;
-        }
-        
-        // Создаем SVG элемент
+        if (oldArrow) oldArrow.remove();
+
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("class", "arrow");
-        svg.setAttribute("width", "100%");
-        svg.setAttribute("height", "100%");
-        svg.setAttribute("position", "absolute");
-        svg.setAttribute("top", "0");
-        svg.setAttribute("left", "0");
-        svg.setAttribute("pointer-events", "none");
-        svg.setAttribute("z-index", "1000");
+        svg.style.position = 'absolute';
+        svg.style.top = '0';
+        svg.style.left = '0';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.pointerEvents = 'none';
+        svg.style.zIndex = '1000';
         
+        const board = document.querySelector('#board');
+        if (!board) {
+            console.error('Board element not found');
+            return;
+        }
+        
+        const fromSquare = document.querySelector(`[data-square="${from}"]`);
+        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        const boardRect = board.getBoundingClientRect();
+        const fromRect = fromSquare.getBoundingClientRect();
+        const toRect = toSquare.getBoundingClientRect();
+        const squareSize = boardRect.width / 8;
+
+        // Координаты
+        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
+        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
+        const x2 = toRect.left - boardRect.left + toRect.width/2;
+        const y2 = toRect.top - boardRect.top + toRect.height/2;
+
+        // Вычисляем угол и размеры
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const width = squareSize * 0.15;
+        const headWidth = squareSize * 0.3;
+        const headLength = squareSize * 0.3;
+
+        // Точки для стрелки
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
+
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        
-        // Вычисляем координаты и направление стрелки
-        const startX = fromCoords.x;
-        const startY = fromCoords.y;
-        const endX = toCoords.x;
-        const endY = toCoords.y;
-        
-        // Вычисляем угол стрелки
-        const angle = Math.atan2(endY - startY, endX - startX);
-        
-        // Длина стрелки
-        const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-        
-        // Размер наконечника стрелки
-        const arrowHeadSize = 15;
-        
-        // Координаты наконечника
-        const arrowX = endX - arrowHeadSize * Math.cos(angle);
-        const arrowY = endY - arrowHeadSize * Math.sin(angle);
-        
-        // Создаем путь для стрелки
         path.setAttribute("d", `
-            M ${startX} ${startY}
-            L ${arrowX} ${arrowY}
-            L ${arrowX - arrowHeadSize * Math.cos(angle - Math.PI/6)} ${arrowY - arrowHeadSize * Math.sin(angle - Math.PI/6)}
-            L ${endX} ${endY}
-            L ${arrowX - arrowHeadSize * Math.cos(angle + Math.PI/6)} ${arrowY - arrowHeadSize * Math.sin(angle + Math.PI/6)}
-            L ${arrowX} ${arrowY}
+            M ${x1 - width*dy} ${y1 + width*dx}
+            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
+            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
+            L ${x2} ${y2}
+            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
+            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
+            L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
         path.setAttribute("fill", color);
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
-        document.getElementById('board').appendChild(svg);
+        board.appendChild(svg);
     }
 
+    // Вспомогательная функция для получения координат клетки
     function getSquareCoords(square) {
-        if (!square || square.length !== 2) {
-            console.error('Invalid square:', square);
-            return null;
-        }
-        
-        const boardElement = document.getElementById('board');
-        if (!boardElement) {
-            console.error('Board element not found');
-            return null;
-        }
-        
-        const squareElement = document.querySelector(`[data-square="${square}"]`);
-        if (!squareElement) {
-            console.error('Square element not found:', square);
-            return null;
-        }
-        
-        const boardRect = boardElement.getBoundingClientRect();
-        const squareRect = squareElement.getBoundingClientRect();
-        
-        return {
-            x: squareRect.left - boardRect.left + squareRect.width / 2,
-            y: squareRect.top - boardRect.top + squareRect.height / 2
-        };
+        const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
+        const rank = 8 - parseInt(square[1]);
+        return { x: file, y: rank };
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
