@@ -36,108 +36,55 @@ document.addEventListener('DOMContentLoaded', function() {
     document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
     document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
-    // Тестовые данные для локального использования
-    const TEST_DATA = {
-        userRating: {
-            rating: 1500,
-            rd: 350,
-            volatility: 0.06
-        },
-        puzzles: [
-            {
-                id: 1,
-                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
-                move1: 'd2d4',
-                move2: 'c6d4',
-                solution: 'Good',
-                rating: 1500,
-                complexity: 4
-            },
-            {
-                id: 2,
-                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
-                move1: 'g1f3',
-                move2: 'd7d5',
-                solution: 'Blunder',
-                rating: 1600,
-                complexity: 3
-            }
-        ]
-    };
+    // Определяем API URL
+    const API_URL = 'https://yoblogger.ru:10000/api';
 
-    // Упрощенная функция для запросов к API
+    // Функция для выполнения запросов с авторизацией
     async function fetchWithAuth(url, options = {}) {
         try {
-            console.log('Fetching:', url, options);
-            
-            // Для тестирования используем локальные данные вместо API
-            if (url.includes('/user-rating/')) {
-                console.log('Using local user rating data');
-                return TEST_DATA.userRating;
-            }
-            
-            if (url.includes('/random-puzzle/')) {
-                console.log('Using local puzzle data');
-                // Возвращаем случайную задачу из тестовых данных
-                return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
-            }
-            
-            if (url.includes('/record-solution')) {
-                console.log('Recording solution locally:', options.body);
-                return { success: true };
-            }
-            
-            // Если URL не соответствует ни одному из известных эндпоинтов, используем реальный запрос
-            const headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            };
-            
-            if (options.headers) {
-                Object.keys(options.headers).forEach(key => {
-                    headers[key] = options.headers[key];
-                });
-            }
-            
-            const response = await fetch(url, {
-                ...options,
-                headers: headers
-            });
+            console.log('Fetching:', url);
+            const response = await fetch(url, options);
             
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API error:', response.status, errorText);
-                throw new Error(`Ошибка API: ${response.status} ${response.statusText}. ${errorText}`);
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
             
             const data = await response.json();
-            console.log('API response:', data);
             return data;
-        } catch (err) {
-            console.error('Fetch error:', err);
-            throw err;
+        } catch (error) {
+            console.error('Fetch error:', error);
+            throw error;
         }
     }
 
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            const userRating = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
-            console.log('Received user rating:', userRating);
+            // Получаем рейтинг пользователя из БД
+            const ratingData = await fetchWithAuth(`${API_URL}/user-rating?username=${username}`);
             
-            const rating = userRating?.rating || 1500;
-            ratingElements.forEach(el => {
-                el.textContent = Math.round(rating);
-                el.style.color = 'black';
-            });
-            return rating;
-        } catch (err) {
-            console.error('Error updating rating:', err);
-            ratingElements.forEach(el => {
-                el.textContent = '1500';
-                el.style.color = 'red';
-            });
-            return 1500;
+            if (ratingData && ratingData.rating) {
+                // Обновляем отображение рейтинга
+                ratingElements.forEach(element => {
+                    element.textContent = Math.round(ratingData.rating);
+                });
+                
+                // Показываем изменение рейтинга
+                const ratingChangeElement = document.getElementById('ratingChange');
+                if (ratingChangeElement && ratingData.change) {
+                    ratingChangeElement.textContent = `${ratingData.change > 0 ? '+' : ''}${Math.round(ratingData.change)}`;
+                    ratingChangeElement.className = ratingData.change > 0 ? 'success' : 'failure';
+                }
+                
+                // Показываем новый рейтинг
+                const newRatingElement = document.getElementById('newRating');
+                if (newRatingElement) {
+                    newRatingElement.textContent = Math.round(ratingData.rating);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating rating:', error);
+            // Не показываем ошибку пользователю, чтобы не мешать работе
         }
     }
 
@@ -192,23 +139,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const [minutes, seconds] = timeDisplay.split(':').map(Number);
             const elapsedTime = minutes * 60 + seconds;
             
-            console.log('Sending data:', { puzzle_id: currentPuzzle.id, user_id: currentUsername, success: success, time: elapsedTime, complexity_id: currentPuzzle.complexity || 1 });
+            // Создаем объект с данными для отправки
+            const data = {
+                puzzle_id: currentPuzzle.id,
+                user_id: currentUsername,
+                success: success,
+                time: elapsedTime,
+                complexity_id: currentPuzzle.complexity || 1
+            };
             
-            // Вместо отправки на сервер, просто логируем результат
-            console.log(`Решение ${success ? 'правильное' : 'неправильное'} для задачи ${currentPuzzle.id}`);
-            console.log(`Время решения: ${elapsedTime} секунд`);
+            console.log('Sending data:', data);
+            
+            // Отправляем данные на сервер
+            fetchWithAuth(`${API_URL}/record-solution`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            }).then(() => {
+                console.log('Solution recorded successfully');
+            }).catch(error => {
+                console.error('Error recording solution on server:', error);
+                // Продолжаем показывать результат даже при ошибке отправки
+            });
             
             // Останавливаем таймер
             if (window.timerInterval) {
                 clearInterval(window.timerInterval);
             }
-            
-            // Обновляем локальный рейтинг (имитация)
-            const ratingChange = success ? 10 : -5;
-            const currentRating = TEST_DATA.userRating.rating;
-            TEST_DATA.userRating.rating = Math.max(100, currentRating + ratingChange);
-            
-            console.log(`Рейтинг изменен: ${currentRating} -> ${TEST_DATA.userRating.rating}`);
             
             // Переходим к результатам
             setTimeout(() => {
@@ -222,18 +181,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     resultText.className = success ? 'success' : 'failure';
                 }
                 
-                // Показываем изменение рейтинга
-                const ratingChangeElement = document.getElementById('ratingChange');
-                if (ratingChangeElement) {
-                    ratingChangeElement.textContent = `${ratingChange > 0 ? '+' : ''}${ratingChange}`;
-                    ratingChangeElement.className = ratingChange > 0 ? 'success' : 'failure';
-                }
-                
-                // Показываем новый рейтинг
-                const newRatingElement = document.getElementById('newRating');
-                if (newRatingElement) {
-                    newRatingElement.textContent = TEST_DATA.userRating.rating;
-                }
+                // Обновляем рейтинг
+                updateRatingDisplay(currentUsername).catch(error => {
+                    console.error('Error updating rating display:', error);
+                });
             }, 500);
         } catch (error) {
             console.error('Error recording solution:', error);
@@ -250,15 +201,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // ... остальной код ...
     }
 
-    // Улучшенная функция загрузки задачи
+    // Функция загрузки задачи из БД
     async function loadPuzzle(username) {
         try {
             console.log('Loading puzzle for user:', username);
             
-            // Используем локальные данные вместо API
-            const randomIndex = Math.floor(Math.random() * TEST_DATA.puzzles.length);
-            const puzzle = TEST_DATA.puzzles[randomIndex];
-            console.log('Using local puzzle data:', puzzle);
+            // Получаем случайную задачу из БД через API
+            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle`);
+            console.log('Received puzzle data:', puzzle);
             
             if (!puzzle) {
                 throw new Error('Не удалось получить данные задачи');
