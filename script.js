@@ -41,32 +41,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchWithAuth(url, options = {}) {
         try {
-            const headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            };
-
-            const response = await fetch(url, { 
-                ...options, 
+            console.log('Fetching:', url, options);
+            const response = await fetch(url, {
+                ...options,
                 headers: {
-                    ...headers,
-                    ...options.headers
+                    ...options.headers,
+                    'Authorization': `Bearer ${initData}`
                 }
             });
-
+            
             if (!response.ok) {
                 const errorText = await response.text();
-                let errorMessage;
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    errorMessage = errorJson.error || `HTTP error! status: ${response.status}`;
-                } catch {
-                    errorMessage = errorText || `HTTP error! status: ${response.status}`;
-                }
-                throw new Error(errorMessage);
+                console.error('API error:', response.status, errorText);
+                throw new Error(`Ошибка API: ${response.status} ${response.statusText}. ${errorText}`);
             }
-
+            
             const data = await response.json();
+            console.log('API response:', data);
             return data;
         } catch (err) {
             console.error('Fetch error:', err);
@@ -156,27 +147,73 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadPuzzle(username) {
         try {
-            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${username}`);
-            if (!puzzle || !puzzle.fen1 || !puzzle.move1 || !puzzle.move2 || !puzzle.id) {
-                throw new Error('Получены неполные данные задачи');
+            console.log('Loading puzzle for user:', username);
+            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${username || 1}`);
+            console.log('Received puzzle data:', puzzle);
+            
+            if (!puzzle) {
+                throw new Error('Не удалось получить данные задачи');
+            }
+            
+            if (!puzzle.fen1) {
+                throw new Error('Отсутствует FEN позиция');
+            }
+            
+            if (!puzzle.move1) {
+                throw new Error('Отсутствует предварительный ход');
+            }
+            
+            if (!puzzle.move2) {
+                throw new Error('Отсутствует оцениваемый ход');
+            }
+            
+            if (!puzzle.id) {
+                throw new Error('Отсутствует ID задачи');
             }
 
             // Проверяем валидность FEN
             const tempGame = new Chess();
-            if (!tempGame.load(puzzle.fen1)) {
-                throw new Error('Некорректная позиция');
+            try {
+                if (!tempGame.load(puzzle.fen1)) {
+                    throw new Error('Некорректная позиция');
+                }
+            } catch (e) {
+                throw new Error('Некорректная FEN позиция: ' + e.message);
             }
 
             // Проверяем валидность предварительного хода
-            const [fromPre, toPre] = puzzle.move1.match(/.{2}/g) || [];
-            if (!fromPre || !toPre || !tempGame.move({ from: fromPre, to: toPre, promotion: 'q' })) {
-                throw new Error('Некорректный предварительный ход');
+            try {
+                const [fromPre, toPre] = puzzle.move1.match(/.{2}/g) || [];
+                if (!fromPre || !toPre) {
+                    throw new Error('Неверный формат предварительного хода');
+                }
+                
+                // Проверяем, есть ли фигура на начальной позиции
+                if (!tempGame.get(fromPre)) {
+                    throw new Error('Нет фигуры на начальной позиции предварительного хода');
+                }
+                
+                const moveResult = tempGame.move({ from: fromPre, to: toPre, promotion: 'q' });
+                if (!moveResult) {
+                    throw new Error('Невозможно выполнить предварительный ход');
+                }
+            } catch (e) {
+                throw new Error('Некорректный предварительный ход: ' + e.message);
             }
 
             // Проверяем валидность оцениваемого хода
-            const [fromEval, toEval] = puzzle.move2.match(/.{2}/g) || [];
-            if (!fromEval || !toEval) {
-                throw new Error('Некорректный оцениваемый ход');
+            try {
+                const [fromEval, toEval] = puzzle.move2.match(/.{2}/g) || [];
+                if (!fromEval || !toEval) {
+                    throw new Error('Неверный формат оцениваемого хода');
+                }
+                
+                // Проверяем, есть ли фигура на начальной позиции
+                if (!tempGame.get(fromEval)) {
+                    throw new Error('Нет фигуры на начальной позиции оцениваемого хода');
+                }
+            } catch (e) {
+                throw new Error('Некорректный оцениваемый ход: ' + e.message);
             }
 
             return puzzle;
@@ -401,6 +438,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializeBoard() {
         return new Promise((resolve, reject) => {
             try {
+                console.log('Initializing board with config:', puzzleConfig);
+                
                 // Очищаем предыдущий таймер если есть
                 if (window.timerInterval) {
                     clearInterval(window.timerInterval);
@@ -420,17 +459,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 // Проверяем валидность FEN и ходов
-                if (!puzzleConfig.initialFen || !game.load(puzzleConfig.initialFen)) {
-                    throw new Error('Invalid FEN position');
+                if (!puzzleConfig.initialFen) {
+                    throw new Error('Отсутствует FEN позиция');
+                }
+                
+                try {
+                    if (!game.load(puzzleConfig.initialFen)) {
+                        throw new Error('Некорректная FEN позиция');
+                    }
+                } catch (e) {
+                    throw new Error('Ошибка при загрузке позиции: ' + e.message);
                 }
 
                 if (!puzzleConfig.preMove || !puzzleConfig.preMove.match(/^[a-h][1-8][a-h][1-8]$/)) {
-                    throw new Error('Invalid premove format');
+                    throw new Error('Некорректный формат предварительного хода');
                 }
 
                 board = Chessboard('board', {
                     position: puzzleConfig.initialFen,
-                    orientation: puzzleConfig.orientation,
+                    orientation: puzzleConfig.orientation || 'white',
                     pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
                     draggable: true,
                     moveSpeed: 'slow',
@@ -448,98 +495,69 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Подсвечиваем начальную и конечную клетки
                         $(`[data-square="${source}"]`).addClass('highlight-square');
-                        $(`[data-square="${target}"]`).addClass('highlight-move');
+                        $(`[data-square="${target}"]`).addClass('highlight-square');
                         
-                        // Проверяем валидность хода
-                        const move = game.move({
-                            from: source,
-                            to: target,
-                            promotion: 'q'
-                        });
-
-                        // Если ход невозможен по правилам шахмат
-                        if (move === null) {
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.highlight-move').removeClass('highlight-move');
-                            return 'snapback';
-                        }
-
-                        // Отменяем ход, чтобы проверить, совпадает ли он с ожидаемым
-                        game.undo();
-
-                        // Проверяем, совпадает ли ход с ожидаемым
-                        const moveString = source + target;
-                        if (moveString === puzzleConfig.evaluatedMove) {
-                            // Делаем ход снова
-                            game.move({
+                        // Проверяем, совпадает ли ход с оцениваемым ходом
+                        const [fromEval, toEval] = puzzleConfig.evaluatedMove.match(/.{2}/g) || [];
+                        if (source === fromEval && target === toEval) {
+                            // Ход совпадает с оцениваемым
+                            const move = game.move({
                                 from: source,
                                 to: target,
-                                promotion: 'q'
+                                promotion: 'q' // Всегда превращаем в ферзя для простоты
                             });
                             
-                            // Обновляем позицию с анимацией
-                            board.position(game.fen(), true);
+                            if (move === null) return 'snapback';
                             
-                            setTimeout(() => {
-                                $('.highlight-square').removeClass('highlight-square');
-                                $('.highlight-move').removeClass('highlight-move');
-                                handlePuzzleResult(puzzleConfig.solution === 'Good');
-                            }, 600);
-                        } else {
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.highlight-move').removeClass('highlight-move');
-                            return 'snapback';
+                            // Обновляем доску
+                            board.position(game.fen());
+                            
+                            // Останавливаем таймер
+                            if (window.timerInterval) {
+                                clearInterval(window.timerInterval);
+                            }
+                            
+                            // Показываем результат
+                            handlePuzzleResult(puzzleConfig.solution === 'Good');
+                            
+                            return;
                         }
-                    },
-                    onSnapEnd: function() {
-                        board.position(game.fen(), false);
+                        
+                        // Если ход не совпадает с оцениваемым, отменяем его
+                        return 'snapback';
                     }
                 });
-
-                // Анимация предварительного хода с задержкой
-                setTimeout(() => {
-                    if (!puzzleConfig.preMove) {
-                        console.error('No premove defined');
-                        reject(new Error('No premove defined'));
-                        return;
-                    }
-
-                    const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                    if (!from || !to) {
-                        console.error('Invalid premove format');
-                        reject(new Error('Invalid premove format'));
-                        return;
+                
+                // Выполняем предварительный ход
+                try {
+                    const [fromPre, toPre] = puzzleConfig.preMove.match(/.{2}/g) || [];
+                    if (!fromPre || !toPre) {
+                        throw new Error('Некорректный формат предварительного хода');
                     }
                     
-                    // Проверяем валидность хода
-                    const move = game.move({ from, to, promotion: 'q' });
-                    if (!move) {
-                        console.error('Invalid premove:', from, to);
-                        reject(new Error('Invalid premove'));
-                        return;
+                    const moveResult = game.move({
+                        from: fromPre,
+                        to: toPre,
+                        promotion: 'q'
+                    });
+                    
+                    if (!moveResult) {
+                        throw new Error('Невозможно выполнить предварительный ход');
                     }
                     
-                    // Подсвечиваем начальную и конечную клетки
-                    $(`[data-square="${from}"]`).addClass('highlight-square');
-                    $(`[data-square="${to}"]`).addClass('highlight-move');
+                    // Обновляем доску
+                    board.position(game.fen());
                     
-                    // Анимируем ход на доске
-                    board.position(game.fen(), true);
+                    // Рисуем стрелку для предварительного хода
+                    drawArrow(fromPre, toPre, 'blue');
                     
-                    // Убираем подсветку после завершения анимации
-                    setTimeout(() => {
-                        $('.highlight-square').removeClass('highlight-square');
-                        $('.highlight-move').removeClass('highlight-move');
-                        // После завершения анимации рисуем стрелку
-                        if (puzzleConfig.evaluatedMove) {
-                            drawArrow();
-                        }
-                        resolve();
-                    }, 600);
-                }, 500);
-
-                // Запускаем секундомер
-                startStopwatch();
+                    // Запускаем секундомер
+                    startStopwatch();
+                    
+                    resolve();
+                } catch (e) {
+                    reject(new Error('Ошибка при выполнении предварительного хода: ' + e.message));
+                }
             } catch (err) {
                 console.error('Error initializing board:', err);
                 reject(err);
@@ -547,79 +565,103 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function drawArrow() {
-        console.log('Drawing arrow for move:', puzzleConfig.evaluatedMove); // Добавляем лог
-        
-        const [from, to] = puzzleConfig.evaluatedMove.match(/.{2}/g);
+    function drawArrow(from, to, color = '#00ff00') {
+        console.log('Drawing arrow for move:', from, to);
         
         // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
-        if (oldArrow) oldArrow.remove();
-
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("class", "arrow");
-        svg.style.position = 'absolute';
-        svg.style.top = '0';
-        svg.style.left = '0';
-        svg.style.width = '100%';
-        svg.style.height = '100%';
-        svg.style.pointerEvents = 'none';
-        svg.style.zIndex = '1000';
+        if (oldArrow) {
+            oldArrow.remove();
+        }
         
-        const board = document.querySelector('#board');
-        if (!board) {
-            console.error('Board element not found');
+        if (!from || !to) {
+            console.error('Invalid arrow parameters');
             return;
         }
         
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
-        const boardRect = board.getBoundingClientRect();
-        const fromRect = fromSquare.getBoundingClientRect();
-        const toRect = toSquare.getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
-
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
-
-        // Вычисляем угол и размеры
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.15;
-        const headWidth = squareSize * 0.3;
-        const headLength = squareSize * 0.3;
-
-        // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
-
+        const fromCoords = getSquareCoords(from);
+        const toCoords = getSquareCoords(to);
+        
+        if (!fromCoords || !toCoords) {
+            console.error('Could not get coordinates for squares', from, to);
+            return;
+        }
+        
+        // Создаем SVG элемент
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "arrow");
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+        svg.setAttribute("position", "absolute");
+        svg.setAttribute("top", "0");
+        svg.setAttribute("left", "0");
+        svg.setAttribute("pointer-events", "none");
+        svg.setAttribute("z-index", "1000");
+        
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        
+        // Вычисляем координаты и направление стрелки
+        const startX = fromCoords.x;
+        const startY = fromCoords.y;
+        const endX = toCoords.x;
+        const endY = toCoords.y;
+        
+        // Вычисляем угол стрелки
+        const angle = Math.atan2(endY - startY, endX - startX);
+        
+        // Длина стрелки
+        const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+        
+        // Размер наконечника стрелки
+        const arrowHeadSize = 15;
+        
+        // Координаты наконечника
+        const arrowX = endX - arrowHeadSize * Math.cos(angle);
+        const arrowY = endY - arrowHeadSize * Math.sin(angle);
+        
+        // Создаем путь для стрелки
         path.setAttribute("d", `
-            M ${x1 - width*dy} ${y1 + width*dx}
-            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
-            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
-            L ${x2} ${y2}
-            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
-            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
-            L ${x1 + width*dy} ${y1 - width*dx}
+            M ${startX} ${startY}
+            L ${arrowX} ${arrowY}
+            L ${arrowX - arrowHeadSize * Math.cos(angle - Math.PI/6)} ${arrowY - arrowHeadSize * Math.sin(angle - Math.PI/6)}
+            L ${endX} ${endY}
+            L ${arrowX - arrowHeadSize * Math.cos(angle + Math.PI/6)} ${arrowY - arrowHeadSize * Math.sin(angle + Math.PI/6)}
+            L ${arrowX} ${arrowY}
             Z
         `);
-        path.setAttribute("fill", "#00ff00");
+        path.setAttribute("fill", color);
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
-        board.appendChild(svg);
+        document.getElementById('board').appendChild(svg);
     }
 
-    // Вспомогательная функция для получения координат клетки
     function getSquareCoords(square) {
-        const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
-        const rank = 8 - parseInt(square[1]);
-        return { x: file, y: rank };
+        if (!square || square.length !== 2) {
+            console.error('Invalid square:', square);
+            return null;
+        }
+        
+        const boardElement = document.getElementById('board');
+        if (!boardElement) {
+            console.error('Board element not found');
+            return null;
+        }
+        
+        const squareElement = document.querySelector(`[data-square="${square}"]`);
+        if (!squareElement) {
+            console.error('Square element not found:', square);
+            return null;
+        }
+        
+        const boardRect = boardElement.getBoundingClientRect();
+        const squareRect = squareElement.getBoundingClientRect();
+        
+        return {
+            x: squareRect.left - boardRect.left + squareRect.width / 2,
+            y: squareRect.top - boardRect.top + squareRect.height / 2
+        };
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
