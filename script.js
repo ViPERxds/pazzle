@@ -23,31 +23,98 @@ document.addEventListener('DOMContentLoaded', function() {
     let startTime = null;
     let seconds = 180; 
 
-    // Инициализация Telegram WebApp
-    const tg = window.Telegram.WebApp;
-    tg.expand(); // Раскрываем на весь экран
-    
-    // Получаем имя пользователя из Telegram
-    let currentUsername = tg.initDataUnsafe?.user?.username || 'test_user';
-    
-    // Добавляем цвета из темы Telegram
-    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
-    document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
-    document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
-    document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
+    // Фиксированное имя пользователя для тестирования
+    const currentUsername = 'test_user';
 
-    // Используем глобальную конфигурацию
+    // Получаем данные из Telegram WebApp если доступно
+    const tg = window.Telegram?.WebApp || {};
+
+    // Расширяем WebApp на весь экран, если доступно
+    if (tg.expand) {
+        try {
+            tg.expand();
+        } catch (e) {
+            console.error('Error expanding WebApp:', e);
+        }
+    }
+
+    // Устанавливаем цвета из Telegram WebApp
+    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor || '#ffffff');
+    document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor || '#000000');
+    document.documentElement.style.setProperty('--tg-theme-hint-color', tg.hintColor || '#999999');
+    document.documentElement.style.setProperty('--tg-theme-link-color', tg.linkColor || '#2678b6');
+    document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor || '#50a8eb');
+    document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor || '#ffffff');
+
+    // Обновляем URL API
     const API_URL = 'https://chess-puzzles-bot.onrender.com/api';
 
+    // Тестовые данные для локального использования
+    const TEST_DATA = {
+        userRating: {
+            rating: 1500,
+            rd: 350,
+            volatility: 0.06
+        },
+        puzzles: [
+            {
+                id: 1,
+                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+                move1: 'd2d4',
+                move2: 'c6d4',
+                solution: 'Good',
+                rating: 1500,
+                complexity: 4
+            },
+            {
+                id: 2,
+                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+                move1: 'g1f3',
+                move2: 'd7d5',
+                solution: 'Blunder',
+                rating: 1600,
+                complexity: 3
+            }
+        ]
+    };
+
+    // Упрощенная функция для запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
             console.log('Fetching:', url, options);
+            
+            // Для тестирования используем локальные данные вместо API
+            if (url.includes('/user-rating/')) {
+                console.log('Using local user rating data');
+                return TEST_DATA.userRating;
+            }
+            
+            if (url.includes('/random-puzzle/')) {
+                console.log('Using local puzzle data');
+                // Возвращаем случайную задачу из тестовых данных
+                return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
+            }
+            
+            if (url.includes('/record-solution')) {
+                console.log('Recording solution locally:', options.body);
+                return { success: true };
+            }
+            
+            // Если URL не соответствует ни одному из известных эндпоинтов, используем реальный запрос
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            
+            if (options.headers) {
+                Object.keys(options.headers).forEach(key => {
+                    headers[key] = options.headers[key];
+                });
+            }
+            
             const response = await fetch(url, {
                 ...options,
-                headers: {
-                    ...options.headers,
-                    'Authorization': `Bearer ${initData}`
-                }
+                headers: headers
             });
             
             if (!response.ok) {
