@@ -19,35 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
         resultPage
     });
 
-    // Локальные данные для работы без сервера
-    const LOCAL_DATA = {
-        userRating: {
-            rating: 1500,
-            rd: 350,
-            volatility: 0.06,
-            change: 0
-        },
-        puzzles: [
-            {
-                id: 1,
-                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
-                move1: 'd2d4',
-                move2: 'c6d4',
-                solution: 'Good',
-                rating: 1500,
-                complexity: 4
-            },
-            {
-                id: 2,
-                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
-                move1: 'g1f3',
-                move2: 'd7d5',
-                solution: 'Blunder',
-                rating: 1600,
-                complexity: 3
-            }
-        ]
-    };
+    // Определяем API URL
+    const API_URL = 'https://yoblogger.ru:10000/api';
 
     let currentPuzzle = null;
     let currentUsername = 'test_user';
@@ -65,37 +38,19 @@ document.addEventListener('DOMContentLoaded', function() {
         preMoveDelay: 2000
     };
 
-    // Функция для эмуляции запросов к API
+    // Функция для выполнения запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
             console.log('Fetching:', url);
             
-            // Эмулируем задержку сети
-            await new Promise(resolve => setTimeout(resolve, 300));
+            const response = await fetch(url, options);
             
-            // Эмулируем ответы API на основе URL
-            if (url.includes('user-rating')) {
-                return { ...LOCAL_DATA.userRating };
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
             
-            if (url.includes('random-puzzle')) {
-                const randomIndex = Math.floor(Math.random() * LOCAL_DATA.puzzles.length);
-                return { ...LOCAL_DATA.puzzles[randomIndex] };
-            }
-            
-            if (url.includes('record-solution')) {
-                const data = JSON.parse(options.body);
-                
-                // Обновляем рейтинг в локальных данных
-                const ratingChange = data.success ? 10 : -5;
-                LOCAL_DATA.userRating.rating += ratingChange;
-                LOCAL_DATA.userRating.change = ratingChange;
-                
-                return { success: true };
-            }
-            
-            // Для других запросов возвращаем успешный ответ
-            return { success: true };
+            const data = await response.json();
+            return data;
         } catch (error) {
             console.error('Fetch error:', error);
             throw error;
@@ -105,8 +60,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            // Получаем рейтинг пользователя из локальных данных
-            const ratingData = await fetchWithAuth(`/api/user-rating?username=${username}`);
+            // Получаем рейтинг пользователя из БД
+            const ratingData = await fetchWithAuth(`${API_URL}/user-rating?username=${username}`);
             
             if (ratingData && ratingData.rating) {
                 // Обновляем отображение рейтинга
@@ -183,8 +138,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Sending data:', data);
             
-            // Отправляем данные на "сервер" (локально)
-            fetchWithAuth(`/api/record-solution`, {
+            // Отправляем данные на сервер
+            fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -253,13 +208,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Функция загрузки задачи из локальных данных
+    // Функция загрузки задачи из БД
     async function loadPuzzle(username) {
         try {
             console.log('Loading puzzle for user:', username);
             
-            // Получаем случайную задачу из локальных данных
-            const puzzle = await fetchWithAuth(`/api/random-puzzle`);
+            // Получаем случайную задачу из БД через API
+            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle`);
             console.log('Received puzzle data:', puzzle);
             
             if (!puzzle) {
