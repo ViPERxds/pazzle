@@ -5,6 +5,7 @@ const { Pool } = require('pg');
 const path = require('path');
 const crypto = require('crypto');
 const app = express();
+const db = require('./db');
 
 // Проверяем наличие необходимых переменных окружения
 if (!process.env.NODE_ENV) {
