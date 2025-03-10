@@ -36,37 +36,82 @@ document.addEventListener('DOMContentLoaded', function() {
     document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
     document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
-    // Используем глобальную конфигурацию
-    const API_URL = 'https://chess-puzzles-bot.onrender.com/api';
+    // Тестовые данные для локального использования
+    const TEST_DATA = {
+        userRating: {
+            rating: 1500,
+            rd: 350,
+            volatility: 0.06
+        },
+        puzzles: [
+            {
+                id: 1,
+                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+                move1: 'd2d4',
+                move2: 'c6d4',
+                solution: 'Good',
+                rating: 1500,
+                complexity: 4
+            },
+            {
+                id: 2,
+                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+                move1: 'g1f3',
+                move2: 'd7d5',
+                solution: 'Blunder',
+                rating: 1600,
+                complexity: 3
+            }
+        ]
+    };
 
+    // Упрощенная функция для запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
+            console.log('Fetching:', url, options);
+            
+            // Для тестирования используем локальные данные вместо API
+            if (url.includes('/user-rating/')) {
+                console.log('Using local user rating data');
+                return TEST_DATA.userRating;
+            }
+            
+            if (url.includes('/random-puzzle/')) {
+                console.log('Using local puzzle data');
+                // Возвращаем случайную задачу из тестовых данных
+                return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
+            }
+            
+            if (url.includes('/record-solution')) {
+                console.log('Recording solution locally:', options.body);
+                return { success: true };
+            }
+            
+            // Если URL не соответствует ни одному из известных эндпоинтов, используем реальный запрос
             const headers = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             };
-
-            const response = await fetch(url, { 
-                ...options, 
-                headers: {
-                    ...headers,
-                    ...options.headers
-                }
+            
+            if (options.headers) {
+                Object.keys(options.headers).forEach(key => {
+                    headers[key] = options.headers[key];
+                });
+            }
+            
+            const response = await fetch(url, {
+                ...options,
+                headers: headers
             });
-
+            
             if (!response.ok) {
                 const errorText = await response.text();
-                let errorMessage;
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    errorMessage = errorJson.error || `HTTP error! status: ${response.status}`;
-                } catch {
-                    errorMessage = errorText || `HTTP error! status: ${response.status}`;
-                }
-                throw new Error(errorMessage);
+                console.error('API error:', response.status, errorText);
+                throw new Error(`Ошибка API: ${response.status} ${response.statusText}. ${errorText}`);
             }
-
+            
             const data = await response.json();
+            console.log('API response:', data);
             return data;
         } catch (err) {
             console.error('Fetch error:', err);
@@ -154,29 +199,81 @@ document.addEventListener('DOMContentLoaded', function() {
         // ... остальной код ...
     }
 
+    // Улучшенная функция загрузки задачи
     async function loadPuzzle(username) {
         try {
-            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${username}`);
-            if (!puzzle || !puzzle.fen1 || !puzzle.move1 || !puzzle.move2 || !puzzle.id) {
-                throw new Error('Получены неполные данные задачи');
+            console.log('Loading puzzle for user:', username);
+            
+            // Используем локальные данные вместо API
+            const randomIndex = Math.floor(Math.random() * TEST_DATA.puzzles.length);
+            const puzzle = TEST_DATA.puzzles[randomIndex];
+            console.log('Using local puzzle data:', puzzle);
+            
+            if (!puzzle) {
+                throw new Error('Не удалось получить данные задачи');
+            }
+            
+            if (!puzzle.fen1) {
+                throw new Error('Отсутствует FEN позиция');
+            }
+            
+            if (!puzzle.move1) {
+                throw new Error('Отсутствует предварительный ход');
+            }
+            
+            if (!puzzle.move2) {
+                throw new Error('Отсутствует оцениваемый ход');
+            }
+            
+            if (!puzzle.id) {
+                throw new Error('Отсутствует ID задачи');
             }
 
             // Проверяем валидность FEN
             const tempGame = new Chess();
-            if (!tempGame.load(puzzle.fen1)) {
-                throw new Error('Некорректная позиция');
+            try {
+                if (!tempGame.load(puzzle.fen1)) {
+                    throw new Error('Некорректная позиция');
+                }
+            } catch (e) {
+                throw new Error('Некорректная FEN позиция: ' + e.message);
             }
 
             // Проверяем валидность предварительного хода
-            const [fromPre, toPre] = puzzle.move1.match(/.{2}/g) || [];
-            if (!fromPre || !toPre || !tempGame.move({ from: fromPre, to: toPre, promotion: 'q' })) {
-                throw new Error('Некорректный предварительный ход');
+            try {
+                const [fromPre, toPre] = puzzle.move1.match(/.{2}/g) || [];
+                if (!fromPre || !toPre) {
+                    throw new Error('Неверный формат предварительного хода');
+                }
+                
+                // Проверяем, есть ли фигура на начальной позиции
+                const piece = tempGame.get(fromPre);
+                if (!piece) {
+                    throw new Error('Нет фигуры на начальной позиции предварительного хода');
+                }
+                
+                const moveResult = tempGame.move({ from: fromPre, to: toPre, promotion: 'q' });
+                if (!moveResult) {
+                    throw new Error('Невозможно выполнить предварительный ход');
+                }
+            } catch (e) {
+                throw new Error('Некорректный предварительный ход: ' + e.message);
             }
 
             // Проверяем валидность оцениваемого хода
-            const [fromEval, toEval] = puzzle.move2.match(/.{2}/g) || [];
-            if (!fromEval || !toEval) {
-                throw new Error('Некорректный оцениваемый ход');
+            try {
+                const [fromEval, toEval] = puzzle.move2.match(/.{2}/g) || [];
+                if (!fromEval || !toEval) {
+                    throw new Error('Неверный формат оцениваемого хода');
+                }
+                
+                // Проверяем, есть ли фигура на начальной позиции
+                const piece = tempGame.get(fromEval);
+                if (!piece) {
+                    throw new Error('Нет фигуры на начальной позиции оцениваемого хода');
+                }
+            } catch (e) {
+                throw new Error('Некорректный оцениваемый ход: ' + e.message);
             }
 
             return puzzle;
@@ -679,15 +776,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Заменяем showAlert на showPopup где это возможно
+    // Заменяем showError на простой alert
     function showError(message) {
-        if (window.Telegram?.WebApp?.showPopup) {
-            window.Telegram.WebApp.showPopup({
-                message: message,
-                buttons: [{type: 'close'}]
-            });
-        } else {
-            alert(message);
-        }
+        alert(message);
     }
 }); 
