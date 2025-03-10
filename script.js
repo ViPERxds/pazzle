@@ -178,16 +178,62 @@ document.addEventListener('DOMContentLoaded', function() {
         return seconds;
     }
 
+    // Функция для отправки решения
     function submitSolution(success) {
-        // Останавливаем секундомер
-        clearInterval(window.timerInterval);
-        
-        // Получаем прошедшее время в секундах
-        const timeDisplay = timerElement.textContent;
-        const [minutes, seconds] = timeDisplay.split(':').map(Number);
-        const totalSeconds = minutes * 60 + seconds;
-        
-        // Остальной код функции остается без изменений...
+        try {
+            if (!currentPuzzle || !currentPuzzle.id) {
+                console.error('No current puzzle or puzzle ID!');
+                showError('Нет текущей задачи!');
+                return;
+            }
+            
+            console.log('Sending data:', { puzzle_id: currentPuzzle.id, user_id: currentUsername, success: success, time: elapsedTime, complexity_id: currentPuzzle.complexity || 1 });
+            
+            // Вместо отправки на сервер, просто логируем результат
+            console.log(`Решение ${success ? 'правильное' : 'неправильное'} для задачи ${currentPuzzle.id}`);
+            console.log(`Время решения: ${elapsedTime} секунд`);
+            
+            // Останавливаем таймер
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+            }
+            
+            // Обновляем локальный рейтинг (имитация)
+            const ratingChange = success ? 10 : -5;
+            const currentRating = TEST_DATA.userRating.rating;
+            TEST_DATA.userRating.rating = Math.max(100, currentRating + ratingChange);
+            
+            console.log(`Рейтинг изменен: ${currentRating} -> ${TEST_DATA.userRating.rating}`);
+            
+            // Переходим к результатам
+            setTimeout(() => {
+                puzzlePage.classList.add('hidden');
+                resultPage.classList.remove('hidden');
+                
+                // Показываем результат
+                const resultText = document.getElementById('resultText');
+                if (resultText) {
+                    resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
+                    resultText.className = success ? 'success' : 'failure';
+                }
+                
+                // Показываем изменение рейтинга
+                const ratingChangeElement = document.getElementById('ratingChange');
+                if (ratingChangeElement) {
+                    ratingChangeElement.textContent = `${ratingChange > 0 ? '+' : ''}${ratingChange}`;
+                    ratingChangeElement.className = ratingChange > 0 ? 'success' : 'failure';
+                }
+                
+                // Показываем новый рейтинг
+                const newRatingElement = document.getElementById('newRating');
+                if (newRatingElement) {
+                    newRatingElement.textContent = TEST_DATA.userRating.rating;
+                }
+            }, 500);
+        } catch (error) {
+            console.error('Error recording solution:', error);
+            showError('Ошибка при записи решения: ' + error.message);
+        }
     }
 
     function showPuzzle(puzzle) {
@@ -322,100 +368,38 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация кнопок
     function initializeButtons() {
         if (goodButton) {
-            goodButton.addEventListener('click', async () => {
-                try {
-                    if (!currentPuzzle || !currentPuzzle.id) {
-                        console.error('No current puzzle!');
-                        alert('Ошибка: нет активной задачи');
-                        return;
-                    }
-                    
-                    // Останавливаем таймер
-                    if (window.timerInterval) {
-                        clearInterval(window.timerInterval);
-                    }
-                    
-                    const timeDisplay = timerElement.textContent;
-                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
-                    const totalSeconds = minutes * 60 + seconds;
-                    
-                    const data = {
-                        puzzle_id: currentPuzzle.id,
-                        user_id: 1,
-                        success: true,
-                        time: totalSeconds,
-                        complexity_id: 4
-                    };
-                    
-                    console.log('Sending data:', data);
-                    
-                    await fetchWithAuth(`${API_URL}/record-solution`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    // Обновляем интерфейс
-                    puzzlePage.classList.add('hidden');
-                    resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution === 'Good' ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution === 'Good' ? '#4CAF50' : '#FF0000';
-                    
-                } catch (err) {
-                    console.error('Error recording solution:', err);
-                    alert('Ошибка при записи решения: ' + err.message);
+            goodButton.addEventListener('click', () => {
+                if (!currentPuzzle) {
+                    showError('Нет текущей задачи!');
+                    return;
                 }
+                
+                // Останавливаем таймер
+                if (window.timerInterval) {
+                    clearInterval(window.timerInterval);
+                }
+                
+                // Проверяем, правильный ли ответ
+                const isCorrect = currentPuzzle.solution === 'Good';
+                handlePuzzleResult(isCorrect);
             });
         }
 
         if (blunderButton) {
-            blunderButton.addEventListener('click', async () => {
-                try {
-                    if (!currentPuzzle || !currentPuzzle.id) {
-                        console.error('No current puzzle!');
-                        alert('Ошибка: нет активной задачи');
-                        return;
-                    }
-                    
-                    // Останавливаем таймер
-                    if (window.timerInterval) {
-                        clearInterval(window.timerInterval);
-                    }
-                    
-                    const timeDisplay = timerElement.textContent;
-                    const [minutes, seconds] = timeDisplay.split(':').map(Number);
-                    const totalSeconds = minutes * 60 + seconds;
-                    
-                    const data = {
-                        puzzle_id: currentPuzzle.id,
-                        user_id: 1,
-                        success: false,
-                        time: totalSeconds,
-                        complexity_id: 4
-                    };
-                    
-                    console.log('Sending data:', data);
-                    
-                    await fetchWithAuth(`${API_URL}/record-solution`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    // Обновляем интерфейс
-                    puzzlePage.classList.add('hidden');
-                    resultPage.classList.remove('hidden');
-                    resultText.textContent = currentPuzzle.solution === 'Blunder' ? 'Correct!' : 'Wrong!';
-                    resultText.style.color = currentPuzzle.solution === 'Blunder' ? '#4CAF50' : '#FF0000';
-                    
-                } catch (err) {
-                    console.error('Error recording solution:', err);
-                    alert('Ошибка при записи решения: ' + err.message);
+            blunderButton.addEventListener('click', () => {
+                if (!currentPuzzle) {
+                    showError('Нет текущей задачи!');
+                    return;
                 }
+                
+                // Останавливаем таймер
+                if (window.timerInterval) {
+                    clearInterval(window.timerInterval);
+                }
+                
+                // Проверяем, правильный ли ответ
+                const isCorrect = currentPuzzle.solution === 'Blunder';
+                handlePuzzleResult(isCorrect);
             });
         }
 
@@ -424,11 +408,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (nextButton) {
             nextButton.addEventListener('click', async () => {
                 try {
-                    // Останавливаем таймер если есть
-                    if (window.timerInterval) {
-                        clearInterval(window.timerInterval);
-                    }
+                    resultPage.classList.add('hidden');
+                    puzzlePage.classList.remove('hidden');
                     
+                    // Загружаем новую задачу
                     currentPuzzle = await loadPuzzle(currentUsername);
                     
                     // Определяем, кто должен ходить из FEN позиции
@@ -441,9 +424,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     puzzleConfig.evaluatedMove = currentPuzzle.move2;
                     puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
                     puzzleConfig.solution = currentPuzzle.solution;
-
-                    resultPage.classList.add('hidden');
-                    puzzlePage.classList.remove('hidden');
                     
                     // Сбрасываем состояние игры
                     game = new Chess();
@@ -451,9 +431,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 } catch (err) {
                     console.error('Error loading next puzzle:', err);
                     showError('Ошибка при загрузке следующей задачи: ' + err.message);
-                    // Возвращаемся на страницу результата при ошибке
-                    puzzlePage.classList.add('hidden');
-                    resultPage.classList.remove('hidden');
+                    resultPage.classList.add('hidden');
+                    startPage.classList.remove('hidden');
                 }
             });
         }
@@ -720,49 +699,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация при загрузке
     initializeBoard();
 
-    // Обновляем функцию handlePuzzleResult
+    // Обработчик результата задачи
     async function handlePuzzleResult(isCorrect) {
-        if (window.timerInterval) {
-            clearInterval(window.timerInterval);
-        }
-        
-        if (!currentPuzzle || !currentPuzzle.id) {
-            console.error('No valid puzzle data');
-            alert('Ошибка: нет данных о текущей задаче');
-            return;
-        }
-        
-        const timeDisplay = timerElement.textContent;
-        const [minutes, seconds] = timeDisplay.split(':').map(Number);
-        const totalSeconds = minutes * 60 + seconds;
-
         try {
-            const data = {
-                puzzle_id: currentPuzzle.id,
-                user_id: 1,
-                success: isCorrect,
-                time: totalSeconds,
-                complexity_id: 4
-            };
+            // Останавливаем таймер
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+            }
             
-            console.log('Sending data:', data);
-            
-            await fetchWithAuth(`${API_URL}/record-solution`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-
-            resultText.textContent = isCorrect ? 'Right!' : 'Wrong!';
-            resultText.style.color = isCorrect ? '#4CAF50' : '#FF0000';
-            puzzlePage.classList.add('hidden');
-            resultPage.classList.remove('hidden');
-
-        } catch (err) {
-            console.error('Error recording solution:', err);
-            alert('Ошибка при сохранении результата: ' + err.message);
+            // Отправляем решение
+            submitSolution(isCorrect);
+        } catch (error) {
+            console.error('Error handling puzzle result:', error);
+            showError('Ошибка при обработке результата: ' + error.message);
         }
     }
 
