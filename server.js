@@ -468,15 +468,16 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        console.log('Starting transaction for solution recording');
 
-        // Получаем ID пользователя
+        // Получаем ID пользователя и его текущий рейтинг
         const userResult = await client.query(
             'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
             [username]
         );
 
         if (userResult.rows.length === 0) {
-            throw new Error('User not found');
+            throw new Error(`User ${username} not found`);
         }
 
         const userId = userResult.rows[0].id;
@@ -489,13 +490,15 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
         );
 
         if (puzzleResult.rows.length === 0) {
-            throw new Error('Puzzle not found');
+            throw new Error(`Puzzle ${puzzleId} not found`);
         }
 
         const puzzleRating = puzzleResult.rows[0];
+        console.log('Current ratings:', { user: userRating, puzzle: puzzleRating });
 
         // Рассчитываем новые рейтинги
         const newRatings = calculateNewRatings(userRating, puzzleRating, success ? 1 : 0);
+        console.log('New ratings calculated:', newRatings);
 
         // Обновляем рейтинг пользователя
         await client.query(
@@ -513,18 +516,15 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             [newRatings.puzzleRating, newRatings.puzzleRD, newRatings.puzzleVolatility, puzzleId]
         );
 
+        // Определяем сложность на основе времени
+        const complexityType = time < 30 ? 'easy' : time < 90 ? 'medium' : 'hard';
+        
         // Записываем результат в журнал
         await client.query(
             `INSERT INTO Journal 
              (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id) 
              VALUES ($1, $2, $3, $4, $5, $6, 
-                    (SELECT id FROM Complexity WHERE complexity_type = 
-                        CASE 
-                            WHEN $7 < 30 THEN 'easy'
-                            WHEN $7 < 90 THEN 'medium'
-                            ELSE 'hard'
-                        END
-                    ))`,
+                    (SELECT id FROM Complexity WHERE complexity_type = $7))`,
             [
                 userId,
                 puzzleId,
@@ -532,15 +532,21 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 time,
                 puzzleRating.rating,
                 newRatings.userRating,
-                time
+                complexityType
             ]
         );
 
         await client.query('COMMIT');
-        return newRatings;
+        console.log('Transaction committed successfully');
+        
+        return {
+            userRating: newRatings.userRating,
+            userRD: newRatings.userRD,
+            userVolatility: newRatings.userVolatility
+        };
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Error recording solution:', err);
+        console.error('Error in recordPuzzleSolution:', err);
         throw err;
     } finally {
         client.release();
@@ -636,14 +642,37 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
 app.post('/api/record-solution', async (req, res) => {
     try {
         const { username, puzzleId, success, time } = req.body;
+        console.log('Received solution data:', { username, puzzleId, success, time });
         
-        if (!username || !puzzleId || success === undefined || !time) {
-            throw new Error('Missing required parameters');
+        // Проверяем наличие всех необходимых параметров
+        if (!username || puzzleId === undefined || success === undefined || time === undefined) {
+            console.log('Missing parameters:', { username, puzzleId, success, time });
+            return res.status(400).json({ 
+                error: 'Missing required parameters',
+                received: { username, puzzleId, success, time }
+            });
+        }
+
+        // Проверяем существование пользователя
+        const userExists = await pool.query('SELECT id FROM Users WHERE username = $1', [username]);
+        if (userExists.rows.length === 0) {
+            // Если пользователя нет, создаем его
+            await pool.query(
+                'INSERT INTO Users (username, rating, rd, volatility, status) VALUES ($1, 1500, 350, 0.06, true)',
+                [username]
+            );
+        }
+
+        // Проверяем существование задачи
+        const puzzleExists = await pool.query('SELECT id FROM Puzzles WHERE id = $1', [puzzleId]);
+        if (puzzleExists.rows.length === 0) {
+            return res.status(404).json({ error: 'Puzzle not found' });
         }
 
         const result = await recordPuzzleSolution(username, puzzleId, success, time);
         
         res.json({
+            status: 'success',
             rating: result.userRating,
             rd: result.userRD,
             volatility: result.userVolatility
@@ -651,7 +680,8 @@ app.post('/api/record-solution', async (req, res) => {
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
         res.status(500).json({ 
-            error: err.message,
+            error: 'Internal server error',
+            message: err.message,
             details: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
     }
@@ -734,6 +764,40 @@ app.use('/api', (req, res, next) => {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
+});
+
+// Добавляем тестовый эндпоинт для проверки БД
+app.get('/api/test-db', async (req, res) => {
+    try {
+        // Проверяем подключение к БД
+        const dbCheck = await pool.query('SELECT NOW()');
+        
+        // Проверяем основные таблицы
+        const tablesCheck = await pool.query(`
+            SELECT 
+                (SELECT COUNT(*) FROM users) as users_count,
+                (SELECT COUNT(*) FROM puzzles) as puzzles_count,
+                (SELECT COUNT(*) FROM types) as types_count,
+                (SELECT COUNT(*) FROM tags) as tags_count,
+                (SELECT COUNT(*) FROM puzzles_tags) as puzzles_tags_count,
+                (SELECT COUNT(*) FROM journal) as journal_count,
+                (SELECT COUNT(*) FROM complexity) as complexity_count,
+                (SELECT COUNT(*) FROM settings) as settings_count
+        `);
+        
+        res.json({
+            status: 'success',
+            timestamp: dbCheck.rows[0].now,
+            tables: tablesCheck.rows[0]
+        });
+    } catch (err) {
+        console.error('Database test failed:', err);
+        res.status(500).json({
+            status: 'error',
+            message: err.message,
+            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
+    }
 });
 
 // Изменим порт на переменную окружения
