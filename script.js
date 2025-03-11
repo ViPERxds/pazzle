@@ -53,29 +53,31 @@ document.addEventListener('DOMContentLoaded', function() {
             moveSpeed: 300,
             snapbackSpeed: 100,
             snapSpeed: 100,
-            trashSpeed: 100
+            trashSpeed: 100,
+            onChange: () => {
+                // Если был сделан предварительный ход, рисуем стрелку
+                if (puzzleConfig.preMove && game.history().length > 0) {
+                    const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+                    drawArrow(from, to, '#00ff00');
+                }
+            }
         });
         
         // Делаем предварительный ход с анимацией
         if (puzzleConfig.preMove) {
-            setTimeout(() => {
-                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                const move = game.move({
-                    from: from,
-                    to: to,
-                    promotion: 'q'
-                });
+            const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+            const move = game.move({
+                from: from,
+                to: to,
+                promotion: 'q'
+            });
 
-                if (move) {
-                    board.position(game.fen(), true); // true для анимации
-                    setTimeout(() => {
-                        drawArrow(from, to, '#00ff00');
-                    }, 500); // Рисуем стрелку после завершения анимации
-                } else {
-                    console.error('Failed to make premove');
-                    showError('Невозможно выполнить предварительный ход');
-                }
-            }, 1000); // Даем время на отрисовку начальной позиции
+            if (move) {
+                board.position(game.fen(), true); // true для анимации
+            } else {
+                console.error('Failed to make premove');
+                showError('Невозможно выполнить предварительный ход');
+            }
         }
     }
     
