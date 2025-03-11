@@ -47,18 +47,37 @@ document.addEventListener('DOMContentLoaded', function() {
             draggable: true,
             onDragStart: onDragStart,
             onDrop: onDrop,
-            onSnapEnd: onSnapEnd
-        });
-        
-        // Делаем предварительный ход
-        if (puzzleConfig.preMove) {
-            setTimeout(() => {
-                const move = game.move(puzzleConfig.preMove, { sloppy: true });
-                if (move) {
-                    board.position(game.fen());
+            onSnapEnd: onSnapEnd,
+            // Добавляем callback после полной загрузки доски
+            pieceTheme: 'img/chesspieces/wikipedia/{piece}.png',
+            onLoad: function() {
+                console.log('Board fully loaded');
+                // Делаем предварительный ход после полной загрузки доски
+                if (puzzleConfig.preMove) {
+                    const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+                    console.log('Making premove:', from, 'to', to);
+                    
+                    const move = game.move({
+                        from: from,
+                        to: to,
+                        promotion: 'q'
+                    }, { sloppy: true });
+
+                    if (move) {
+                        console.log('Premove made successfully');
+                        board.position(game.fen(), false);
+                        
+                        // Рисуем стрелку только после успешного хода
+                        setTimeout(() => {
+                            console.log('Drawing arrow after successful premove');
+                            drawArrow(from, to, '#00ff00');
+                        }, 500);
+                    } else {
+                        console.error('Failed to make premove');
+                    }
                 }
-            }, 1000);
-        }
+            }
+        });
     }
     
     // Функции для обработки ходов
@@ -300,17 +319,11 @@ document.addEventListener('DOMContentLoaded', function() {
         puzzleConfig.orientation = orientation;
         puzzleConfig.solution = puzzle.solution === 'Good';
 
+        console.log('Updated puzzle config:', puzzleConfig);
+
         // Сбрасываем состояние игры
         game = new Chess();
         initializeBoard();
-
-        // После инициализации доски и выполнения предварительного хода, показываем стрелку
-        setTimeout(() => {
-            if (puzzleConfig.preMove) {
-                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                drawArrow(from, to, '#00ff00');
-            }
-        }, 1500); // Даем время на выполнение предварительного хода
     }
 
     // Улучшенная функция загрузки задачи
