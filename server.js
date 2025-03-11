@@ -112,14 +112,14 @@ pool.connect(async (err, client, release) => {
         // Инициализируем задачи
         await initializePuzzles();
         
+        // Инициализируем теги
+        await initializeTags();
+        
         // Инициализируем связи задач с тегами
         await initializePuzzlesTags();
         
         // Инициализируем журнал
         await initializeJournal();
-        
-        // Инициализируем теги
-        await initializeTags();
 
     } catch (err) {
         console.error('Error during initialization:', err);
@@ -818,14 +818,14 @@ function calculateNewRatings(userRating, puzzleRating, R) {
     // Вычисляем изменение рейтинга без ограничений
     const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
     
-    // Новый рейтинг без ограничения
-    const newRating = userRating.rating + ratingChange;
+    // Преобразуем строковые значения в числовые и выполняем вычисление
+    const newRating = parseFloat(userRating.rating) + ratingChange;
     
     // Шаг 3: Определение нового отклонения рейтинга
     const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
     
     return {
-        userRating: newRating,
+        userRating: newRating.toFixed(8),
         userRD: newRD,
         userVolatility: userRating.volatility
     };
