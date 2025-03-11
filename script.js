@@ -39,78 +39,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
     document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
-    // Обновляем TEST_DATA для соответствия новой структуре
-    const TEST_DATA = {
-        userRating: {
-            rating: 1500,
-            rd: 350,
-            volatility: 0.06
-        },
-        puzzles: [
-            {
-                id: 1,
-                unique_task: 1,
-                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
-                move1: 'd2d4',
-                fen2: 'r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3',
-                move2: 'c6d4',
-                solution: true,
-                type_id: 1,
-                color: true,
-                rating: 1500,
-                rd: 350,
-                volatility: 0.06,
-                number: 0
-            },
-            {
-                id: 2,
-                unique_task: 2,
-                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
-                move1: 'g1f3',
-                fen2: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
-                move2: 'd7d5',
-                solution: false,
-                type_id: 2,
-                color: false,
-                rating: 1600,
-                rd: 350,
-                volatility: 0.06,
-                number: 0
-            }
-        ]
-    };
-
     // Упрощенная функция для запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
             console.log('Fetching:', url, options);
             
-            // Для тестирования используем локальные данные вместо API
-            if (url.includes('/user-rating/')) {
-                console.log('Using local user rating data');
-                return TEST_DATA.userRating;
-            }
-            
-            if (url.includes('/random-puzzle/')) {
-                console.log('Using local puzzle data');
-                // Возвращаем случайную задачу из тестовых данных
-                return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
-            }
-            
-            if (url.includes('/record-solution')) {
-                console.log('Recording solution:', options.body);
-                const data = JSON.parse(options.body);
-                // Имитируем обновление рейтинга
-                TEST_DATA.userRating.rating += data.success ? 10 : -10;
-                return {
-                    status: 'success',
-                    rating: TEST_DATA.userRating.rating,
-                    rd: TEST_DATA.userRating.rd,
-                    volatility: TEST_DATA.userRating.volatility
-                };
-            }
-            
-            // Если URL не соответствует ни одному из известных эндпоинтов, используем реальный запрос
+            // Используем реальный запрос к API
             const headers = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
@@ -138,26 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return data;
         } catch (err) {
             console.error('Fetch error:', err);
-            // Если это ошибка сети или сервер недоступен, используем локальные данные
-            if (err.name === 'TypeError' || err.message.includes('Failed to fetch')) {
-                console.log('Using fallback local data due to network error');
-                if (url.includes('/user-rating/')) {
-                    return TEST_DATA.userRating;
-                }
-                if (url.includes('/random-puzzle/')) {
-                    return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
-                }
-                if (url.includes('/record-solution')) {
-                    const data = JSON.parse(options.body);
-                    TEST_DATA.userRating.rating += data.success ? 10 : -10;
-                    return {
-                        status: 'success',
-                        rating: TEST_DATA.userRating.rating,
-                        rd: TEST_DATA.userRating.rd,
-                        volatility: TEST_DATA.userRating.volatility
-                    };
-                }
-            }
             throw err;
         }
     }
@@ -284,15 +198,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         console.log('Showing puzzle:', puzzle);
 
-        // Определяем цвет из булева значения
-        const orientation = puzzle.color ? 'white' : 'black';
+        // Определяем цвет из строкового значения 'w' или 'b'
+        const orientation = puzzle.color === 'w' ? 'white' : 'black';
         
         // Обновляем конфигурацию
         puzzleConfig.initialFen = puzzle.fen1;
         puzzleConfig.preMove = puzzle.move1;
         puzzleConfig.evaluatedMove = puzzle.move2;
         puzzleConfig.orientation = orientation;
-        puzzleConfig.solution = puzzle.solution ? 'Good' : 'Blunder';
+        puzzleConfig.solution = puzzle.solution === 'Good';
 
         // Сбрасываем состояние игры
         game = new Chess();
@@ -304,10 +218,9 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             console.log('Loading puzzle for user:', username);
             
-            // Используем локальные данные вместо API
-            const randomIndex = Math.floor(Math.random() * TEST_DATA.puzzles.length);
-            const puzzle = TEST_DATA.puzzles[randomIndex];
-            console.log('Using local puzzle data:', puzzle);
+            // Получаем задачу через API
+            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${username}`);
+            console.log('Received puzzle:', puzzle);
             
             if (!puzzle) {
                 throw new Error('Не удалось получить данные задачи');
@@ -339,49 +252,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Некорректная FEN позиция: ' + e.message);
             }
 
-            // Проверяем валидность предварительного хода
-            try {
-                // Проверяем формат хода (должен быть 4 символа без пробела)
-                if (!puzzle.move1.match(/^[a-h][1-8][a-h][1-8]$/)) {
-                    throw new Error('Неверный формат предварительного хода');
-                }
-                
-                const fromPre = puzzle.move1.substring(0, 2);
-                const toPre = puzzle.move1.substring(2, 4);
-                
-                // Проверяем, есть ли фигура на начальной позиции
-                const piece = tempGame.get(fromPre);
-                if (!piece) {
-                    throw new Error('Нет фигуры на начальной позиции предварительного хода');
-                }
-                
-                const moveResult = tempGame.move({ from: fromPre, to: toPre, promotion: 'q' });
-                if (!moveResult) {
-                    throw new Error('Невозможно выполнить предварительный ход');
-                }
-            } catch (e) {
-                throw new Error('Некорректный предварительный ход: ' + e.message);
-            }
-
-            // Проверяем валидность оцениваемого хода
-            try {
-                // Проверяем формат хода (должен быть 4 символа без пробела)
-                if (!puzzle.move2.match(/^[a-h][1-8][a-h][1-8]$/)) {
-                    throw new Error('Неверный формат оцениваемого хода');
-                }
-                
-                const fromEval = puzzle.move2.substring(0, 2);
-                const toEval = puzzle.move2.substring(2, 4);
-                
-                // Проверяем, есть ли фигура на начальной позиции
-                const piece = tempGame.get(fromEval);
-                if (!piece) {
-                    throw new Error('Нет фигуры на начальной позиции оцениваемого хода');
-                }
-            } catch (e) {
-                throw new Error('Некорректный оцениваемый ход: ' + e.message);
-            }
-
             return puzzle;
         } catch (err) {
             console.error('Error loading puzzle:', err);
@@ -396,21 +266,10 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzlePage.classList.remove('hidden');
             
             currentPuzzle = await loadPuzzle(currentUsername);
+            showPuzzle(currentPuzzle);
             
-            // Определяем, кто должен ходить из FEN позиции
-            const fenParts = currentPuzzle.fen1.split(' ');
-            const colorToMove = fenParts[1];
-            
-            // Обновляем конфигурацию
-            puzzleConfig.initialFen = currentPuzzle.fen1;
-            puzzleConfig.preMove = currentPuzzle.move1;
-            puzzleConfig.evaluatedMove = currentPuzzle.move2;
-            puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
-            puzzleConfig.solution = currentPuzzle.solution;
-
-            // Сбрасываем состояние игры
-            game = new Chess();
-            await initializeBoard();
+            // Запускаем таймер
+            startStopwatch();
         } catch (err) {
             console.error('Error starting puzzle:', err);
             showError('Ошибка при загрузке задачи: ' + err.message);
@@ -467,21 +326,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Загружаем новую задачу
                     currentPuzzle = await loadPuzzle(currentUsername);
+                    showPuzzle(currentPuzzle);
                     
-                    // Определяем, кто должен ходить из FEN позиции
-                    const fenParts = currentPuzzle.fen1.split(' ');
-                    const colorToMove = fenParts[1];
-                    
-                    // Обновляем конфигурацию
-                    puzzleConfig.initialFen = currentPuzzle.fen1;
-                    puzzleConfig.preMove = currentPuzzle.move1;
-                    puzzleConfig.evaluatedMove = currentPuzzle.move2;
-                    puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
-                    puzzleConfig.solution = currentPuzzle.solution;
-                    
-                    // Сбрасываем состояние игры
-                    game = new Chess();
-                    await initializeBoard();
+                    // Запускаем таймер
+                    startStopwatch();
                 } catch (err) {
                     console.error('Error loading next puzzle:', err);
                     showError('Ошибка при загрузке следующей задачи: ' + err.message);
