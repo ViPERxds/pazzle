@@ -156,9 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Вызываем обновление рейтинга при загрузке страницы
     updateRatingDisplay(currentUsername);
     
-    // Обновляем рейтинг каждые 5 секунд
-    setInterval(() => updateRatingDisplay(currentUsername), 5000);
-
     function startStopwatch() {
         let seconds = 0;
         const maxTime = 180; // 3 минуты в секундах
@@ -188,30 +185,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
 
         return seconds;
-    }
-
-    // Обновляем функцию showPuzzle
-    function showPuzzle(puzzle) {
-        if (!puzzle) {
-            console.error('No puzzle data provided');
-            return;
-        }
-
-        console.log('Showing puzzle:', puzzle);
-
-        // Определяем цвет из булева значения
-        const orientation = puzzle.color ? 'white' : 'black';
-        
-        // Обновляем конфигурацию
-        puzzleConfig.initialFen = puzzle.fen1;
-        puzzleConfig.preMove = puzzle.move1;
-        puzzleConfig.evaluatedMove = puzzle.move2;
-        puzzleConfig.orientation = orientation;
-        puzzleConfig.solution = puzzle.solution ? 'Good' : 'Blunder';
-
-        // Сбрасываем состояние игры
-        game = new Chess();
-        initializeBoard();
     }
 
     // Обновляем функцию submitSolution
@@ -259,9 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Solution recorded:', result);
 
             // Обновляем отображение рейтинга
-            ratingElements.forEach(el => {
-                el.textContent = Math.round(result.rating);
-            });
+            await updateRatingDisplay(currentUsername);
 
             // Показываем результат
             puzzlePage.classList.add('hidden');
@@ -273,6 +244,30 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error submitting solution:', error);
             showError('Ошибка при отправке решения: ' + error.message);
         }
+    }
+
+    // Обновляем функцию showPuzzle
+    function showPuzzle(puzzle) {
+        if (!puzzle) {
+            console.error('No puzzle data provided');
+            return;
+        }
+
+        console.log('Showing puzzle:', puzzle);
+
+        // Определяем цвет из булева значения
+        const orientation = puzzle.color ? 'white' : 'black';
+        
+        // Обновляем конфигурацию
+        puzzleConfig.initialFen = puzzle.fen1;
+        puzzleConfig.preMove = puzzle.move1;
+        puzzleConfig.evaluatedMove = puzzle.move2;
+        puzzleConfig.orientation = orientation;
+        puzzleConfig.solution = puzzle.solution ? 'Good' : 'Blunder';
+
+        // Сбрасываем состояние игры
+        game = new Chess();
+        initializeBoard();
     }
 
     // Улучшенная функция загрузки задачи
