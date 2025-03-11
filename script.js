@@ -12,6 +12,97 @@ document.addEventListener('DOMContentLoaded', function() {
     // Определяем API URL
     const API_URL = window.location.origin;  // Используем текущий домен
     
+    let currentPuzzle = null;
+    let timer = null;
+    let startTime = null;
+    let seconds = 180;
+    
+    // Инициализация конфигурации задачи
+    let puzzleConfig = {
+        initialFen: '',
+        preMove: '',
+        evaluatedMove: '',
+        orientation: 'white',
+        solution: false
+    };
+    
+    // Инициализация игры
+    let game = new Chess();
+    let board = null;
+    
+    // Функция инициализации доски
+    function initializeBoard() {
+        // Если доска уже существует, уничтожаем её
+        if (board) {
+            board.destroy();
+        }
+        
+        // Устанавливаем начальную позицию
+        game.load(puzzleConfig.initialFen);
+        
+        // Создаем новую доску
+        board = Chessboard('board', {
+            position: puzzleConfig.initialFen,
+            orientation: puzzleConfig.orientation,
+            draggable: true,
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd
+        });
+        
+        // Делаем предварительный ход
+        if (puzzleConfig.preMove) {
+            setTimeout(() => {
+                const move = game.move(puzzleConfig.preMove, { sloppy: true });
+                if (move) {
+                    board.position(game.fen());
+                }
+            }, 1000);
+        }
+    }
+    
+    // Функции для обработки ходов
+    function onDragStart(source, piece, position, orientation) {
+        // Разрешаем перемещение только после предварительного хода
+        if (game.history().length === 0) {
+            return false;
+        }
+        
+        // Разрешаем перемещение только своих фигур
+        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    function onDrop(source, target) {
+        // Проверяем возможность хода
+        const move = game.move({
+            from: source,
+            to: target,
+            promotion: 'q' // Всегда превращаем в ферзя
+        });
+        
+        // Если ход невозможен, возвращаем фигуру
+        if (move === null) return 'snapback';
+        
+        // Проверяем, является ли это ходом для оценки
+        if (puzzleConfig.evaluatedMove) {
+            const moveStr = move.from + move.to;
+            if (moveStr === puzzleConfig.evaluatedMove) {
+                submitSolution(true);
+            } else {
+                submitSolution(false);
+            }
+        }
+    }
+    
+    function onSnapEnd() {
+        board.position(game.fen());
+    }
+    
     // Проверяем, найдены ли элементы
     console.log('API URL:', API_URL);
     console.log('Elements found:', {
@@ -21,11 +112,6 @@ document.addEventListener('DOMContentLoaded', function() {
         puzzlePage,
         resultPage
     });
-
-    let currentPuzzle = null;
-    let timer = null;
-    let startTime = null;
-    let seconds = 180; 
 
     // Инициализация Telegram WebApp
     const tg = window.Telegram.WebApp;
@@ -217,6 +303,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Сбрасываем состояние игры
         game = new Chess();
         initializeBoard();
+
+        // После инициализации доски и выполнения предварительного хода, показываем стрелку
+        setTimeout(() => {
+            if (puzzleConfig.preMove) {
+                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+                drawArrow(from, to, '#00ff00');
+            }
+        }, 1500); // Даем время на выполнение предварительного хода
     }
 
     // Улучшенная функция загрузки задачи
@@ -248,107 +342,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Отсутствует ID задачи');
             }
 
-            // Проверяем валидность FEN
-            const tempGame = new Chess();
-            try {
-                if (!tempGame.load(puzzle.fen1)) {
-                    throw new Error('Некорректная позиция');
-                }
-            } catch (e) {
-                throw new Error('Некорректная FEN позиция: ' + e.message);
-            }
-
-            return puzzle;
-        } catch (err) {
-            console.error('Error loading puzzle:', err);
-            throw err;
-        }
-    }
-
-    // Обработчик кнопки START
-    startButton.addEventListener('click', async () => {
-        try {
-            startPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
+            // Сохраняем текущую задачу
+            currentPuzzle = puzzle;
             
-            currentPuzzle = await loadPuzzle(currentUsername);
-            showPuzzle(currentPuzzle);
+            // Показываем задачу
+            showPuzzle(puzzle);
             
             // Запускаем таймер
             startStopwatch();
+            
+            // Показываем страницу с задачей
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            resultPage.classList.add('hidden');
+            
         } catch (err) {
-            console.error('Error starting puzzle:', err);
+            console.error('Error loading puzzle:', err);
             showError('Ошибка при загрузке задачи: ' + err.message);
-            startPage.classList.remove('hidden');
-            puzzlePage.classList.add('hidden');
-        }
-    });
-
-    // Инициализация кнопок
-    function initializeButtons() {
-        if (goodButton) {
-            goodButton.addEventListener('click', () => {
-                if (!currentPuzzle) {
-                    showError('Нет текущей задачи!');
-                    return;
-                }
-                
-                // Останавливаем таймер
-                if (window.timerInterval) {
-                    clearInterval(window.timerInterval);
-                }
-                
-                // Проверяем, правильный ли ответ
-                const isCorrect = currentPuzzle.solution === 'Good';
-                handlePuzzleResult(isCorrect);
-            });
-        }
-
-        if (blunderButton) {
-            blunderButton.addEventListener('click', () => {
-                if (!currentPuzzle) {
-                    showError('Нет текущей задачи!');
-                    return;
-                }
-                
-                // Останавливаем таймер
-                if (window.timerInterval) {
-                    clearInterval(window.timerInterval);
-                }
-                
-                // Проверяем, правильный ли ответ
-                const isCorrect = currentPuzzle.solution === 'Blunder';
-                handlePuzzleResult(isCorrect);
-            });
-        }
-
-        // Добавляем обработчик для кнопки Next
-        const nextButton = document.querySelector('.next-btn');
-        if (nextButton) {
-            nextButton.addEventListener('click', async () => {
-                try {
-                    resultPage.classList.add('hidden');
-                    puzzlePage.classList.remove('hidden');
-                    
-                    // Загружаем новую задачу
-                    currentPuzzle = await loadPuzzle(currentUsername);
-                    showPuzzle(currentPuzzle);
-                    
-                    // Запускаем таймер
-                    startStopwatch();
-                } catch (err) {
-                    console.error('Error loading next puzzle:', err);
-                    showError('Ошибка при загрузке следующей задачи: ' + err.message);
-                    resultPage.classList.add('hidden');
-                    startPage.classList.remove('hidden');
-                }
-            });
         }
     }
 
-    // Вызываем инициализацию кнопок после загрузки DOM
-    initializeButtons();
+    // Добавляем обработчики событий
+    startButton.addEventListener('click', () => loadPuzzle(currentUsername));
+    goodButton.addEventListener('click', () => submitSolution(true));
+    blunderButton.addEventListener('click', () => submitSolution(false));
 
+    // Обработчик результата задачи
+    async function handlePuzzleResult(isCorrect) {
+        try {
+            // Останавливаем таймер
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+            }
+            
+            // Отправляем решение
+            await submitSolution(isCorrect);
+        } catch (error) {
+            console.error('Error handling puzzle result:', error);
+            showError('Ошибка при обработке результата: ' + error.message);
+        }
+    }
+
+    // Добавляем обработчик для кнопки анализа
     document.querySelector('.analyze-btn').addEventListener('click', () => {
         // Используем FEN позиции после предварительного хода
         const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
@@ -367,164 +402,9 @@ document.addEventListener('DOMContentLoaded', function() {
         game.move({ from, to, promotion: 'q' });
     });
 
-    // Конфигурация шахматной задачи
-    const puzzleConfig = {
-        initialFen: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 0 1', // Пример FEN
-        preMove: 'e7d7', // Предварительный ход
-        evaluatedMove: 'c7b6', // Оцениваемый ход
-        orientation: 'white', // Ориентация доски
-        preMoveDelay: 2000, // Задержка перед предварительным ходом в мс
-        solution: 'Good' // Предполагаемый правильный ответ
-    };
-
-    let board = null;
-    let game = new Chess();
-    let arrow = null;
-
-    // Функция для определения ориентации доски
-    function getBoardOrientation(fen) {
-        const fenParts = fen.split(' ');
-        const colorToMove = fenParts[1]; // 'w' для белых, 'b' для черных
-        return colorToMove === 'w' ? 'white' : 'black';
-    }
-
-    function initializeBoard() {
-        return new Promise((resolve, reject) => {
-            try {
-                console.log('Initializing board with config:', puzzleConfig);
-                
-                // Очищаем предыдущий таймер если есть
-                if (window.timerInterval) {
-                    clearInterval(window.timerInterval);
-                }
-                
-                // Сбрасываем время
-                timerElement.textContent = '00:00';
-                
-                // Очищаем предыдущую стрелку
-                const oldArrow = document.querySelector('.arrow');
-                if (oldArrow) {
-                    oldArrow.remove();
-                }
-                
-                if (board) {
-                    board.destroy();
-                }
-
-                // Проверяем валидность FEN и ходов
-                if (!puzzleConfig.initialFen) {
-                    throw new Error('Отсутствует FEN позиция');
-                }
-                
-                try {
-                    if (!game.load(puzzleConfig.initialFen)) {
-                        throw new Error('Некорректная FEN позиция');
-                    }
-                } catch (e) {
-                    throw new Error('Ошибка при загрузке позиции: ' + e.message);
-                }
-
-                // Проверяем формат предварительного хода (должен быть 4 символа без пробела)
-                if (!puzzleConfig.preMove || !puzzleConfig.preMove.match(/^[a-h][1-8][a-h][1-8]$/)) {
-                    throw new Error('Некорректный формат предварительного хода');
-                }
-
-                board = Chessboard('board', {
-                    position: puzzleConfig.initialFen,
-                    orientation: puzzleConfig.orientation || 'white',
-                    pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
-                    draggable: true,
-                    moveSpeed: 'slow',
-                    snapSpeed: 100,
-                    snapbackSpeed: 250,
-                    trashSpeed: 100,
-                    showErrors: false,
-                    onDragStart: function(source, piece) {
-                        return game.turn() === (piece[0] === 'w' ? 'w' : 'b');
-                    },
-                    onDrop: function(source, target) {
-                        // Получаем фигуру, которая делает ход
-                        const piece = game.get(source);
-                        if (!piece) return 'snapback';
-                        
-                        // Подсвечиваем начальную и конечную клетки
-                        $(`[data-square="${source}"]`).addClass('highlight-square');
-                        $(`[data-square="${target}"]`).addClass('highlight-square');
-                        
-                        // Проверяем, совпадает ли ход с оцениваемым ходом
-                        const fromEval = puzzleConfig.evaluatedMove.substring(0, 2);
-                        const toEval = puzzleConfig.evaluatedMove.substring(2, 4);
-                        
-                        if (source === fromEval && target === toEval) {
-                            // Ход совпадает с оцениваемым
-                            const move = game.move({
-                                from: source,
-                                to: target,
-                                promotion: 'q' // Всегда превращаем в ферзя для простоты
-                            });
-                            
-                            if (move === null) return 'snapback';
-                            
-                            // Обновляем доску
-                            board.position(game.fen());
-                            
-                            // Останавливаем таймер
-                            if (window.timerInterval) {
-                                clearInterval(window.timerInterval);
-                            }
-                            
-                            // Показываем результат
-                            handlePuzzleResult(puzzleConfig.solution === 'Good');
-                            
-                            return;
-                        }
-                        
-                        // Если ход не совпадает с оцениваемым, отменяем его
-                        return 'snapback';
-                    }
-                });
-                
-                // Выполняем предварительный ход
-                try {
-                    const fromPre = puzzleConfig.preMove.substring(0, 2);
-                    const toPre = puzzleConfig.preMove.substring(2, 4);
-                    
-                    if (!fromPre || !toPre) {
-                        throw new Error('Некорректный формат предварительного хода');
-                    }
-                    
-                    const moveResult = game.move({
-                        from: fromPre,
-                        to: toPre,
-                        promotion: 'q'
-                    });
-                    
-                    if (!moveResult) {
-                        throw new Error('Невозможно выполнить предварительный ход');
-                    }
-                    
-                    // Обновляем доску
-                    board.position(game.fen());
-                    
-                    // Рисуем стрелку для предварительного хода
-                    drawArrow(fromPre, toPre, 'blue');
-                    
-                    // Запускаем секундомер
-                    startStopwatch();
-                    
-                    resolve();
-                } catch (e) {
-                    reject(new Error('Ошибка при выполнении предварительного хода: ' + e.message));
-                }
-            } catch (err) {
-                console.error('Error initializing board:', err);
-                reject(err);
-            }
-        });
-    }
-
+    // Функция для отрисовки стрелок
     function drawArrow(from, to, color) {
-        console.log('Drawing arrow for move:', from + to); // Добавляем лог
+        console.log('Drawing arrow for move:', from + to);
         
         // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
@@ -545,33 +425,51 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Board element not found');
             return;
         }
+
+        // Находим квадраты для хода
+        const squares = board.getElementsByClassName('square-55d63');
+        let fromSquare = null;
+        let toSquare = null;
+
+        // Ищем нужные квадраты по координатам
+        for (let square of squares) {
+            const dataSquare = square.getAttribute('data-square');
+            if (dataSquare === from) fromSquare = square;
+            if (dataSquare === to) toSquare = square;
+        }
         
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        if (!fromSquare || !toSquare) {
+            console.error('Squares not found:', from, to);
+            return;
+        }
+
         const boardRect = board.getBoundingClientRect();
-        const fromRect = fromSquare.getBoundingClientRect();
-        const toRect = toSquare.getBoundingClientRect();
         const squareSize = boardRect.width / 8;
 
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
+        // Получаем координаты квадратов
+        const fromFile = from.charCodeAt(0) - 'a'.charCodeAt(0);
+        const fromRank = 8 - parseInt(from[1]);
+        const toFile = to.charCodeAt(0) - 'a'.charCodeAt(0);
+        const toRank = 8 - parseInt(to[1]);
 
-        // Вычисляем угол и размеры
+        // Вычисляем координаты центров квадратов
+        const x1 = fromFile * squareSize + squareSize / 2;
+        const y1 = fromRank * squareSize + squareSize / 2;
+        const x2 = toFile * squareSize + squareSize / 2;
+        const y2 = toRank * squareSize + squareSize / 2;
+
+        // Параметры стрелки
         const angle = Math.atan2(y2 - y1, x2 - x1);
         const width = squareSize * 0.15;
         const headWidth = squareSize * 0.3;
         const headLength = squareSize * 0.3;
-
-        // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
         const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
 
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+
         path.setAttribute("d", `
             M ${x1 - width*dy} ${y1 + width*dx}
             L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
@@ -582,18 +480,11 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
-        path.setAttribute("fill", color);
+        path.setAttribute("fill", color || '#00ff00');
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
         board.appendChild(svg);
-    }
-
-    // Вспомогательная функция для получения координат клетки
-    function getSquareCoords(square) {
-        const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
-        const rank = 8 - parseInt(square[1]);
-        return { x: file, y: rank };
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
@@ -604,27 +495,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Инициализация при загрузке
-    initializeBoard();
-
-    // Обработчик результата задачи
-    async function handlePuzzleResult(isCorrect) {
-        try {
-            // Останавливаем таймер
-            if (window.timerInterval) {
-                clearInterval(window.timerInterval);
-            }
-            
-            // Отправляем решение
-            await submitSolution(isCorrect);
-        } catch (error) {
-            console.error('Error handling puzzle result:', error);
-            showError('Ошибка при обработке результата: ' + error.message);
-        }
-    }
-
-    // Заменяем showError на простой alert
+    // Функция для отображения ошибок
     function showError(message) {
+        // Показываем ошибку пользователю
         alert(message);
     }
 }); 
