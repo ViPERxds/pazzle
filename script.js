@@ -392,6 +392,14 @@ document.addEventListener('DOMContentLoaded', function() {
     startButton.addEventListener('click', () => loadPuzzle(currentUsername));
     goodButton.addEventListener('click', () => submitSolution(true));
     blunderButton.addEventListener('click', () => submitSolution(false));
+    
+    // Добавляем обработчик для кнопки Next
+    document.querySelector('.next-btn').addEventListener('click', () => {
+        // Скрываем страницу результата
+        resultPage.classList.add('hidden');
+        // Загружаем новую задачу
+        loadPuzzle(currentUsername);
+    });
 
     // Обработчик результата задачи
     async function handlePuzzleResult(isCorrect) {
