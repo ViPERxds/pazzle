@@ -66,6 +66,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Делаем предварительный ход с анимацией
         if (puzzleConfig.preMove) {
             const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+            
+            // Проверяем, что ход возможен
+            const piece = game.get(from);
+            if (!piece) {
+                console.error('No piece at', from);
+                showError('Ошибка: нет фигуры на начальной позиции');
+                return;
+            }
+            
+            console.log('Making premove:', from, 'to', to, 'piece:', piece);
+            
             const move = game.move({
                 from: from,
                 to: to,
@@ -74,8 +85,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (move) {
                 board.position(game.fen(), true); // true для анимации
+                setTimeout(() => {
+                    drawArrow(from, to, '#00ff00');
+                }, 500);
             } else {
-                console.error('Failed to make premove');
+                console.error('Failed to make premove:', from, to);
                 showError('Невозможно выполнить предварительный ход');
             }
         }
