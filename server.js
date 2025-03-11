@@ -498,12 +498,11 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
                 SELECT DISTINCT puzzle_id 
                 FROM Journal 
                 WHERE user_id = $1
-                AND success = true
             )
         `, [userId]);
 
         if (puzzlesResult.rows.length === 0) {
-            // Если все задачи решены, очищаем историю
+            // Если все задачи решены, очищаем половину истории
             await pool.query(`
                 DELETE FROM Journal 
                 WHERE user_id = $1 
@@ -522,6 +521,8 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
         const randomIndex = Math.floor(Math.random() * puzzlesResult.rows.length);
         const selectedPuzzle = puzzlesResult.rows[randomIndex];
 
+        console.log('Selected puzzle:', selectedPuzzle);
+
         // Преобразуем данные в нужный формат
         return {
             id: selectedPuzzle.id,
@@ -530,8 +531,8 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
             volatility: selectedPuzzle.volatility,
             fen1: selectedPuzzle.fen1,
             move1: selectedPuzzle.move1,
-            fen2: selectedPuzzle.fen2,
-            move2: selectedPuzzle.move2,
+            fen2: selectedPuzzle.fen2 || selectedPuzzle.fen1,
+            move2: selectedPuzzle.move2 || '',
             solution: selectedPuzzle.solution,
             color: selectedPuzzle.color,
             type_id: selectedPuzzle.type_id
@@ -850,14 +851,21 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
             volatility: puzzle.volatility,
             fen1: puzzle.fen1,
             move1: puzzle.move1,
-            fen2: puzzle.fen2 || puzzle.fen1,
-            move2: puzzle.move2 || '',
+            fen2: puzzle.fen2 || puzzle.fen1, // Если fen2 не указан, используем fen1
+            move2: puzzle.move2 || '', // Если move2 не указан, используем пустую строку
             solution: puzzle.solution ? 'Good' : 'Blunder',
             color: puzzle.color ? 'w' : 'b',
             type_id: puzzle.type_id
         };
 
         console.log('Sending response:', response);
+        
+        // Проверяем, что все необходимые поля присутствуют
+        if (!response.fen1 || !response.move1 || !response.color) {
+            console.error('Invalid puzzle data:', response);
+            throw new Error('Invalid puzzle data');
+        }
+
         res.json(response);
     } catch (err) {
         console.error('Error in /api/random-puzzle:', err);
