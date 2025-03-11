@@ -1,8 +1,3 @@
-window.addEventListener('error', function(e) {
-    console.error('Global error:', e.error);
-    showError('Произошла ошибка: ' + e.error.message);
-});
-
 document.addEventListener('DOMContentLoaded', function() {
     const startPage = document.getElementById('startPage');
     const puzzlePage = document.getElementById('puzzlePage');
@@ -26,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentPuzzle = null;
     let timer = null;
     let startTime = null;
-    let elapsedTime = 0;
     let seconds = 180; 
 
     // Инициализация Telegram WebApp
@@ -42,30 +36,85 @@ document.addEventListener('DOMContentLoaded', function() {
     document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
     document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
-    // Обновляем функцию fetchWithAuth для реальных запросов к API
+    // Тестовые данные для локального использования
+    const TEST_DATA = {
+        userRating: {
+            rating: 1500,
+            rd: 350,
+            volatility: 0.06
+        },
+        puzzles: [
+            {
+                id: 1,
+                fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+                move1: 'd2d4',
+                move2: 'c6d4',
+                solution: 'Good',
+                rating: 1500,
+                complexity: 4
+            },
+            {
+                id: 2,
+                fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+                move1: 'g1f3',
+                move2: 'd7d5',
+                solution: 'Blunder',
+                rating: 1600,
+                complexity: 3
+            }
+        ]
+    };
+
+    // Упрощенная функция для запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
-            console.log(`Fetching ${url} with options:`, options);
+            console.log('Fetching:', url, options);
+            
+            // Для тестирования используем локальные данные вместо API
+            if (url.includes('/user-rating/')) {
+                console.log('Using local user rating data');
+                return TEST_DATA.userRating;
+            }
+            
+            if (url.includes('/random-puzzle/')) {
+                console.log('Using local puzzle data');
+                // Возвращаем случайную задачу из тестовых данных
+                return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
+            }
+            
+            if (url.includes('/record-solution')) {
+                console.log('Recording solution locally:', options.body);
+                return { success: true };
+            }
+            
+            // Если URL не соответствует ни одному из известных эндпоинтов, используем реальный запрос
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            
+            if (options.headers) {
+                Object.keys(options.headers).forEach(key => {
+                    headers[key] = options.headers[key];
+                });
+            }
+            
             const response = await fetch(url, {
                 ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    ...options.headers
-                }
+                headers: headers
             });
             
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`API Error (${response.status}):`, errorText);
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                console.error('API error:', response.status, errorText);
+                throw new Error(`Ошибка API: ${response.status} ${response.statusText}. ${errorText}`);
             }
             
             const data = await response.json();
-            console.log(`Response from ${url}:`, data);
+            console.log('API response:', data);
             return data;
         } catch (err) {
-            console.error(`Error fetching ${url}:`, err);
+            console.error('Fetch error:', err);
             throw err;
         }
     }
@@ -73,7 +122,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            const userRating = await fetchWithAuth(`${window.CONFIG.API_URL}/user-rating/${username}`);
+            const userRating = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
             console.log('Received user rating:', userRating);
             
             const rating = userRating?.rating || 1500;
@@ -102,8 +151,6 @@ document.addEventListener('DOMContentLoaded', function() {
         let seconds = 0;
         const maxTime = 180; // 3 минуты в секундах
         
-        startTime = Date.now(); // Запоминаем время начала
-        
         // Очищаем предыдущий интервал если он был
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
@@ -112,7 +159,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Обновляем отображение времени каждую секунду
         window.timerInterval = setInterval(() => {
             seconds++;
-            elapsedTime = (Date.now() - startTime) / 1000; // Обновляем затраченное время
             
             // Форматируем время в MM:SS
             const minutes = Math.floor(seconds / 60);
@@ -124,6 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Если прошло 3 минуты, останавливаем секундомер
             if (seconds >= maxTime) {
                 clearInterval(window.timerInterval);
+                // Автоматически отправляем текущее решение как неверное
                 handlePuzzleResult(false);
             }
         }, 1000);
@@ -131,8 +178,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return seconds;
     }
 
-    // Обновляем функцию submitSolution для работы с реальным API
-    async function submitSolution(success) {
+    // Функция для отправки решения
+    function submitSolution(success) {
         try {
             if (!currentPuzzle || !currentPuzzle.id) {
                 console.error('No current puzzle or puzzle ID!');
@@ -140,39 +187,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            const data = {
-                username: currentUsername,
-                puzzleId: currentPuzzle.id,
-                success: success,
-                time: elapsedTime
-            };
+            console.log('Sending data:', { puzzle_id: currentPuzzle.id, user_id: currentUsername, success: success, time: elapsedTime, complexity_id: currentPuzzle.complexity || 1 });
             
-            console.log('Sending solution:', data);
-            
-            const result = await fetchWithAuth(`${window.CONFIG.API_URL}/record-solution`, {
-                method: 'POST',
-                body: JSON.stringify(data)
-            });
+            // Вместо отправки на сервер, просто логируем результат
+            console.log(`Решение ${success ? 'правильное' : 'неправильное'} для задачи ${currentPuzzle.id}`);
+            console.log(`Время решения: ${elapsedTime} секунд`);
             
             // Останавливаем таймер
             if (window.timerInterval) {
                 clearInterval(window.timerInterval);
             }
             
-            // Показываем результат
-            puzzlePage.classList.add('hidden');
-            resultPage.classList.remove('hidden');
+            // Обновляем локальный рейтинг (имитация)
+            const ratingChange = success ? 10 : -5;
+            const currentRating = TEST_DATA.userRating.rating;
+            TEST_DATA.userRating.rating = Math.max(100, currentRating + ratingChange);
             
-            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
-            resultText.className = success ? 'success' : 'failure';
+            console.log(`Рейтинг изменен: ${currentRating} -> ${TEST_DATA.userRating.rating}`);
             
-            // Обновляем рейтинг из ответа API
-            if (result.newRating) {
-                ratingElements.forEach(el => {
-                    el.textContent = Math.round(result.newRating);
-                });
-            }
-            
+            // Переходим к результатам
+            setTimeout(() => {
+                puzzlePage.classList.add('hidden');
+                resultPage.classList.remove('hidden');
+                
+                // Показываем результат
+                const resultText = document.getElementById('resultText');
+                if (resultText) {
+                    resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
+                    resultText.className = success ? 'success' : 'failure';
+                }
+                
+                // Показываем изменение рейтинга
+                const ratingChangeElement = document.getElementById('ratingChange');
+                if (ratingChangeElement) {
+                    ratingChangeElement.textContent = `${ratingChange > 0 ? '+' : ''}${ratingChange}`;
+                    ratingChangeElement.className = ratingChange > 0 ? 'success' : 'failure';
+                }
+                
+                // Показываем новый рейтинг
+                const newRatingElement = document.getElementById('newRating');
+                if (newRatingElement) {
+                    newRatingElement.textContent = TEST_DATA.userRating.rating;
+                }
+            }, 500);
         } catch (error) {
             console.error('Error recording solution:', error);
             showError('Ошибка при записи решения: ' + error.message);
@@ -180,43 +237,97 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showPuzzle(puzzle) {
-        currentPuzzle = puzzle;
+        // ... существующий код ...
         
-        // Определяем, кто должен ходить из FEN позиции
-        const fenParts = puzzle.fen1.split(' ');
-        const colorToMove = fenParts[1];
-        
-        // Обновляем конфигурацию
-        puzzleConfig.initialFen = puzzle.fen1;
-        puzzleConfig.preMove = puzzle.move1;
-        puzzleConfig.evaluatedMove = puzzle.move2;
-        puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
-        puzzleConfig.solution = puzzle.solution;
-
-        // Сбрасываем состояние игры
-        game = new Chess();
-        
-        // Запускаем секундомер
+        // Запускаем секундомер вместо таймера
         startStopwatch();
         
-        // Инициализируем доску
-        initializeBoard();
+        // ... остальной код ...
     }
 
-    // Обновляем функцию loadPuzzle для работы с реальным API
+    // Улучшенная функция загрузки задачи
     async function loadPuzzle(username) {
         try {
             console.log('Loading puzzle for user:', username);
-            const apiUrl = `${window.CONFIG.API_URL}/random-puzzle/${username}`;
-            console.log('API URL:', apiUrl);
             
-            const puzzle = await fetchWithAuth(apiUrl);
-            console.log('Received puzzle:', puzzle);
+            // Используем локальные данные вместо API
+            const randomIndex = Math.floor(Math.random() * TEST_DATA.puzzles.length);
+            const puzzle = TEST_DATA.puzzles[randomIndex];
+            console.log('Using local puzzle data:', puzzle);
             
             if (!puzzle) {
-                throw new Error('No puzzle received from server');
+                throw new Error('Не удалось получить данные задачи');
             }
             
+            if (!puzzle.fen1) {
+                throw new Error('Отсутствует FEN позиция');
+            }
+            
+            if (!puzzle.move1) {
+                throw new Error('Отсутствует предварительный ход');
+            }
+            
+            if (!puzzle.move2) {
+                throw new Error('Отсутствует оцениваемый ход');
+            }
+            
+            if (!puzzle.id) {
+                throw new Error('Отсутствует ID задачи');
+            }
+
+            // Проверяем валидность FEN
+            const tempGame = new Chess();
+            try {
+                if (!tempGame.load(puzzle.fen1)) {
+                    throw new Error('Некорректная позиция');
+                }
+            } catch (e) {
+                throw new Error('Некорректная FEN позиция: ' + e.message);
+            }
+
+            // Проверяем валидность предварительного хода
+            try {
+                // Проверяем формат хода (должен быть 4 символа без пробела)
+                if (!puzzle.move1.match(/^[a-h][1-8][a-h][1-8]$/)) {
+                    throw new Error('Неверный формат предварительного хода');
+                }
+                
+                const fromPre = puzzle.move1.substring(0, 2);
+                const toPre = puzzle.move1.substring(2, 4);
+                
+                // Проверяем, есть ли фигура на начальной позиции
+                const piece = tempGame.get(fromPre);
+                if (!piece) {
+                    throw new Error('Нет фигуры на начальной позиции предварительного хода');
+                }
+                
+                const moveResult = tempGame.move({ from: fromPre, to: toPre, promotion: 'q' });
+                if (!moveResult) {
+                    throw new Error('Невозможно выполнить предварительный ход');
+                }
+            } catch (e) {
+                throw new Error('Некорректный предварительный ход: ' + e.message);
+            }
+
+            // Проверяем валидность оцениваемого хода
+            try {
+                // Проверяем формат хода (должен быть 4 символа без пробела)
+                if (!puzzle.move2.match(/^[a-h][1-8][a-h][1-8]$/)) {
+                    throw new Error('Неверный формат оцениваемого хода');
+                }
+                
+                const fromEval = puzzle.move2.substring(0, 2);
+                const toEval = puzzle.move2.substring(2, 4);
+                
+                // Проверяем, есть ли фигура на начальной позиции
+                const piece = tempGame.get(fromEval);
+                if (!piece) {
+                    throw new Error('Нет фигуры на начальной позиции оцениваемого хода');
+                }
+            } catch (e) {
+                throw new Error('Некорректный оцениваемый ход: ' + e.message);
+            }
+
             return puzzle;
         } catch (err) {
             console.error('Error loading puzzle:', err);
@@ -597,7 +708,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Отправляем решение
-            await submitSolution(isCorrect);
+            submitSolution(isCorrect);
         } catch (error) {
             console.error('Error handling puzzle result:', error);
             showError('Ошибка при обработке результата: ' + error.message);
@@ -606,16 +717,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Заменяем showError на простой alert
     function showError(message) {
-        console.error(message);
         alert(message);
     }
-
-    // Добавляем обработчики для кнопок
-    goodButton.addEventListener('click', () => {
-        handlePuzzleResult(true);
-    });
-
-    blunderButton.addEventListener('click', () => {
-        handlePuzzleResult(false);
-    });
 }); 
