@@ -758,23 +758,28 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             [newRatings.puzzleRating, newRatings.puzzleRD, newRatings.puzzleVolatility, puzzleId]
         );
 
+        // Нормализуем время решения (преобразуем в секунды и ограничиваем до 999.99)
+        const normalizedTime = Math.min(parseFloat(time) || 0, 999.99);
+        
         // Определяем сложность на основе времени
-        const complexityType = time < 30 ? 'easy' : time < 90 ? 'medium' : 'hard';
+        let complexityId;
+        if (normalizedTime < 30) complexityId = 3; // легкая
+        else if (normalizedTime < 90) complexityId = 4; // средняя
+        else complexityId = 5; // сложная
         
         // Записываем результат в журнал
         await client.query(
             `INSERT INTO Journal 
              (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, 
-                    (SELECT id FROM Complexity WHERE complexity_type = $7))`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
                 userId,
                 puzzleId,
                 success,
-                time,
+                normalizedTime,
                 puzzleRating.rating,
                 newRatings.userRating,
-                complexityType
+                complexityId
             ]
         );
 
@@ -1703,7 +1708,7 @@ async function initializeJournal() {
                 `INSERT INTO Journal (
                     id, user_id, puzzle_id, success, time_success,
                     puzzle_rating_before, user_rating_after, complexity_id, date
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
                 [
                     record.id,
                     record.user_id,
