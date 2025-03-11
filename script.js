@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError('Ошибка: нет фигуры на начальной позиции');
                 return;
             }
+
+            // Проверяем, что это ход правильного цвета
+            if (game.turn() !== piece.color) {
+                game.load(puzzleConfig.initialFen); // Перезагружаем позицию
+            }
             
             // Делаем ход
             const move = game.move({
