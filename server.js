@@ -469,29 +469,15 @@ async function initializePuzzles() {
 }
 
 // Функция для поиска задачи с учетом всех критериев
-async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
+async function findPuzzleWithCriteria(userId, userRating) {
     try {
-        // Получаем все настройки
-        const settingsResult = await pool.query('SELECT setting, meaning FROM Settings');
-        const settings = settingsResult.rows.reduce((acc, row) => {
-            acc[row.setting] = row.meaning;
-            return acc;
-        }, {});
-
-        // Получаем все нерешенные задачи с их типами
+        console.log(`Finding puzzle with criteria for user ${userId} with rating ${userRating}`);
+        
+        // Получаем все нерешенные задачи
         const puzzlesResult = await pool.query(`
             SELECT 
                 p.*,
-                t.type as puzzle_type,
-                COALESCE(
-                    (SELECT complexity_type 
-                     FROM Journal j 
-                     JOIN Complexity c ON j.complexity_id = c.id 
-                     WHERE j.puzzle_id = p.id 
-                     ORDER BY j.date DESC 
-                     LIMIT 1),
-                    'средняя'
-                ) as last_complexity
+                t.type as puzzle_type
             FROM Puzzles p
             LEFT JOIN Types t ON p.type_id = t.id
             WHERE p.id NOT IN (
@@ -501,8 +487,11 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
             )
         `, [userId]);
 
+        console.log(`Found ${puzzlesResult.rows.length} unsolved puzzles`);
+
         if (puzzlesResult.rows.length === 0) {
             // Если все задачи решены, очищаем половину истории
+            console.log('All puzzles solved, clearing half of history');
             await pool.query(`
                 DELETE FROM Journal 
                 WHERE user_id = $1 
@@ -514,7 +503,7 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
                     LIMIT (SELECT COUNT(*)/2 FROM Journal WHERE user_id = $1)
                 )
             `, [userId]);
-            return findPuzzleWithCriteria(userId, userRating, userPerformance);
+            return findPuzzleWithCriteria(userId, userRating);
         }
 
         // Выбираем случайную задачу из доступных
@@ -550,205 +539,41 @@ async function findPuzzleForUser(username) {
         
         // Получаем информацию о пользователе
         const userResult = await pool.query(
-            'SELECT id, rating, performance FROM Users WHERE username = $1',
+            'SELECT id, rating FROM Users WHERE username = $1',
             [username]
         );
         
+        console.log('User query result:', userResult.rows);
+        
         if (userResult.rows.length === 0) {
-            throw new Error('User not found');
+            // Если пользователь не найден, создаем нового
+            console.log(`Creating new user: ${username}`);
+            const newUser = await pool.query(
+                `INSERT INTO Users (username, rating, rd, volatility, status) 
+                 VALUES ($1, 1500, 350, 0.06, true) 
+                 RETURNING id, rating`,
+                [username]
+            );
+            console.log('New user created:', newUser.rows[0]);
+            return findPuzzleWithCriteria(newUser.rows[0].id, newUser.rows[0].rating);
         }
         
         const userId = userResult.rows[0].id;
         const userRating = userResult.rows[0].rating;
-        const userPerformance = userResult.rows[0].performance;
+        console.log(`Found user: id=${userId}, rating=${userRating}`);
 
         // Используем новую функцию для поиска задачи
-        return findPuzzleWithCriteria(userId, userRating, userPerformance);
+        const puzzle = await findPuzzleWithCriteria(userId, userRating);
+        console.log('Found puzzle:', puzzle);
+        
+        if (!puzzle) {
+            throw new Error('No available puzzles found');
+        }
+
+        return puzzle;
     } catch (err) {
         console.error('Error in findPuzzleForUser:', err);
         throw err;
-    }
-}
-
-// Функция для инициализации рейтинга нового пользователя
-async function initializeUserRating(username) {
-    try {
-        const result = await pool.query(
-            `INSERT INTO Journal 
-            (username, puzzle_id, success, time, rating, rd, volatility)
-            VALUES ($1, 0, true, 0, 1500, 350, 0.06)
-            RETURNING rating, rd, volatility`,
-            [username]
-        );
-        return result.rows[0];
-    } catch (err) {
-        console.error('Error initializing user rating:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию getUserRating
-async function getUserRating(username) {
-    try {
-        // Получаем пользователя по username
-        const userResult = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
-
-        // Если пользователь не найден, создаем нового
-        if (userResult.rows.length === 0) {
-            const newUser = await pool.query(
-                `INSERT INTO Users (username, rating, rd, volatility, status) 
-                 VALUES ($1, 1500, 350, 0.06, true) 
-                 RETURNING id, rating, rd, volatility`,
-                [username]
-            );
-            return newUser.rows[0];
-        }
-
-        return userResult.rows[0];
-    } catch (err) {
-        console.error('Error getting user rating:', err);
-        throw err;
-    }
-}
-
-// Функция для получения рейтинга задачи
-async function getPuzzleRating(puzzleId) {
-    try {
-        console.log('Getting rating for puzzle:', puzzleId);
-        const result = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (result.rows.length === 0) {
-            console.error('Puzzle not found:', puzzleId);
-            throw new Error(`Puzzle ${puzzleId} not found`);
-        }
-        
-        console.log('Found puzzle rating:', result.rows[0]);
-        return result.rows[0];
-    } catch (err) {
-        console.error('Error getting puzzle rating:', err);
-        throw err;
-    }
-}
-
-// Функция для получения настроек
-async function getSettings() {
-    try {
-        const result = await pool.query('SELECT * FROM Settings');
-        if (result.rows.length === 0) {
-            return {
-                normal_time: 60,
-                tau: 0.5,
-                epsilon: 0.000001
-            };
-        }
-        return result.rows.reduce((acc, row) => {
-            acc[row.parameter_name] = row.parameter_value;
-            return acc;
-        }, {});
-    } catch (err) {
-        console.error('Error getting settings:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию recordPuzzleSolution
-async function recordPuzzleSolution(username, puzzleId, success, time) {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        console.log('Starting transaction for solution recording');
-
-        // Получаем ID пользователя и его текущий рейтинг
-        const userResult = await client.query(
-            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
-
-        if (userResult.rows.length === 0) {
-            throw new Error(`User ${username} not found`);
-        }
-
-        const userId = userResult.rows[0].id;
-        const userRating = userResult.rows[0];
-
-        // Получаем информацию о задаче
-        const puzzleResult = await client.query(
-            'SELECT id, rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-
-        if (puzzleResult.rows.length === 0) {
-            throw new Error(`Puzzle ${puzzleId} not found`);
-        }
-
-        const puzzleRating = puzzleResult.rows[0];
-        console.log('Current ratings:', { user: userRating, puzzle: puzzleRating });
-
-        // Рассчитываем новые рейтинги
-        const newRatings = calculateNewRatings(userRating, puzzleRating, success ? 1 : 0);
-        console.log('New ratings calculated:', newRatings);
-
-        // Обновляем рейтинг пользователя
-        await client.query(
-            `UPDATE Users 
-             SET rating = $1, rd = $2, volatility = $3 
-             WHERE id = $4`,
-            [newRatings.userRating, newRatings.userRD, newRatings.userVolatility, userId]
-        );
-
-        // Обновляем рейтинг задачи
-        await client.query(
-            `UPDATE Puzzles 
-             SET rating = $1, rd = $2, volatility = $3, number = number + 1 
-             WHERE id = $4`,
-            [newRatings.puzzleRating, newRatings.puzzleRD, newRatings.puzzleVolatility, puzzleId]
-        );
-
-        // Нормализуем время решения (преобразуем в секунды и ограничиваем до 999.99)
-        const normalizedTime = Math.min(parseFloat(time) || 0, 999.99);
-        
-        // Определяем сложность на основе времени
-        let complexityId;
-        if (normalizedTime < 30) complexityId = 3; // легкая
-        else if (normalizedTime < 90) complexityId = 4; // средняя
-        else complexityId = 5; // сложная
-        
-        // Записываем результат в журнал
-        await client.query(
-            `INSERT INTO Journal 
-             (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-                userId,
-                puzzleId,
-                success,
-                normalizedTime,
-                puzzleRating.rating,
-                newRatings.userRating,
-                complexityId
-            ]
-        );
-
-        await client.query('COMMIT');
-        console.log('Transaction committed successfully');
-        
-        return {
-            userRating: newRatings.userRating,
-            userRD: newRatings.userRD,
-            userVolatility: newRatings.userVolatility
-        };
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Error in recordPuzzleSolution:', err);
-        throw err;
-    } finally {
-        client.release();
     }
 }
 
@@ -838,7 +663,8 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
         const puzzle = await findPuzzleForUser(username);
         
         if (!puzzle) {
-            throw new Error('No available puzzles found');
+            console.error('No puzzle found for user:', username);
+            return res.status(404).json({ error: 'No available puzzles found' });
         }
 
         console.log('Found puzzle:', puzzle);
@@ -846,13 +672,13 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
         // Преобразуем данные в нужный формат
         const response = {
             id: puzzle.id,
-            rating: puzzle.rating,
-            rd: puzzle.rd,
-            volatility: puzzle.volatility,
+            rating: parseFloat(puzzle.rating).toFixed(2),
+            rd: parseFloat(puzzle.rd).toFixed(2),
+            volatility: parseFloat(puzzle.volatility).toFixed(8),
             fen1: puzzle.fen1,
             move1: puzzle.move1,
-            fen2: puzzle.fen2 || puzzle.fen1, // Если fen2 не указан, используем fen1
-            move2: puzzle.move2 || '', // Если move2 не указан, используем пустую строку
+            fen2: puzzle.fen2 || puzzle.fen1,
+            move2: puzzle.move2 || '',
             solution: puzzle.solution ? 'Good' : 'Blunder',
             color: puzzle.color ? 'w' : 'b',
             type_id: puzzle.type_id
@@ -863,7 +689,7 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
         // Проверяем, что все необходимые поля присутствуют
         if (!response.fen1 || !response.move1 || !response.color) {
             console.error('Invalid puzzle data:', response);
-            throw new Error('Invalid puzzle data');
+            return res.status(500).json({ error: 'Invalid puzzle data' });
         }
 
         res.json(response);
@@ -871,7 +697,7 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
         console.error('Error in /api/random-puzzle:', err);
         res.status(500).json({ 
             error: err.message,
-            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
     }
 });
