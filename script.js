@@ -45,33 +45,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обновляем функцию fetchWithAuth для реальных запросов к API
     async function fetchWithAuth(url, options = {}) {
         try {
-            console.log('Fetching:', url, options);
-            
-            const headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            };
-            
-            if (options.headers) {
-                Object.assign(headers, options.headers);
-            }
-            
+            console.log(`Fetching ${url} with options:`, options);
             const response = await fetch(url, {
                 ...options,
-                headers: headers
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    ...options.headers
+                }
             });
             
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('API error:', response.status, errorText);
-                throw new Error(`Ошибка API: ${response.status} ${response.statusText}. ${errorText}`);
+                console.error(`API Error (${response.status}):`, errorText);
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
             }
             
             const data = await response.json();
-            console.log('API response:', data);
+            console.log(`Response from ${url}:`, data);
             return data;
         } catch (err) {
-            console.error('Fetch error:', err);
+            console.error(`Error fetching ${url}:`, err);
             throw err;
         }
     }
@@ -213,23 +207,16 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadPuzzle(username) {
         try {
             console.log('Loading puzzle for user:', username);
+            const apiUrl = `${window.CONFIG.API_URL}/random-puzzle/${username}`;
+            console.log('API URL:', apiUrl);
             
-            const puzzle = await fetchWithAuth(`${window.CONFIG.API_URL}/random-puzzle/${username}`);
+            const puzzle = await fetchWithAuth(apiUrl);
+            console.log('Received puzzle:', puzzle);
             
             if (!puzzle) {
-                throw new Error('Не удалось получить данные задачи');
+                throw new Error('No puzzle received from server');
             }
             
-            if (!puzzle.fen1 || !puzzle.move1 || !puzzle.move2 || !puzzle.id) {
-                throw new Error('Неполные данные задачи');
-            }
-
-            // Проверяем валидность FEN и ходов
-            const tempGame = new Chess();
-            if (!tempGame.load(puzzle.fen1)) {
-                throw new Error('Некорректная позиция');
-            }
-
             return puzzle;
         } catch (err) {
             console.error('Error loading puzzle:', err);
