@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const blunderButton = document.querySelector('.blunder-btn');
     const timerElement = document.querySelector('.timer');
     
+    // Определяем API URL
+    const API_URL = window.location.origin;
+    
     // Проверяем, найдены ли элементы
     console.log('Elements found:', {
         goodButton,
@@ -95,8 +98,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (url.includes('/record-solution')) {
-                console.log('Recording solution locally:', options.body);
-                return { success: true };
+                console.log('Recording solution:', options.body);
+                const data = JSON.parse(options.body);
+                // Имитируем обновление рейтинга
+                TEST_DATA.userRating.rating += data.success ? 10 : -10;
+                return {
+                    status: 'success',
+                    rating: TEST_DATA.userRating.rating,
+                    rd: TEST_DATA.userRating.rd,
+                    volatility: TEST_DATA.userRating.volatility
+                };
             }
             
             // Если URL не соответствует ни одному из известных эндпоинтов, используем реальный запрос
@@ -127,6 +138,26 @@ document.addEventListener('DOMContentLoaded', function() {
             return data;
         } catch (err) {
             console.error('Fetch error:', err);
+            // Если это ошибка сети или сервер недоступен, используем локальные данные
+            if (err.name === 'TypeError' || err.message.includes('Failed to fetch')) {
+                console.log('Using fallback local data due to network error');
+                if (url.includes('/user-rating/')) {
+                    return TEST_DATA.userRating;
+                }
+                if (url.includes('/random-puzzle/')) {
+                    return TEST_DATA.puzzles[Math.floor(Math.random() * TEST_DATA.puzzles.length)];
+                }
+                if (url.includes('/record-solution')) {
+                    const data = JSON.parse(options.body);
+                    TEST_DATA.userRating.rating += data.success ? 10 : -10;
+                    return {
+                        status: 'success',
+                        rating: TEST_DATA.userRating.rating,
+                        rd: TEST_DATA.userRating.rd,
+                        volatility: TEST_DATA.userRating.volatility
+                    };
+                }
+            }
             throw err;
         }
     }
@@ -164,6 +195,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
         }
+
+        // Устанавливаем начальное время
+        startTime = Date.now();
 
         // Обновляем отображение времени каждую секунду
         window.timerInterval = setInterval(() => {
@@ -211,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 time: elapsedTime
             });
 
-            const response = await fetch(`${CONFIG.API_URL}/record-solution`, {
+            const result = await fetchWithAuth(`${API_URL}/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -224,11 +258,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
             console.log('Solution recorded:', result);
 
             // Обновляем отображение рейтинга
