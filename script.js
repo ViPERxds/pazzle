@@ -1,3 +1,8 @@
+window.addEventListener('error', function(e) {
+    console.error('Global error:', e.error);
+    showError('Произошла ошибка: ' + e.error.message);
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     const startPage = document.getElementById('startPage');
     const puzzlePage = document.getElementById('puzzlePage');
@@ -21,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentPuzzle = null;
     let timer = null;
     let startTime = null;
+    let elapsedTime = 0;
     let seconds = 180; 
 
     // Инициализация Telegram WebApp
@@ -73,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            const userRating = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
+            const userRating = await fetchWithAuth(`${window.CONFIG.API_URL}/user-rating/${username}`);
             console.log('Received user rating:', userRating);
             
             const rating = userRating?.rating || 1500;
@@ -102,6 +108,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let seconds = 0;
         const maxTime = 180; // 3 минуты в секундах
         
+        startTime = Date.now(); // Запоминаем время начала
+        
         // Очищаем предыдущий интервал если он был
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
@@ -110,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Обновляем отображение времени каждую секунду
         window.timerInterval = setInterval(() => {
             seconds++;
+            elapsedTime = (Date.now() - startTime) / 1000; // Обновляем затраченное время
             
             // Форматируем время в MM:SS
             const minutes = Math.floor(seconds / 60);
@@ -121,7 +130,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Если прошло 3 минуты, останавливаем секундомер
             if (seconds >= maxTime) {
                 clearInterval(window.timerInterval);
-                // Автоматически отправляем текущее решение как неверное
                 handlePuzzleResult(false);
             }
         }, 1000);
@@ -178,12 +186,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showPuzzle(puzzle) {
-        // ... существующий код ...
+        currentPuzzle = puzzle;
         
-        // Запускаем секундомер вместо таймера
+        // Определяем, кто должен ходить из FEN позиции
+        const fenParts = puzzle.fen1.split(' ');
+        const colorToMove = fenParts[1];
+        
+        // Обновляем конфигурацию
+        puzzleConfig.initialFen = puzzle.fen1;
+        puzzleConfig.preMove = puzzle.move1;
+        puzzleConfig.evaluatedMove = puzzle.move2;
+        puzzleConfig.orientation = colorToMove === 'w' ? 'white' : 'black';
+        puzzleConfig.solution = puzzle.solution;
+
+        // Сбрасываем состояние игры
+        game = new Chess();
+        
+        // Запускаем секундомер
         startStopwatch();
         
-        // ... остальной код ...
+        // Инициализируем доску
+        initializeBoard();
     }
 
     // Обновляем функцию loadPuzzle для работы с реальным API
@@ -596,6 +619,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Заменяем showError на простой alert
     function showError(message) {
+        console.error(message);
         alert(message);
     }
+
+    // Добавляем обработчики для кнопок
+    goodButton.addEventListener('click', () => {
+        handlePuzzleResult(true);
+    });
+
+    blunderButton.addEventListener('click', () => {
+        handlePuzzleResult(false);
+    });
 }); 
