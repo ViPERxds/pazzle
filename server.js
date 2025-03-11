@@ -29,19 +29,7 @@ pool.connect(async (err, client, release) => {
     console.log('Successfully connected to database');
     
     try {
-        // Удаляем существующие таблицы
-        await client.query(`
-            DROP TABLE IF EXISTS Journal CASCADE;
-            DROP TABLE IF EXISTS Puzzles_Tags CASCADE;
-            DROP TABLE IF EXISTS Puzzles CASCADE;
-            DROP TABLE IF EXISTS Users CASCADE;
-            DROP TABLE IF EXISTS Settings CASCADE;
-            DROP TABLE IF EXISTS Tags CASCADE;
-            DROP TABLE IF EXISTS Types CASCADE;
-            DROP TABLE IF EXISTS Complexity CASCADE;
-        `);
-
-        // Создаем таблицы заново
+        // Создаем таблицы если они не существуют
         await client.query(`
             CREATE TABLE IF NOT EXISTS Users (
                 id SERIAL PRIMARY KEY,
@@ -109,7 +97,7 @@ pool.connect(async (err, client, release) => {
             );
         `);
 
-        // Добавляем базовые типы
+        // Добавляем базовые типы если их нет
         await client.query(`
             INSERT INTO Types (type) VALUES 
             ('missed'),
@@ -121,7 +109,7 @@ pool.connect(async (err, client, release) => {
             ON CONFLICT DO NOTHING;
         `);
 
-        // Добавляем базовые уровни сложности
+        // Добавляем базовые уровни сложности если их нет
         await client.query(`
             INSERT INTO Complexity (complexity_type) VALUES 
             ('easy'),
@@ -130,7 +118,7 @@ pool.connect(async (err, client, release) => {
             ON CONFLICT DO NOTHING;
         `);
 
-        // Добавляем базовые настройки
+        // Добавляем базовые настройки если их нет
         await client.query(`
             INSERT INTO Settings (setting, meaning) VALUES 
             ('normal_time', 60),
@@ -139,49 +127,28 @@ pool.connect(async (err, client, release) => {
             ON CONFLICT DO NOTHING;
         `);
 
-        // Сначала получаем все задачи из PuzzlesList
-        const puzzles = await client.query('SELECT * FROM PuzzlesList');
-        console.log(`Found ${puzzles.rows.length} puzzles in PuzzlesList`);
-
-        // Добавляем тестового пользователя
+        // Добавляем тестового пользователя если его нет
         await client.query(`
-            INSERT INTO Users (username)
-            VALUES ('test_user')
+            INSERT INTO Users (username, rating, rd, volatility, status)
+            VALUES ('test_user', 1500, 350, 0.06, true)
             ON CONFLICT (username) DO NOTHING;
         `);
 
-        // Копируем задачи из PuzzlesList в Puzzles
-        if (puzzles.rows.length > 0) {
-            const validTypes = ['missed', 'usual', 'fake', 'worst', 'best', 'not defense'];
-            const values = puzzles.rows.map(p => {
-                // Проверяем и нормализуем цвет
-                const color = p.fen.includes(' w ') ? 'w' : 'b';
-                // Проверяем тип задачи
-                const type = validTypes.includes(p.type) ? p.type : 'usual';
-                // Используем значения из базы данных или null для тегов
-                return `('${p.fen}', '${p.move_1}', '${p.move_2}', '${p.solution}', 1500, 350, 0.06, '${type}', 
-                '${p.tag1 || ''}', '${p.tag2 || ''}', '${p.tag3 || ''}', '${p.tag4 || ''}', '${p.tag5 || ''}', '${p.tag6 || ''}',
-                '${color}', 0)`;
-            }).join(',');
-            
+        // Проверяем, есть ли задачи в базе
+        const puzzlesCount = await client.query('SELECT COUNT(*) FROM Puzzles');
+        if (parseInt(puzzlesCount.rows[0].count) === 0) {
+            // Добавляем базовые тестовые задачи только если таблица пустая
             await client.query(`
-                INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, 
-                tag1, tag2, tag3, tag4, tag5, tag6, color, number)
-                VALUES ${values}
+                INSERT INTO Puzzles (fen1, move1, fen2, move2, solution, type_id, color, rating, rd, volatility, number) VALUES
+                ('r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1', 'h5f7', 'e8f7', '', true, (SELECT id FROM Types WHERE type = 'usual'), true, 1500, 350, 0.06, 0),
+                ('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1', 'f3e5', 'c6e5', '', false, (SELECT id FROM Types WHERE type = 'missed'), false, 1500, 350, 0.06, 0),
+                ('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1', 'f1c4', 'd7d6', '', true, (SELECT id FROM Types WHERE type = 'best'), true, 1500, 350, 0.06, 0)
             `);
-            console.log(`Copied ${puzzles.rows.length} puzzles to Puzzles table`);
+            console.log('Added initial test puzzles');
         }
 
-        // Добавляем базовые задачи с разными цветами
-        await client.query(`
-            INSERT INTO Puzzles (fen, move_1, move_2, solution, rating, rd, volatility, type, color, number) VALUES
-            ('r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1', 'h5f7', 'e8f7', 'Good', 1500, 350, 0.06, 'usual', 'w', 0),
-            ('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1', 'f3e5', 'c6e5', 'Blunder', 1500, 350, 0.06, 'missed', 'b', 0),
-            ('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1', 'f1c4', 'd7d6', 'Good', 1500, 350, 0.06, 'best', 'w', 0)
-        `);
-
     } catch (err) {
-        console.error('Error creating tables:', err);
+        console.error('Error initializing database:', err);
         console.error(err.stack);
     } finally {
         release();
