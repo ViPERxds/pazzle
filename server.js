@@ -97,28 +97,22 @@ pool.connect(async (err, client, release) => {
             );
         `);
 
-        // Инициализируем типы сложности
+        // Инициализируем в правильном порядке
+        // Сначала удаляем данные из зависимых таблиц
+        await client.query('DELETE FROM Journal');
+        await client.query('DELETE FROM Puzzles_Tags');
+        await client.query('DELETE FROM Puzzles');
+        
+        // Теперь инициализируем базовые таблицы
         await initializeComplexity();
-        
-        // Инициализируем типы
         await initializeTypes();
-        
-        // Инициализируем пользователей
         await initializeUsers();
-        
-        // Инициализируем настройки
         await initializeSettings();
-        
-        // Инициализируем задачи
-        await initializePuzzles();
-        
-        // Инициализируем теги
         await initializeTags();
         
-        // Инициализируем связи задач с тегами
+        // Затем инициализируем таблицы с зависимостями
+        await initializePuzzles();
         await initializePuzzlesTags();
-        
-        // Инициализируем журнал
         await initializeJournal();
 
     } catch (err) {
@@ -1811,7 +1805,7 @@ async function initializeTypes() {
             );
         }
         
-        // Сбрасываем последовательность id
+        // Сбрасываем последовательность id после вставки
         await pool.query('SELECT setval(\'types_id_seq\', (SELECT MAX(id) FROM Types))');
         
         console.log('Types initialized successfully');
