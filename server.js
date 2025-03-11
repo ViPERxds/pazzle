@@ -55,6 +55,26 @@ pool.connect(async (err, client, release) => {
         return;
     }
     console.log('Successfully connected to database');
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS Journal (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES Users(id),
+            puzzle_id INTEGER REFERENCES Puzzles(id),
+            success BOOLEAN NOT NULL,
+            time NUMERIC(10,3) NOT NULL,
+            puzzle_rating_before NUMERIC(12,8),
+            puzzle_rd_before NUMERIC(12,8),
+            puzzle_volatility_before NUMERIC(8,8),
+            user_rating_before NUMERIC(12,8),
+            user_rd_before NUMERIC(12,8),
+            user_volatility_before NUMERIC(8,8),
+            user_rating_after NUMERIC(12,8),
+            user_rd_after NUMERIC(12,8),
+            user_volatility_after NUMERIC(8,8),
+            complexity_id INTEGER REFERENCES Complexity(id),
+            date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
     release();
 });
 
@@ -767,6 +787,71 @@ async function updateRating(username, puzzleId, success) {
         client.release();
     }
 }
+
+// Добавляем маршрут для записи решения
+app.post('/api/record-solution', async (req, res) => {
+    try {
+        const { username, puzzleId, success, time } = req.body;
+        
+        console.log('Recording solution:', {
+            username,
+            puzzleId,
+            success,
+            time
+        });
+
+        // Проверяем входные данные
+        if (!username || puzzleId === undefined || success === undefined || time === undefined) {
+            return res.status(400).json({ 
+                error: 'Missing required fields' 
+            });
+        }
+
+        // Получаем ID пользователя
+        const userResult = await pool.query(
+            'SELECT id FROM Users WHERE username = $1',
+            [username]
+        );
+
+        if (userResult.rows.length === 0) {
+            // Создаем нового пользователя если не существует
+            const newUserResult = await pool.query(
+                `INSERT INTO Users (username, rating, rd, volatility) 
+                 VALUES ($1, 1500, 350, 0.06) 
+                 RETURNING id`,
+                [username]
+            );
+            userId = newUserResult.rows[0].id;
+        } else {
+            userId = userResult.rows[0].id;
+        }
+
+        // Записываем решение в журнал
+        await pool.query(
+            `INSERT INTO Journal 
+            (user_id, puzzle_id, success, time, date)
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+            [userId, puzzleId, success, time]
+        );
+
+        // Обновляем рейтинг пользователя
+        const newRating = await updateRating(username, puzzleId, success);
+
+        res.json({
+            success: true,
+            newRating: newRating.rating,
+            newRD: newRating.rd,
+            newVolatility: newRating.volatility
+        });
+
+    } catch (err) {
+        console.error('Error recording solution:', err);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            details: err.message 
+        });
+    }
+});
 
 // Обновляем обработчик ошибок
 app.use((err, req, res, next) => {
