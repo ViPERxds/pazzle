@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
     document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
 
-    // Тестовые данные для локального использования
+    // Обновляем TEST_DATA для соответствия новой структуре
     const TEST_DATA = {
         userRating: {
             rating: 1500,
@@ -46,21 +46,33 @@ document.addEventListener('DOMContentLoaded', function() {
         puzzles: [
             {
                 id: 1,
+                unique_task: 1,
                 fen1: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
                 move1: 'd2d4',
+                fen2: 'r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3',
                 move2: 'c6d4',
-                solution: 'Good',
+                solution: true,
+                type_id: 1,
+                color: true,
                 rating: 1500,
-                complexity: 4
+                rd: 350,
+                volatility: 0.06,
+                number: 0
             },
             {
                 id: 2,
+                unique_task: 2,
                 fen1: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
                 move1: 'g1f3',
+                fen2: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
                 move2: 'd7d5',
-                solution: 'Blunder',
+                solution: false,
+                type_id: 2,
+                color: false,
                 rating: 1600,
-                complexity: 3
+                rd: 350,
+                volatility: 0.06,
+                number: 0
             }
         ]
     };
@@ -178,71 +190,89 @@ document.addEventListener('DOMContentLoaded', function() {
         return seconds;
     }
 
-    // Функция для отправки решения
-    function submitSolution(success) {
+    // Обновляем функцию showPuzzle
+    function showPuzzle(puzzle) {
+        if (!puzzle) {
+            console.error('No puzzle data provided');
+            return;
+        }
+
+        console.log('Showing puzzle:', puzzle);
+
+        // Определяем цвет из булева значения
+        const orientation = puzzle.color ? 'white' : 'black';
+        
+        // Обновляем конфигурацию
+        puzzleConfig.initialFen = puzzle.fen1;
+        puzzleConfig.preMove = puzzle.move1;
+        puzzleConfig.evaluatedMove = puzzle.move2;
+        puzzleConfig.orientation = orientation;
+        puzzleConfig.solution = puzzle.solution ? 'Good' : 'Blunder';
+
+        // Сбрасываем состояние игры
+        game = new Chess();
+        initializeBoard();
+    }
+
+    // Обновляем функцию submitSolution
+    async function submitSolution(success) {
         try {
             if (!currentPuzzle || !currentPuzzle.id) {
                 console.error('No current puzzle or puzzle ID!');
                 showError('Нет текущей задачи!');
                 return;
             }
-            
-            console.log('Sending data:', { puzzle_id: currentPuzzle.id, user_id: currentUsername, success: success, time: elapsedTime, complexity_id: currentPuzzle.complexity || 1 });
-            
-            // Вместо отправки на сервер, просто логируем результат
-            console.log(`Решение ${success ? 'правильное' : 'неправильное'} для задачи ${currentPuzzle.id}`);
-            console.log(`Время решения: ${elapsedTime} секунд`);
-            
+
             // Останавливаем таймер
             if (window.timerInterval) {
                 clearInterval(window.timerInterval);
             }
-            
-            // Обновляем локальный рейтинг (имитация)
-            const ratingChange = success ? 10 : -5;
-            const currentRating = TEST_DATA.userRating.rating;
-            TEST_DATA.userRating.rating = Math.max(100, currentRating + ratingChange);
-            
-            console.log(`Рейтинг изменен: ${currentRating} -> ${TEST_DATA.userRating.rating}`);
-            
-            // Переходим к результатам
-            setTimeout(() => {
-                puzzlePage.classList.add('hidden');
-                resultPage.classList.remove('hidden');
-                
-                // Показываем результат
-                const resultText = document.getElementById('resultText');
-                if (resultText) {
-                    resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
-                    resultText.className = success ? 'success' : 'failure';
-                }
-                
-                // Показываем изменение рейтинга
-                const ratingChangeElement = document.getElementById('ratingChange');
-                if (ratingChangeElement) {
-                    ratingChangeElement.textContent = `${ratingChange > 0 ? '+' : ''}${ratingChange}`;
-                    ratingChangeElement.className = ratingChange > 0 ? 'success' : 'failure';
-                }
-                
-                // Показываем новый рейтинг
-                const newRatingElement = document.getElementById('newRating');
-                if (newRatingElement) {
-                    newRatingElement.textContent = TEST_DATA.userRating.rating;
-                }
-            }, 500);
-        } catch (error) {
-            console.error('Error recording solution:', error);
-            showError('Ошибка при записи решения: ' + error.message);
-        }
-    }
 
-    function showPuzzle(puzzle) {
-        // ... существующий код ...
-        
-        // Запускаем секундомер вместо таймера
-        startStopwatch();
-        
-        // ... остальной код ...
+            // Получаем время решения
+            const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+
+            console.log('Sending solution:', {
+                username: currentUsername,
+                puzzleId: currentPuzzle.id,
+                success: success,
+                time: elapsedTime
+            });
+
+            const response = await fetch(`${CONFIG.API_URL}/record-solution`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: currentUsername,
+                    puzzleId: currentPuzzle.id,
+                    success: success,
+                    time: elapsedTime
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Solution recorded:', result);
+
+            // Обновляем отображение рейтинга
+            ratingElements.forEach(el => {
+                el.textContent = Math.round(result.rating);
+            });
+
+            // Показываем результат
+            puzzlePage.classList.add('hidden');
+            resultPage.classList.remove('hidden');
+            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
+            resultText.className = success ? 'success' : 'failure';
+
+        } catch (error) {
+            console.error('Error submitting solution:', error);
+            showError('Ошибка при отправке решения: ' + error.message);
+        }
     }
 
     // Улучшенная функция загрузки задачи
@@ -708,7 +738,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Отправляем решение
-            submitSolution(isCorrect);
+            await submitSolution(isCorrect);
         } catch (error) {
             console.error('Error handling puzzle result:', error);
             showError('Ошибка при обработке результата: ' + error.message);
