@@ -664,20 +664,19 @@ async function getUserRating(username) {
 // Функция для получения рейтинга задачи
 async function getPuzzleRating(puzzleId) {
     try {
+        console.log('Getting rating for puzzle:', puzzleId);
         const result = await pool.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+            'SELECT id, rating, rd, volatility FROM Puzzles WHERE id = $1',
             [puzzleId]
         );
         
         if (result.rows.length === 0) {
-            throw new Error('Puzzle not found');
+            console.error('Puzzle not found:', puzzleId);
+            throw new Error(`Puzzle ${puzzleId} not found`);
         }
         
-        return {
-            rating: result.rows[0].rating,
-            rd: result.rows[0].rd,
-            volatility: result.rows[0].volatility
-        };
+        console.log('Found puzzle rating:', result.rows[0]);
+        return result.rows[0];
     } catch (err) {
         console.error('Error getting puzzle rating:', err);
         throw err;
@@ -727,7 +726,7 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
 
         // Получаем информацию о задаче
         const puzzleResult = await client.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+            'SELECT id, rating, rd, volatility FROM Puzzles WHERE id = $1',
             [puzzleId]
         );
 
@@ -802,32 +801,52 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
 
 // Обновляем функцию calculateNewRatings без жесткого ограничения
 function calculateNewRatings(userRating, puzzleRating, R) {
-    // Константы
-    const q = Math.log(10) / 400;
-    const c = 34.6;
-    
-    // Шаг 1: Определение отклонения рейтинга (RD)
-    const RD = Math.min(Math.sqrt(userRating.rd * userRating.rd + c * c), 350);
-    
-    // Шаг 2: Определение нового рейтинга
-    const g = 1 / Math.sqrt(1 + 3 * q * q * puzzleRating.rd * puzzleRating.rd / (Math.PI * Math.PI));
-    const E = 1 / (1 + Math.pow(10, g * (userRating.rating - puzzleRating.rating) / -400));
-    const d2 = 1 / (q * q * g * g * E * (1 - E));
-    
-    // Вычисляем изменение рейтинга без ограничений
-    const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
-    
-    // Преобразуем строковые значения в числовые и выполняем вычисление
-    const newRating = parseFloat(userRating.rating) + ratingChange;
-    
-    // Шаг 3: Определение нового отклонения рейтинга
-    const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
-    
-    return {
-        userRating: newRating.toFixed(8),
-        userRD: newRD,
-        userVolatility: userRating.volatility
-    };
+    try {
+        console.log('Calculating new ratings with:', { userRating, puzzleRating, R });
+        
+        // Преобразуем строковые значения в числовые
+        const userRatingNum = parseFloat(userRating.rating);
+        const userRDNum = parseFloat(userRating.rd);
+        const puzzleRatingNum = parseFloat(puzzleRating.rating);
+        const puzzleRDNum = parseFloat(puzzleRating.rd);
+        
+        // Константы
+        const q = Math.log(10) / 400;
+        const c = 34.6;
+        
+        // Шаг 1: Определение отклонения рейтинга (RD)
+        const RD = Math.min(Math.sqrt(userRDNum * userRDNum + c * c), 350);
+        
+        // Шаг 2: Определение нового рейтинга
+        const g = 1 / Math.sqrt(1 + 3 * q * q * puzzleRDNum * puzzleRDNum / (Math.PI * Math.PI));
+        const E = 1 / (1 + Math.pow(10, g * (userRatingNum - puzzleRatingNum) / -400));
+        const d2 = 1 / (q * q * g * g * E * (1 - E));
+        
+        // Вычисляем изменение рейтинга
+        const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
+        
+        // Вычисляем новый рейтинг
+        const newRating = userRatingNum + ratingChange;
+        
+        // Шаг 3: Определение нового отклонения рейтинга
+        const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
+        
+        // Формируем результат с фиксированным количеством знаков после запятой
+        const result = {
+            userRating: newRating.toFixed(8),
+            userRD: newRD,
+            userVolatility: userRating.volatility,
+            puzzleRating: (puzzleRatingNum - ratingChange).toFixed(8),
+            puzzleRD: puzzleRDNum,
+            puzzleVolatility: puzzleRating.volatility
+        };
+        
+        console.log('Calculated new ratings:', result);
+        return result;
+    } catch (err) {
+        console.error('Error calculating new ratings:', err);
+        throw err;
+    }
 }
 
 // API endpoints
@@ -961,10 +980,18 @@ async function getSettings() {
 // Добавляем функцию getPuzzleRating
 async function getPuzzleRating(puzzleId) {
     try {
+        console.log('Getting rating for puzzle:', puzzleId);
         const result = await pool.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+            'SELECT id, rating, rd, volatility FROM Puzzles WHERE id = $1',
             [puzzleId]
         );
+        
+        if (result.rows.length === 0) {
+            console.error('Puzzle not found:', puzzleId);
+            throw new Error(`Puzzle ${puzzleId} not found`);
+        }
+        
+        console.log('Found puzzle rating:', result.rows[0]);
         return result.rows[0];
     } catch (err) {
         console.error('Error getting puzzle rating:', err);
