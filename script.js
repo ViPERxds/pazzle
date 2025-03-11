@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const timerElement = document.querySelector('.timer');
     
     // Определяем API URL
-    const API_URL = 'https://chess-puzzles-bot.onrender.com';
+    const API_URL = '';  // Пустая строка для относительных путей
     
     // Проверяем, найдены ли элементы
     console.log('API URL:', API_URL);
