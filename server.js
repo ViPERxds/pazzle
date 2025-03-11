@@ -34,7 +34,7 @@ pool.connect(async (err, client, release) => {
             CREATE TABLE IF NOT EXISTS Users (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(255),
-                telegram_id INTEGER,
+                telegram_id BIGINT,
                 rating NUMERIC(12,8) DEFAULT 1500,
                 rd NUMERIC(12,8) DEFAULT 350,
                 volatility NUMERIC(8,8) DEFAULT 0.06,
