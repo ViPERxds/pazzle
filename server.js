@@ -788,7 +788,7 @@ async function updateRating(username, puzzleId, success) {
     }
 }
 
-// Добавляем маршрут для записи решения
+// Исправляем маршрут для записи решения
 app.post('/api/record-solution', async (req, res) => {
     try {
         const { username, puzzleId, success, time } = req.body;
@@ -806,6 +806,9 @@ app.post('/api/record-solution', async (req, res) => {
                 error: 'Missing required fields' 
             });
         }
+
+        // Объявляем userId в правильной области видимости
+        let userId;
 
         // Получаем ID пользователя
         const userResult = await pool.query(
@@ -830,12 +833,21 @@ app.post('/api/record-solution', async (req, res) => {
         await pool.query(
             `INSERT INTO Journal 
             (user_id, puzzle_id, success, time, date)
-            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            RETURNING id`, // Добавляем RETURNING для проверки успешности вставки
             [userId, puzzleId, success, time]
         );
 
         // Обновляем рейтинг пользователя
         const newRating = await updateRating(username, puzzleId, success);
+
+        console.log('Successfully recorded solution and updated rating:', {
+            userId,
+            puzzleId,
+            success,
+            time,
+            newRating
+        });
 
         res.json({
             success: true,
@@ -848,7 +860,8 @@ app.post('/api/record-solution', async (req, res) => {
         console.error('Error recording solution:', err);
         res.status(500).json({ 
             error: 'Internal server error',
-            details: err.message 
+            details: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
     }
 });
