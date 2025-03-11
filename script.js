@@ -427,8 +427,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Находим квадраты
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        const fromSquare = boardEl.querySelector(`[data-square="${from}"]`);
+        const toSquare = boardEl.querySelector(`[data-square="${to}"]`);
 
         if (!fromSquare || !toSquare) {
             console.error('Squares not found:', from, to);
@@ -450,20 +450,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const boardRect = boardEl.getBoundingClientRect();
 
         // Вычисляем центры квадратов относительно доски
-        const x1 = fromRect.left + fromRect.width/2 - boardRect.left;
-        const y1 = fromRect.top + fromRect.height/2 - boardRect.top;
-        const x2 = toRect.left + toRect.width/2 - boardRect.left;
-        const y2 = toRect.top + toRect.height/2 - boardRect.top;
+        const fromCenter = {
+            x: fromRect.left + fromRect.width/2 - boardRect.left,
+            y: fromRect.top + fromRect.height/2 - boardRect.top
+        };
+        const toCenter = {
+            x: toRect.left + toRect.width/2 - boardRect.left,
+            y: toRect.top + toRect.height/2 - boardRect.top
+        };
 
         // Вычисляем длину и угол стрелки
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
-        const angle = Math.atan2(y2-y1, x2-x1) * 180 / Math.PI;
+        const dx = toCenter.x - fromCenter.x;
+        const dy = toCenter.y - fromCenter.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
 
         // Устанавливаем размеры и позицию стрелки
         arrow.style.width = `${length}px`;
-        arrow.style.height = '8px'; // Уменьшил толщину стрелки
-        arrow.style.left = `${x1}px`;
-        arrow.style.top = `${y1-4}px`; // Центрируем стрелку по вертикали
+        arrow.style.height = '10px';
+        arrow.style.left = `${fromCenter.x}px`;
+        arrow.style.top = `${fromCenter.y - 5}px`;
         arrow.style.transformOrigin = '0 50%';
         arrow.style.transform = `rotate(${angle}deg)`;
 
@@ -471,12 +477,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const arrowHead = document.createElement('div');
         arrowHead.style.position = 'absolute';
         arrowHead.style.right = '-10px';
-        arrowHead.style.top = '-8px'; // Центрируем наконечник
+        arrowHead.style.top = '-10px';
         arrowHead.style.width = '0';
         arrowHead.style.height = '0';
-        arrowHead.style.borderLeft = '16px solid ' + (color || '#00ff00');
-        arrowHead.style.borderTop = '12px solid transparent';
-        arrowHead.style.borderBottom = '12px solid transparent';
+        arrowHead.style.borderLeft = '20px solid ' + (color || '#00ff00');
+        arrowHead.style.borderTop = '15px solid transparent';
+        arrowHead.style.borderBottom = '15px solid transparent';
         arrowHead.style.opacity = '0.5';
 
         arrow.appendChild(arrowHead);
