@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
             onDragStart: onDragStart,
             onDrop: onDrop,
             onSnapEnd: onSnapEnd,
-            pieceTheme: 'img/chesspieces/wikipedia/{piece}.png',
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             appearSpeed: 200,
             moveSpeed: 300,
             snapbackSpeed: 100,
