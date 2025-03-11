@@ -48,8 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Используем реальный запрос к API
             const headers = {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Origin': window.location.origin
+                'Accept': 'application/json'
             };
             
             if (options.headers) {
@@ -61,8 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(url, {
                 ...options,
                 headers: headers,
-                mode: 'cors',
-                credentials: 'include'
+                mode: 'cors'
             });
             
             if (!response.ok) {
@@ -83,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            const userRating = await fetchWithAuth(`${API_URL}/user-rating/${username}`);
+            const userRating = await fetchWithAuth(`/api/user-rating/${username}`);
             console.log('Received user rating:', userRating);
             
             const rating = userRating?.rating || 1500;
@@ -163,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 time: elapsedTime
             });
 
-            const result = await fetchWithAuth(`${API_URL}/record-solution`, {
+            const result = await fetchWithAuth(`/api/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -223,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Loading puzzle for user:', username);
             
             // Получаем задачу через API
-            const puzzle = await fetchWithAuth(`${API_URL}/random-puzzle/${username}`);
+            const puzzle = await fetchWithAuth(`/api/random-puzzle/${username}`);
             console.log('Received puzzle:', puzzle);
             
             if (!puzzle) {
