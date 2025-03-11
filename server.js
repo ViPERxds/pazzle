@@ -303,6 +303,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Сбрасываем состояние игры
         game = new Chess();
         initializeBoard();
+
+        // После инициализации доски и выполнения предварительного хода, показываем стрелку
+        setTimeout(() => {
+            if (puzzleConfig.preMove) {
+                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+                drawArrow(from, to, '#00ff00');
+            }
+        }, 1500); // Даем время на выполнение предварительного хода
     }
 
     // Улучшенная функция загрузки задачи
@@ -417,33 +425,41 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Board element not found');
             return;
         }
+
+        // Находим квадраты для хода
+        const fromSquare = board.querySelector(`[data-square="${from}"]`);
+        const toSquare = board.querySelector(`[data-square="${to}"]`);
         
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        if (!fromSquare || !toSquare) {
+            console.error('Squares not found:', from, to);
+            return;
+        }
+
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
+        
+        // Размер квадрата
         const squareSize = boardRect.width / 8;
 
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
+        // Вычисляем координаты центров квадратов относительно доски
+        const x1 = (fromSquare.offsetLeft + squareSize/2);
+        const y1 = (fromSquare.offsetTop + squareSize/2);
+        const x2 = (toSquare.offsetLeft + squareSize/2);
+        const y2 = (toSquare.offsetTop + squareSize/2);
 
-        // Вычисляем угол и размеры
+        // Параметры стрелки
         const angle = Math.atan2(y2 - y1, x2 - x1);
         const width = squareSize * 0.15;
         const headWidth = squareSize * 0.3;
         const headLength = squareSize * 0.3;
-
-        // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
         const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
 
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+
         path.setAttribute("d", `
             M ${x1 - width*dy} ${y1 + width*dx}
             L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
@@ -454,7 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
-        path.setAttribute("fill", color);
+        path.setAttribute("fill", color || '#00ff00');
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
