@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const timerElement = document.querySelector('.timer');
     
     // Определяем API URL
-    const API_URL = '';  // Пустая строка для относительных путей
+    const API_URL = window.location.origin;  // Используем текущий домен
     
     // Проверяем, найдены ли элементы
     console.log('API URL:', API_URL);
@@ -81,12 +81,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
-            const userRating = await fetchWithAuth(`/api/user-rating/${username}`);
+            const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${username}`);
             console.log('Received user rating:', userRating);
             
-            const rating = userRating?.rating || 1500;
+            if (!userRating || !userRating.rating) {
+                throw new Error('getUserRating is not defined');
+            }
+            
+            const rating = parseFloat(userRating.rating).toFixed(0);
             ratingElements.forEach(el => {
-                el.textContent = Math.round(rating);
+                el.textContent = rating;
                 el.style.color = 'black';
             });
             return rating;
@@ -161,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 time: elapsedTime
             });
 
-            const result = await fetchWithAuth(`/api/record-solution`, {
+            const result = await fetchWithAuth(`${API_URL}/api/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -221,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Loading puzzle for user:', username);
             
             // Получаем задачу через API
-            const puzzle = await fetchWithAuth(`/api/random-puzzle/${username}`);
+            const puzzle = await fetchWithAuth(`${API_URL}/api/random-puzzle/${username}`);
             console.log('Received puzzle:', puzzle);
             
             if (!puzzle) {
@@ -237,7 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (!puzzle.move2) {
-                throw new Error('Отсутствует оцениваемый ход');
+                puzzle.move2 = '';  // Устанавливаем пустую строку если move2 отсутствует
             }
             
             if (!puzzle.id) {
