@@ -478,31 +478,6 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
             return acc;
         }, {});
 
-        // Получаем базовые вероятности для типов задач
-        const typesProbabilities = {
-            'лучший': settings['Базовая вероятность критерия "лучший"'],
-            'защита': settings['Базовая вероятность критерия "защита"'],
-            'обычный': settings['Базовая вероятность критерия "обычный"'],
-            'пропуск': settings['Базовая вероятность критерия "пропуск"'],
-            'фейк': settings['Базовая вероятность критерия "фейк"'],
-            'нет защиты': settings['Базовая вероятность критерия "нет защиты"'],
-            'подстава': settings['Базовая вероятность критерия "подстава"']
-        };
-
-        // Получаем базовые вероятности для сложности
-        const complexityProbabilities = {
-            'супер легкая': settings['Базовая вероятность критерия "супер легкая"'],
-            'очень легкая': settings['Базовая вероятность критерия "очень легкая"'],
-            'легкая': settings['Базовая вероятность критерия "легкая"'],
-            'средняя': settings['Базовая вероятность критерия "средняя"'],
-            'сложная': settings['Базовая вероятность критерия "сложная"'],
-            'очень сложная': settings['Базовая вероятность критерия "очень сложная"'],
-            'супер сложная': settings['Базовая вероятность критерия "супер сложная"']
-        };
-
-        // Коэффициент понижения базовой вероятности
-        const probabilityReductionCoef = settings['Коэффициент понижения базовой вероятности'];
-
         // Получаем все нерешенные задачи с их типами
         const puzzlesResult = await pool.query(`
             SELECT 
@@ -520,9 +495,10 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
             FROM Puzzles p
             LEFT JOIN Types t ON p.type_id = t.id
             WHERE p.id NOT IN (
-                SELECT puzzle_id 
+                SELECT DISTINCT puzzle_id 
                 FROM Journal 
                 WHERE user_id = $1
+                AND success = true
             )
         `, [userId]);
 
@@ -542,48 +518,24 @@ async function findPuzzleWithCriteria(userId, userRating, userPerformance) {
             return findPuzzleWithCriteria(userId, userRating, userPerformance);
         }
 
-        // Вычисляем вероятность выбора для каждой задачи
-        const puzzlesWithProbabilities = puzzlesResult.rows.map(puzzle => {
-            // Базовая вероятность по типу
-            let probability = typesProbabilities[puzzle.puzzle_type] || 0.5;
-            
-            // Учитываем сложность
-            probability *= complexityProbabilities[puzzle.last_complexity] || 0.35;
-            
-            // Учитываем рейтинг
-            const ratingDiff = Math.abs(puzzle.rating - userRating);
-            if (ratingDiff > 300) {
-                probability *= probabilityReductionCoef;
-            }
-            
-            // Учитываем перформанс
-            if (userPerformance && Math.abs(puzzle.rating - userPerformance) > settings['Стандартное отклонение']) {
-                probability *= probabilityReductionCoef;
-            }
+        // Выбираем случайную задачу из доступных
+        const randomIndex = Math.floor(Math.random() * puzzlesResult.rows.length);
+        const selectedPuzzle = puzzlesResult.rows[randomIndex];
 
-            return {
-                ...puzzle,
-                probability
-            };
-        });
-
-        // Нормализуем вероятности
-        const totalProbability = puzzlesWithProbabilities.reduce((sum, p) => sum + p.probability, 0);
-        puzzlesWithProbabilities.forEach(p => p.probability /= totalProbability);
-
-        // Выбираем задачу случайным образом с учетом вероятностей
-        const random = Math.random();
-        let cumulativeProbability = 0;
-        
-        for (const puzzle of puzzlesWithProbabilities) {
-            cumulativeProbability += puzzle.probability;
-            if (random <= cumulativeProbability) {
-                return puzzle;
-            }
-        }
-
-        // Если по какой-то причине не выбрали задачу, возвращаем случайную
-        return puzzlesWithProbabilities[Math.floor(Math.random() * puzzlesWithProbabilities.length)];
+        // Преобразуем данные в нужный формат
+        return {
+            id: selectedPuzzle.id,
+            rating: selectedPuzzle.rating,
+            rd: selectedPuzzle.rd,
+            volatility: selectedPuzzle.volatility,
+            fen1: selectedPuzzle.fen1,
+            move1: selectedPuzzle.move1,
+            fen2: selectedPuzzle.fen2,
+            move2: selectedPuzzle.move2,
+            solution: selectedPuzzle.solution,
+            color: selectedPuzzle.color,
+            type_id: selectedPuzzle.type_id
+        };
     } catch (err) {
         console.error('Error in findPuzzleWithCriteria:', err);
         throw err;
@@ -888,13 +840,24 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
             throw new Error('No available puzzles found');
         }
 
-        // Преобразуем boolean в строку для solution и color
+        console.log('Found puzzle:', puzzle);
+
+        // Преобразуем данные в нужный формат
         const response = {
-            ...puzzle,
+            id: puzzle.id,
+            rating: puzzle.rating,
+            rd: puzzle.rd,
+            volatility: puzzle.volatility,
+            fen1: puzzle.fen1,
+            move1: puzzle.move1,
+            fen2: puzzle.fen2 || puzzle.fen1,
+            move2: puzzle.move2 || '',
             solution: puzzle.solution ? 'Good' : 'Blunder',
-            color: puzzle.color ? 'w' : 'b'
+            color: puzzle.color ? 'w' : 'b',
+            type_id: puzzle.type_id
         };
 
+        console.log('Sending response:', response);
         res.json(response);
     } catch (err) {
         console.error('Error in /api/random-puzzle:', err);
