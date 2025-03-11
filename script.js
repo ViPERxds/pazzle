@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Устанавливаем начальную позицию
         game.load(puzzleConfig.initialFen);
         
-        // Создаем новую доску
+        // Создаем новую доску без анимаций
         board = Chessboard('board', {
             position: puzzleConfig.initialFen,
             orientation: puzzleConfig.orientation,
@@ -49,56 +49,35 @@ document.addEventListener('DOMContentLoaded', function() {
             onDrop: onDrop,
             onSnapEnd: onSnapEnd,
             pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
-            appearSpeed: 200,
-            moveSpeed: 300,
-            snapbackSpeed: 100,
-            snapSpeed: 100,
-            trashSpeed: 100
+            moveSpeed: 0,
+            snapbackSpeed: 0,
+            snapSpeed: 0,
+            trashSpeed: 0,
+            appearSpeed: 0
         });
 
-        // Делаем предварительный ход с анимацией после инициализации доски
+        // Делаем предварительный ход
         if (puzzleConfig.preMove) {
-            // Ждем немного, чтобы доска успела инициализироваться
-            setTimeout(() => {
-                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                console.log('Attempting premove:', from, 'to', to);
-                
-                // Проверяем наличие фигуры
-                const piece = game.get(from);
-                console.log('Piece at', from, ':', piece, 'Current turn:', game.turn());
-                
-                if (!piece) {
-                    console.error('No piece at', from);
-                    showError('Ошибка: нет фигуры на начальной позиции');
-                    return;
-                }
+            const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+            console.log('Making premove:', from, 'to', to);
+            
+            // Делаем ход в игре
+            const move = game.move({
+                from: from,
+                to: to,
+                promotion: 'q'
+            });
 
-                // Загружаем начальную позицию
-                game.load(puzzleConfig.initialFen);
-                
-                // Делаем ход
-                const move = game.move({
-                    from: from,
-                    to: to,
-                    promotion: 'q'
-                });
-
-                if (move) {
-                    console.log('Premove successful:', move);
-                    // Обновляем позицию на доске с анимацией
-                    board.position(game.fen(), true);
-                    // Рисуем стрелку после того как позиция обновится
-                    setTimeout(() => {
-                        drawArrow(from, to, '#00ff00');
-                    }, 500);
-                } else {
-                    console.error('Failed to make premove:', from, to);
-                    showError('Невозможный ход: ' + from + ' -> ' + to);
-                    // Возвращаем начальную позицию
-                    game.load(puzzleConfig.initialFen);
-                    board.position(puzzleConfig.initialFen);
-                }
-            }, 100);
+            if (move) {
+                console.log('Move made in game:', move);
+                // Обновляем позицию на доске без анимации
+                board.position(game.fen(), false);
+                // Рисуем стрелку
+                drawArrow(from, to, '#00ff00');
+            } else {
+                console.error('Failed to make move:', from, to);
+                showError('Невозможный ход: ' + from + ' -> ' + to);
+            }
         }
     }
     
