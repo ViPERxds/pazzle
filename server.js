@@ -9,7 +9,7 @@ const app = express();
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 app.use(express.json());
 
@@ -702,6 +702,65 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
     }
 });
 
+// Добавляем функцию для записи решения задачи
+async function recordPuzzleSolution(username, puzzleId, success, time) {
+    try {
+        console.log('Recording solution:', { username, puzzleId, success, time });
+        
+        // Получаем ID пользователя
+        const userResult = await pool.query(
+            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
+            [username]
+        );
+        
+        if (userResult.rows.length === 0) {
+            throw new Error('User not found');
+        }
+        
+        const userId = userResult.rows[0].id;
+        const userRating = {
+            rating: userResult.rows[0].rating,
+            rd: userResult.rows[0].rd,
+            volatility: userResult.rows[0].volatility
+        };
+        
+        // Получаем рейтинг задачи
+        const puzzleResult = await pool.query(
+            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+            [puzzleId]
+        );
+        
+        if (puzzleResult.rows.length === 0) {
+            throw new Error('Puzzle not found');
+        }
+        
+        const puzzleRating = {
+            rating: puzzleResult.rows[0].rating,
+            rd: puzzleResult.rows[0].rd,
+            volatility: puzzleResult.rows[0].volatility
+        };
+        
+        // Записываем решение в журнал
+        await pool.query(
+            `INSERT INTO Journal 
+            (user_id, puzzle_id, success, time_success, puzzle_rating_before)
+            VALUES ($1, $2, $3, $4, $5)`,
+            [userId, puzzleId, success, time, puzzleRating.rating]
+        );
+        
+        // Возвращаем текущий рейтинг пользователя
+        return {
+            rating: userRating.rating,
+            rd: userRating.rd,
+            volatility: userRating.volatility
+        };
+    } catch (err) {
+        console.error('Error recording solution:', err);
+        throw err;
+    }
+}
+
+// Обновляем обработчик POST /api/record-solution
 app.post('/api/record-solution', async (req, res) => {
     try {
         const { username, puzzleId, success, time } = req.body;
@@ -716,29 +775,13 @@ app.post('/api/record-solution', async (req, res) => {
             });
         }
 
-        // Проверяем существование пользователя
-        const userExists = await pool.query('SELECT id FROM Users WHERE username = $1', [username]);
-        if (userExists.rows.length === 0) {
-            // Если пользователя нет, создаем его
-            await pool.query(
-                'INSERT INTO Users (username, rating, rd, volatility, status) VALUES ($1, 1500, 350, 0.06, true)',
-                [username]
-            );
-        }
-
-        // Проверяем существование задачи
-        const puzzleExists = await pool.query('SELECT id FROM Puzzles WHERE id = $1', [puzzleId]);
-        if (puzzleExists.rows.length === 0) {
-            return res.status(404).json({ error: 'Puzzle not found' });
-        }
-
         const result = await recordPuzzleSolution(username, puzzleId, success, time);
         
         res.json({
             status: 'success',
-            rating: result.userRating,
-            rd: result.userRD,
-            volatility: result.userVolatility
+            rating: result.rating,
+            rd: result.rd,
+            volatility: result.volatility
         });
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
@@ -1746,6 +1789,35 @@ async function initializePuzzlesTags() {
         console.log('Puzzles-Tags relations initialized successfully');
     } catch (err) {
         console.error('Error initializing puzzles-tags relations:', err);
+        throw err;
+    }
+}
+
+// Добавляем функцию для получения рейтинга пользователя
+async function getUserRating(username) {
+    try {
+        console.log('Getting rating for user:', username);
+        const result = await pool.query(
+            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
+            [username]
+        );
+        
+        if (result.rows.length === 0) {
+            // Если пользователь не найден, создаем нового
+            console.log('User not found, creating new user:', username);
+            const newUser = await pool.query(
+                `INSERT INTO Users (username, rating, rd, volatility, status) 
+                 VALUES ($1, 1500, 350, 0.06, true) 
+                 RETURNING rating, rd, volatility`,
+                [username]
+            );
+            return newUser.rows[0];
+        }
+        
+        console.log('Found user rating:', result.rows[0]);
+        return result.rows[0];
+    } catch (err) {
+        console.error('Error getting user rating:', err);
         throw err;
     }
 }
