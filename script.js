@@ -53,30 +53,25 @@ document.addEventListener('DOMContentLoaded', function() {
             moveSpeed: 300,
             snapbackSpeed: 100,
             snapSpeed: 100,
-            trashSpeed: 100,
-            onChange: () => {
-                // Если был сделан предварительный ход, рисуем стрелку
-                if (puzzleConfig.preMove && game.history().length > 0) {
-                    const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                    drawArrow(from, to, '#00ff00');
-                }
-            }
+            trashSpeed: 100
         });
-        
-        // Делаем предварительный ход с анимацией
+
+        // Делаем предварительный ход с анимацией после инициализации доски
         if (puzzleConfig.preMove) {
             const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+            console.log('Attempting premove:', from, 'to', to);
             
-            // Проверяем, что ход возможен
+            // Проверяем наличие фигуры
             const piece = game.get(from);
+            console.log('Piece at', from, ':', piece);
+            
             if (!piece) {
                 console.error('No piece at', from);
                 showError('Ошибка: нет фигуры на начальной позиции');
                 return;
             }
             
-            console.log('Making premove:', from, 'to', to, 'piece:', piece);
-            
+            // Делаем ход
             const move = game.move({
                 from: from,
                 to: to,
@@ -84,13 +79,16 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (move) {
-                board.position(game.fen(), true); // true для анимации
+                console.log('Premove successful:', move);
+                // Обновляем позицию на доске с анимацией
+                board.position(game.fen(), true);
+                // Рисуем стрелку после того как позиция обновится
                 setTimeout(() => {
                     drawArrow(from, to, '#00ff00');
                 }, 500);
             } else {
                 console.error('Failed to make premove:', from, to);
-                showError('Невозможно выполнить предварительный ход');
+                showError('Невозможный ход: ' + from + ' -> ' + to);
             }
         }
     }
