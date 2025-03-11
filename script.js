@@ -71,10 +71,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Проверяем, что это ход правильного цвета
-            if (game.turn() !== piece.color) {
-                game.load(puzzleConfig.initialFen); // Перезагружаем позицию
-            }
+            // Загружаем позицию заново и устанавливаем правильную очередь хода
+            const fen = puzzleConfig.initialFen;
+            const fenParts = fen.split(' ');
+            // Устанавливаем очередь хода в соответствии с цветом фигуры
+            fenParts[1] = piece.color;
+            const newFen = fenParts.join(' ');
+            game.load(newFen);
             
             // Делаем ход
             const move = game.move({
