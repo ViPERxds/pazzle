@@ -420,43 +420,39 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        const board = document.querySelector('#board');
-        if (!board) {
+        const boardEl = document.querySelector('#board');
+        if (!boardEl) {
             console.error('Board element not found');
             return;
         }
 
-        // Находим квадраты для хода
-        const squares = board.getElementsByClassName('square-55d63');
-        let fromSquare = null;
-        let toSquare = null;
-
-        // Ищем нужные квадраты по координатам
-        for (let square of squares) {
-            const dataSquare = square.getAttribute('data-square');
-            if (dataSquare === from) fromSquare = square;
-            if (dataSquare === to) toSquare = square;
-        }
-        
-        if (!fromSquare || !toSquare) {
-            console.error('Squares not found:', from, to);
-            return;
-        }
-
-        const boardRect = board.getBoundingClientRect();
+        // Получаем размеры доски
+        const boardRect = boardEl.getBoundingClientRect();
         const squareSize = boardRect.width / 8;
 
-        // Получаем координаты квадратов
-        const fromFile = from.charCodeAt(0) - 'a'.charCodeAt(0);
-        const fromRank = 8 - parseInt(from[1]);
-        const toFile = to.charCodeAt(0) - 'a'.charCodeAt(0);
-        const toRank = 8 - parseInt(to[1]);
+        // Преобразуем координаты в числа (0-7)
+        const fromCoords = {
+            x: from.charCodeAt(0) - 'a'.charCodeAt(0),
+            y: 8 - parseInt(from[1])
+        };
+        const toCoords = {
+            x: to.charCodeAt(0) - 'a'.charCodeAt(0),
+            y: 8 - parseInt(to[1])
+        };
 
-        // Вычисляем координаты центров квадратов
-        const x1 = fromFile * squareSize + squareSize / 2;
-        const y1 = fromRank * squareSize + squareSize / 2;
-        const x2 = toFile * squareSize + squareSize / 2;
-        const y2 = toRank * squareSize + squareSize / 2;
+        // Если доска перевернута (черными), меняем координаты
+        if (puzzleConfig.orientation === 'black') {
+            fromCoords.x = 7 - fromCoords.x;
+            fromCoords.y = 7 - fromCoords.y;
+            toCoords.x = 7 - toCoords.x;
+            toCoords.y = 7 - toCoords.y;
+        }
+
+        // Вычисляем центры квадратов
+        const x1 = fromCoords.x * squareSize + squareSize / 2;
+        const y1 = fromCoords.y * squareSize + squareSize / 2;
+        const x2 = toCoords.x * squareSize + squareSize / 2;
+        const y2 = toCoords.y * squareSize + squareSize / 2;
 
         // Параметры стрелки
         const angle = Math.atan2(y2 - y1, x2 - x1);
@@ -484,7 +480,15 @@ document.addEventListener('DOMContentLoaded', function() {
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
-        board.appendChild(svg);
+        boardEl.appendChild(svg);
+
+        console.log('Arrow drawn:', {
+            from: fromCoords,
+            to: toCoords,
+            orientation: puzzleConfig.orientation,
+            squareSize,
+            boardRect
+        });
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
