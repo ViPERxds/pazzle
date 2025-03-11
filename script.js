@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Проверяем наличие фигуры
             const piece = game.get(from);
-            console.log('Piece at', from, ':', piece);
+            console.log('Piece at', from, ':', piece, 'Current turn:', game.turn());
             
             if (!piece) {
                 console.error('No piece at', from);
@@ -71,20 +71,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Загружаем позицию заново и устанавливаем правильную очередь хода
-            const fen = puzzleConfig.initialFen;
-            const fenParts = fen.split(' ');
-            // Устанавливаем очередь хода в соответствии с цветом фигуры
-            fenParts[1] = piece.color;
-            const newFen = fenParts.join(' ');
-            game.load(newFen);
-            
+            // Проверяем возможные ходы для фигуры
+            const moves = game.moves({ square: from, verbose: true });
+            console.log('Legal moves from', from, ':', moves);
+
+            // Находим нужный ход среди возможных
+            const targetMove = moves.find(m => m.to === to);
+            console.log('Target move:', targetMove);
+
+            if (!targetMove) {
+                console.error('Move is not legal:', from, 'to', to);
+                showError('Невозможный ход: ' + from + ' -> ' + to);
+                return;
+            }
+
             // Делаем ход
-            const move = game.move({
-                from: from,
-                to: to,
-                promotion: 'q'
-            });
+            const move = game.move(targetMove);
 
             if (move) {
                 console.log('Premove successful:', move);
