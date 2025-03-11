@@ -23,11 +23,10 @@ if (process.env.NODE_ENV !== 'development' && !process.env.BOT_TOKEN) {
 }
 
 app.use(cors({
-    origin: '*',
+    origin: ['https://chess-puzzles-bot.onrender.com', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
-    credentials: false,
-    optionsSuccessStatus: 200
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 app.use(express.json());
 
@@ -52,296 +51,41 @@ const pool = new Pool({
 // Проверяем подключение при запуске
 pool.connect(async (err, client, release) => {
     if (err) {
-        console.error('Error connecting to the database:', err);
-        process.exit(1); // Завершаем процесс при ошибке подключения
+        console.error('Error connecting to database:', err);
+        return;
     }
     console.log('Successfully connected to database');
-    
+    release();
+});
+
+// Добавим логирование в API endpoints
+app.get('/api/random-puzzle/:username', async (req, res) => {
     try {
-        // Удаляем существующие таблицы в правильном порядке
-        await client.query(`
-            DROP TABLE IF EXISTS Journal CASCADE;
-            DROP TABLE IF EXISTS PuzzlesTags CASCADE;
-            DROP TABLE IF EXISTS PuzzleAttempts CASCADE;
-            DROP TABLE IF EXISTS SolvedPuzzles CASCADE;
-            DROP TABLE IF EXISTS Puzzles CASCADE;
-            DROP TABLE IF EXISTS Users CASCADE;
-            DROP TABLE IF EXISTS Settings CASCADE;
-            DROP TABLE IF EXISTS Tags CASCADE;
-            DROP TABLE IF EXISTS Types CASCADE;
-            DROP TABLE IF EXISTS Complexity CASCADE;
-        `);
-
-        console.log('Старые таблицы успешно удалены');
-        
-        console.log('Создаем базовые таблицы...');
-        
-        // Создаем базовые таблицы без внешних ключей
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS Types (
-                id SERIAL PRIMARY KEY,
-                type TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS Tags (
-                id SERIAL PRIMARY KEY,
-                tag TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS Users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(255) UNIQUE NOT NULL,
-                telegram_id BIGINT,
-                rating NUMERIC(12,8) DEFAULT 1500.00,
-                rd NUMERIC(12,8) DEFAULT 350.00,
-                volatility NUMERIC(8,8) DEFAULT 0.06000000,
-                status BOOLEAN DEFAULT true,
-                performance NUMERIC(12,8)
-            );
-
-            CREATE TABLE IF NOT EXISTS Complexity (
-                id SERIAL PRIMARY KEY,
-                complexity_type TEXT NOT NULL
-            );
-        `);
-
-        console.log('Заполняем базовые таблицы...');
-
-        // Заполняем базовые таблицы
-        await client.query(`
-            INSERT INTO Types (id, type) VALUES
-            (1, 'лучший'),
-            (2, 'защита'),
-            (3, 'обычный'),
-            (4, 'пропуск'),
-            (5, 'фейк'),
-            (6, 'нет защиты'),
-            (7, 'подстава')
-            ON CONFLICT (id) DO UPDATE 
-            SET type = EXCLUDED.type;
-        `);
-
-        await client.query(`
-            INSERT INTO Tags (id, tag) VALUES
-            (1, 'бесплатное взятие'),
-            (2, 'выгодный размен'),
-            (3, 'анализ'),
-            (4, 'связка'),
-            (5, 'вилка'),
-            (6, 'рентген'),
-            (7, 'скрытое нападение'),
-            (8, 'капкан'),
-            (9, 'мат'),
-            (10, 'последняя горизонталь'),
-            (11, 'уничтожение защитника'),
-            (12, 'отвлечение'),
-            (13, 'перекрытие'),
-            (14, 'завлечение'),
-            (15, 'освобождение'),
-            (16, 'превращение пешки'),
-            (17, 'пат'),
-            (18, 'повторение')
-            ON CONFLICT (id) DO UPDATE 
-            SET tag = EXCLUDED.tag;
-        `);
-
-        await client.query(`
-            INSERT INTO Complexity (id, complexity_type) VALUES
-            (1, 'супер легкая'),
-            (2, 'очень легкая'),
-            (3, 'легкая'),
-            (4, 'средняя'),
-            (5, 'сложная'),
-            (6, 'очень сложная'),
-            (7, 'супер сложная')
-            ON CONFLICT (id) DO UPDATE 
-            SET complexity_type = EXCLUDED.complexity_type;
-        `);
-
-        console.log('Создаем таблицы с внешними ключами...');
-
-        // Создаем таблицы с внешними ключами
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS Puzzles (
-                id SERIAL PRIMARY KEY,
-                unique_task INTEGER NOT NULL,
-                rating NUMERIC(12,8) DEFAULT 1500.0000,
-                rd NUMERIC(12,8) DEFAULT 350.0000,
-                volatility NUMERIC(8,8) DEFAULT 0.06000000,
-                number INTEGER DEFAULT 0,
-                fen1 TEXT NOT NULL,
-                fen2 TEXT NOT NULL,
-                move1 TEXT,
-                move2 TEXT,
-                solution BOOLEAN,
-                type_id INTEGER REFERENCES Types(id),
-                color BOOLEAN
-            );
-            
-            CREATE TABLE IF NOT EXISTS Journal (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES Users(id),
-                puzzle_id INTEGER REFERENCES Puzzles(id),
-                success BOOLEAN,
-                time NUMERIC(5,2),
-                puzzle_rating_before NUMERIC(12,8),
-                puzzle_rd_before NUMERIC(12,8),
-                puzzle_volatility_before NUMERIC(8,8),
-                user_rating_before NUMERIC(12,8),
-                user_rd_before NUMERIC(12,8),
-                user_volatility_before NUMERIC(8,8),
-                user_rating_after NUMERIC(12,8),
-                user_rd_after NUMERIC(12,8),
-                user_volatility_after NUMERIC(8,8),
-                complexity_id INTEGER,
-                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            
-            CREATE TABLE IF NOT EXISTS Settings (
-                id SERIAL PRIMARY KEY,
-                setting VARCHAR(255),
-                meaning NUMERIC(10,3)
-            );
-
-            CREATE TABLE IF NOT EXISTS PuzzleAttempts (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(255) REFERENCES Users(username),
-                puzzle_fen TEXT,
-                attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                success BOOLEAN,
-                UNIQUE(username, puzzle_fen)
-            );
-            
-            CREATE TABLE IF NOT EXISTS SolvedPuzzles (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(255) REFERENCES Users(username),
-                puzzle_fen TEXT,
-                solved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(username, puzzle_fen)
-            );
-
-            CREATE TABLE IF NOT EXISTS PuzzlesTags (
-                id SERIAL PRIMARY KEY,
-                puzzle_id INTEGER REFERENCES Puzzles(id),
-                tag_id INTEGER REFERENCES Tags(id)
-            );
-        `);
-
-        console.log('Добавляем пользователей...');
-
-        // Добавляем пользователей
-        await client.query(`
-            INSERT INTO Users (username, telegram_id, rating, rd, volatility, status, performance) VALUES
-            ('goodwillchess', 1931999392, 1500.00, 350.00, 0.06000000, true, 1353.195496),
-            ('antiblunderchess', 5395535292, 1500.00, 350.00, 0.06000000, true, 1446.496565),
-            ('alexxldm', 6685769779, 1500.00, 350.00, 0.06000000, true, 1446.496565)
-            ON CONFLICT (username) DO UPDATE 
-            SET telegram_id = EXCLUDED.telegram_id,
-                rating = EXCLUDED.rating,
-                rd = EXCLUDED.rd,
-                volatility = EXCLUDED.volatility,
-                status = EXCLUDED.status,
-                performance = EXCLUDED.performance;
-        `);
-
-        console.log('Добавляем настройки...');
-
-        // Добавляем настройки
-        await client.query(`
-            INSERT INTO Settings (id, setting, meaning) VALUES
-            (1, 'Period, days', 5),
-            (2, 'Минимальное количество задач для расчета перформанса', 5),
-            (3, 'Минимальный перформанс для сравнения', 100),
-            (4, 'Коэффициент понижения базовой вероятности', 0.5),
-            (5, 'Норма решения 1 задачи, секунд', 30),
-            (6, 'Базовая вероятность критерия "лучший"', 0.150),
-            (7, 'Базовая вероятность критерия "защита"', 0.350),
-            (8, 'Базовая вероятность критерия "обычный"', 0.500),
-            (9, 'Базовая вероятность критерия "пропуск"', 0.250),
-            (10, 'Базовая вероятность критерия "фейк"', 0.250),
-            (11, 'Базовая вероятность критерия "нет защиты"', 0.250),
-            (12, 'Базовая вероятность критерия "подстава"', 0.250),
-            (13, 'Базовая вероятность критерия "супер легкая"', 0.025),
-            (14, 'Базовая вероятность критерия "очень легкая"', 0.100),
-            (15, 'Базовая вероятность критерия "легкая"', 0.200),
-            (16, 'Базовая вероятность критерия "средняя"', 0.350),
-            (17, 'Базовая вероятность критерия "сложная"', 0.200),
-            (18, 'Базовая вероятность критерия "очень сложная"', 0.100),
-            (19, 'Базовая вероятность критерия "супер сложная"', 0.025),
-            (20, 'Стандартное отклонение', 100),
-            (21, 'Время до предварительного хода, секунд', 1),
-            (22, 'Время анализа 1 линии, секунд', 1),
-            (23, 'Количество задач в день, которое может решать активный пользователь', 100),
-            (24, 'Количество задач в день, которое может решать неактивный пользователь', 3)
-            ON CONFLICT (id) DO UPDATE 
-            SET setting = EXCLUDED.setting, 
-                meaning = EXCLUDED.meaning;
-        `);
-
-        console.log('Добавляем задачи...');
-
-        // Добавляем задачи
-        await client.query(`
-            INSERT INTO Puzzles (id, unique_task, rating, rd, volatility, number, fen1, fen2, move1, move2, solution, type_id, color) VALUES
-            (1, 1, 1500.0000, 350.0000, 0.06000000, 0, '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2', '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2', 'e7d6', 'c8a6', false, 4, true),
-            (2, 2, 1500.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2', 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2', 'd5e4', 'd2e4', true, 3, true),
-            (3, 2, 1500.0000, 350.0000, 0.06000000, 0, 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1', 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1', 'd4e5', 'd7e5', false, 5, false),
-            (4, 3, 1500.0000, 350.0000, 0.06000000, 0, 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1', 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1', 'f3d4', 'e6c4', false, 7, false),
-            (5, 4, 1500.0000, 350.0000, 0.06000000, 0, 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 1 2', 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 1 2', 'g4e6', 'e1e6', true, 1, true),
-            (6, 5, 1500.0000, 350.0000, 0.06000000, 0, '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 1 1', '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 1 1', 'f2g1', 'd7e7', false, 4, false),
-            (7, 6, 1500.0000, 350.0000, 0.06000000, 0, 'rn1qkbnr/pp3ppp/2pp4/4p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5', 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6', 'b7b5', 'c4f7', false, 5, true),
-            (8, 6, 1400.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/4P3/2PP4/PP3PPP/RN1QKBNR w KQkq - 0 5', 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 5', 'b2b4', 'c5b4', true, 2, false),
-            (9, 6, 1200.0000, 350.0000, 0.06000000, 0, 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6', 'rn1qkbnr/p4Bpp/2pp4/1p2p3/4P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 6', 'c4f7', 'e8f7', true, 1, false),
-            (10, 6, 1500.0000, 350.0000, 0.06000000, 0, 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 6', 'r1bqk2r/ppp2ppp/2np1n2/4p1B1/1P2P3/2PP4/P4bPP/RN1QKBNR w KQkq - 0 7', 'c5f2', 'g5f6', false, 4, true),
-            (11, 7, 1200.0000, 350.0000, 0.06000000, 0, '8/3b2p1/pppBk2p/2P5/1P6/P7/5PPP/4K3 w - - 0 26', '8/3b2p1/pPpBk2p/8/1P6/P7/5PPP/4K3 b - - 0 26', 'c5b6', 'd7b5', true, 1, false),
-            (12, 7, 1500.0000, 350.0000, 0.06000000, 0, '4k3/5ppp/p7/1p6/2p5/PPPbK2P/3B2P1/8 b - - 0 26', '4k3/5ppp/p7/1p6/8/PpPbK2P/3B2P1/8 w - - 0 27', 'c4b3', 'e3d3', false, 4, true),
-            (13, 8, 1500.0000, 350.0000, 0.06000000, 0, '3RR3/1kr5/1ppB1r2/8/p1P4P/P7/1P3bK1/8 b - - 0 1', '3RR3/1k4r1/1ppB1r2/8/p1P4P/P7/1P3bK1/8 w - - 1 2', 'r5g7', 'e8e7', false, 7, true),
-            (14, 9, 1500.0000, 350.0000, 0.06000000, 0, '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/P3QPP1/3R2K1 w - - 0 1', '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/PQ3PP1/3R2K1 b - - 1 1', 'e2b2', 'c5c1', false, 7, false),
-            (15, 10, 1500.0000, 350.0000, 0.06000000, 0, '1r6/kb1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 b - - 0 1', 'kr6/1b1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 w - - 1 2', 'b8a8', 'c5c7', false, 4, true)
-            ON CONFLICT (id) DO UPDATE 
-            SET unique_task = EXCLUDED.unique_task,
-                rating = EXCLUDED.rating,
-                rd = EXCLUDED.rd,
-                volatility = EXCLUDED.volatility,
-                number = EXCLUDED.number,
-                fen1 = EXCLUDED.fen1,
-                fen2 = EXCLUDED.fen2,
-                move1 = EXCLUDED.move1,
-                move2 = EXCLUDED.move2,
-                solution = EXCLUDED.solution,
-                type_id = EXCLUDED.type_id,
-                color = EXCLUDED.color;
-        `);
-
-        console.log('Добавляем связи задач с тегами...');
-
-        // Добавляем задачи с тегами
-        await client.query(`
-            INSERT INTO PuzzlesTags (id, puzzle_id, tag_id) VALUES
-            (1, 1, 5),
-            (2, 2, 9),
-            (3, 3, 10),
-            (4, 4, 11),
-            (5, 5, 12)
-            ON CONFLICT (id) DO UPDATE 
-            SET puzzle_id = EXCLUDED.puzzle_id,
-                tag_id = EXCLUDED.tag_id;
-        `);
-
-        console.log('Инициализация базы данных завершена успешно');
-
+        console.log('Getting random puzzle for user:', req.params.username);
+        const result = await pool.query(
+            'SELECT * FROM Puzzles ORDER BY RANDOM() LIMIT 1'
+        );
+        console.log('Found puzzle:', result.rows[0]);
+        res.json(result.rows[0]);
     } catch (err) {
-        console.error('Error creating tables:', err);
-        console.error(err.stack);
-    } finally {
-        release();
+        console.error('Error getting random puzzle:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
-// Добавляем обработчик ошибок для пула
-pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
-    process.exit(-1);
+app.get('/api/user-rating/:username', async (req, res) => {
+    try {
+        console.log('Getting rating for user:', req.params.username);
+        const result = await pool.query(
+            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
+            [req.params.username]
+        );
+        console.log('Found user rating:', result.rows[0]);
+        res.json(result.rows[0] || { rating: 1500, rd: 350, volatility: 0.06 });
+    } catch (err) {
+        console.error('Error getting user rating:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Функция для проверки доступа пользователя
@@ -708,55 +452,6 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
     }
 }
 
-// Обновляем API endpoint для получения случайной задачи
-app.get('/api/random-puzzle/:username', async (req, res, next) => {
-    try {
-        const username = req.params.username;
-        console.log(`Getting random puzzle for user: ${username}`);
-        
-        const puzzle = await findPuzzleForUser(username);
-        if (!puzzle) {
-            return res.status(404).json({ error: 'No available puzzles found' });
-        }
-        
-        const response = {
-            id: puzzle.id,
-            unique_task: puzzle.unique_task,
-            rating: parseFloat(puzzle.rating),
-            rd: parseFloat(puzzle.rd),
-            volatility: parseFloat(puzzle.volatility),
-            fen1: puzzle.fen1,
-            fen2: puzzle.fen2,
-            move1: puzzle.move1,
-            move2: puzzle.move2,
-            solution: puzzle.solution,
-            type: puzzle.type_name,
-            color: puzzle.color
-        };
-        
-        res.json(response);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// Обновляем API endpoint для записи решения
-app.post('/api/record-solution', async (req, res, next) => {
-    try {
-        const { username, puzzleId, success, time } = req.body;
-        console.log(`Recording solution:`, { username, puzzleId, success, time });
-        
-        if (!username || !puzzleId || success === undefined || !time) {
-            return res.status(400).json({ error: 'Missing required parameters' });
-        }
-        
-        const result = await recordPuzzleSolution(username, puzzleId, success, time);
-        res.json(result);
-    } catch (err) {
-        next(err);
-    }
-});
-
 // Добавляем обработку favicon.ico
 app.get('/favicon.ico', (req, res) => {
     res.status(204).end();
@@ -1072,25 +767,6 @@ async function updateRating(username, puzzleId, success) {
         client.release();
     }
 }
-
-// Добавляем API endpoint для получения рейтинга пользователя
-app.get('/api/user-rating/:username', async (req, res, next) => {
-    try {
-        const username = req.params.username;
-        console.log(`API request for user rating: ${username}`);
-        
-        const userRating = await getUserRating(username);
-        console.log(`Sending rating response for ${username}:`, userRating);
-        
-        res.json({
-            rating: parseFloat(userRating.rating),
-            rd: parseFloat(userRating.rd),
-            volatility: parseFloat(userRating.volatility)
-        });
-    } catch (err) {
-        next(err);
-    }
-});
 
 // Обновляем обработчик ошибок
 app.use((err, req, res, next) => {
