@@ -440,6 +440,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!puzzle) {
                 throw new Error('Не удалось получить данные задачи');
             }
+
+            // Подробное логирование данных задачи
+            console.log('Puzzle details:', {
+                id: puzzle.id,
+                fen1: puzzle.fen1,
+                fen2: puzzle.fen2,
+                move1: puzzle.move1,
+                move2: puzzle.move2,
+                solution: puzzle.solution
+            });
             
             // Проверяем FEN на корректность
             const tempGame = new Chess();
@@ -447,6 +457,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Invalid FEN position:', puzzle.fen1);
                 return loadPuzzle(username);
             }
+
+            // Логируем состояние доски
+            console.log('Board state:', {
+                fen: tempGame.fen(),
+                turn: tempGame.turn(),
+                pieces: tempGame.board().flat().filter(p => p).map(p => ({
+                    type: p.type,
+                    color: p.color,
+                    square: p.square
+                })),
+                legalMoves: tempGame.moves({ verbose: true })
+            });
 
             // Проверяем наличие фигуры для move1
             const [fromSquare, toSquare] = [
@@ -456,7 +478,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const pieceOnStart = tempGame.get(fromSquare);
             if (!pieceOnStart) {
-                console.error('No piece at starting square:', fromSquare);
+                console.error('No piece at starting square:', {
+                    square: fromSquare,
+                    move: puzzle.move1,
+                    puzzleId: puzzle.id,
+                    position: tempGame.fen()
+                });
                 return loadPuzzle(username);
             }
 
@@ -468,13 +495,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!move1Result) {
-                console.error('Move1 is not possible:', puzzle.move1);
+                console.error('Move1 is not possible:', {
+                    from: fromSquare,
+                    to: toSquare,
+                    piece: pieceOnStart,
+                    legalMoves: tempGame.moves({ verbose: true }),
+                    puzzleId: puzzle.id
+                });
                 return loadPuzzle(username);
             }
 
-            // Проверяем, что позиция после хода соответствует fen2
-            if (tempGame.fen() !== puzzle.fen2) {
-                console.error('Position after move1 does not match fen2');
+            // Сравниваем FEN после хода с fen2
+            const currentFen = tempGame.fen();
+            const normalizedCurrentFen = currentFen.split(' ').slice(0, 4).join(' ');
+            const normalizedFen2 = puzzle.fen2.split(' ').slice(0, 4).join(' ');
+
+            if (normalizedCurrentFen !== normalizedFen2) {
+                console.error('FEN mismatch after move1:', {
+                    current: normalizedCurrentFen,
+                    expected: normalizedFen2,
+                    puzzleId: puzzle.id
+                });
                 return loadPuzzle(username);
             }
 
@@ -491,7 +532,12 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!move2Result) {
-                console.error('Move2 is not possible:', puzzle.move2);
+                console.error('Move2 is not possible:', {
+                    from: move2From,
+                    to: move2To,
+                    legalMoves: tempGame.moves({ verbose: true }),
+                    puzzleId: puzzle.id
+                });
                 return loadPuzzle(username);
             }
 
