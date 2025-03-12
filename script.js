@@ -54,34 +54,39 @@ document.addEventListener('DOMContentLoaded', function() {
             snapbackSpeed: 0,
             snapSpeed: 0,
             trashSpeed: 0,
-            appearSpeed: 0,
-            onChange: () => {
-                console.log('Board position changed');
-                // Делаем предварительный ход после того как доска обновилась
-                if (puzzleConfig.preMove && game.history().length === 0) {
-                    console.log('Making premove after board update');
-                    const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                    
-                    // Делаем ход в игре
-                    const move = game.move({
-                        from: from,
-                        to: to,
-                        promotion: 'q'
-                    });
+            appearSpeed: 0
+        });
 
-                    if (move) {
-                        console.log('Move made in game:', move);
-                        // Обновляем позицию на доске без анимации
-                        board.position(game.fen(), false);
-                        // Рисуем стрелку
-                        drawArrow(from, to, '#00ff00');
-                    } else {
-                        console.error('Failed to make move:', from, to);
-                        showError('Невозможный ход: ' + from + ' -> ' + to);
-                    }
+        // Ждем немного и делаем ход
+        setTimeout(() => {
+            if (puzzleConfig.preMove) {
+                console.log('Making premove after timeout');
+                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+                console.log('Move from', from, 'to', to);
+                
+                // Проверяем текущую позицию
+                const piece = game.get(from);
+                console.log('Piece at', from, ':', piece);
+                
+                // Делаем ход в игре
+                const move = game.move({
+                    from: from,
+                    to: to,
+                    promotion: 'q'
+                });
+
+                if (move) {
+                    console.log('Move made in game:', move);
+                    // Обновляем позицию на доске без анимации
+                    board.position(game.fen(), false);
+                    // Рисуем стрелку
+                    drawArrow(from, to, '#00ff00');
+                } else {
+                    console.error('Failed to make move:', from, to);
+                    showError('Невозможный ход: ' + from + ' -> ' + to);
                 }
             }
-        });
+        }, 100);
 
         console.log('Board initialized');
     }
