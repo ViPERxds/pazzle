@@ -49,6 +49,22 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Failed to load initial position:', puzzleConfig.initialFen);
             return;
         }
+
+        // Инициализируем доску, если она еще не инициализирована
+        if (!board) {
+            const config = {
+                draggable: true,
+                position: puzzleConfig.initialFen,
+                orientation: puzzleConfig.orientation,
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd
+            };
+            board = Chessboard('board', config);
+        } else {
+            board.orientation(puzzleConfig.orientation);
+            board.position(puzzleConfig.initialFen);
+        }
         
         // Получаем координаты предварительного хода
         const [fromSquare, toSquare] = [
@@ -653,6 +669,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const arrow = document.querySelector('.arrow');
         if (arrow) {
             arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
+        }
+    });
+
+    // Обработчик изменения размера окна
+    $(window).resize(function() {
+        if (board) {
+            board.resize();
         }
     });
 
