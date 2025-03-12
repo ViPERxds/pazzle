@@ -428,29 +428,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return null;
     }
 
-    // Функция для отметки некорректной задачи
-    async function markInvalidPuzzle(puzzleId, reason) {
-        try {
-            console.log('Marking invalid puzzle:', {
-                puzzleId: puzzleId,
-                reason: reason
-            });
-            
-            await fetchWithAuth(`${API_URL}/api/mark-invalid-puzzle`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    puzzleId: puzzleId,
-                    reason: reason
-                })
-            });
-        } catch (err) {
-            console.error('Error marking invalid puzzle:', err);
-        }
-    }
-
     // Улучшенная функция загрузки задачи
     async function loadPuzzle(username) {
         try {
@@ -467,8 +444,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Проверяем FEN на корректность
             const tempGame = new Chess();
             if (!puzzle.fen1 || !tempGame.load(puzzle.fen1)) {
-                await markInvalidPuzzle(puzzle.id, 'Некорректный FEN');
-                throw new Error('Неверный формат позиции');
+                console.error('Invalid FEN position:', puzzle.fen1);
+                // Загружаем новую задачу
+                return loadPuzzle(username);
             }
 
             // Подробное логирование текущей позиции
@@ -500,8 +478,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (!pieceOnStart) {
-                await markInvalidPuzzle(puzzle.id, `На поле ${fromSquare} нет фигуры для хода ${puzzle.move1}`);
-                throw new Error(`Ошибка в базе данных (ID: ${puzzle.id}): на поле ${fromSquare} нет фигуры для хода ${puzzle.move1}`);
+                console.error(`No piece at square ${fromSquare} for move ${puzzle.move1} in puzzle ${puzzle.id}`);
+                // Загружаем новую задачу
+                return loadPuzzle(username);
             }
 
             // Проверяем возможность хода move1
@@ -511,8 +490,10 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             if (!move1IsLegal) {
-                await markInvalidPuzzle(puzzle.id, `Ход ${puzzle.move1} невозможен в позиции ${puzzle.fen1}`);
-                throw new Error(`Ошибка в базе данных (ID: ${puzzle.id}): ход ${puzzle.move1} невозможен. Доступные ходы: ${legalMoves.map(m => m.from + m.to).join(', ')}`);
+                console.error(`Move ${puzzle.move1} is not legal in puzzle ${puzzle.id}. Legal moves:`, 
+                    legalMoves.map(m => m.from + m.to).join(', '));
+                // Загружаем новую задачу
+                return loadPuzzle(username);
             }
 
             // Делаем ход move1
@@ -523,7 +504,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!move1Result) {
-                throw new Error('Неверные данные хода: ход невозможен');
+                console.error('Move is not possible:', puzzle.move1);
+                // Загружаем новую задачу
+                return loadPuzzle(username);
             }
 
             // Обновляем fen2 после хода
@@ -541,7 +524,9 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             if (!move2IsLegal) {
-                throw new Error('Ответный ход из базы данных невозможен в текущей позиции');
+                console.error(`Move2 ${puzzle.move2} is not legal in puzzle ${puzzle.id}`);
+                // Загружаем новую задачу
+                return loadPuzzle(username);
             }
 
             // Сохраняем текущую задачу
@@ -560,9 +545,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (err) {
             console.error('Error loading puzzle:', err);
-            showError('Ошибка при загрузке задачи: ' + err.message);
             // Загружаем новую задачу при ошибке
-            loadPuzzle(username);
+            return loadPuzzle(username);
         }
     }
 
