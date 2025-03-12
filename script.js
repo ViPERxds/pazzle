@@ -476,20 +476,7 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             if (!move1IsLegal) {
-                console.log('Move1 is not legal, searching for alternatives');
-                
-                // Получаем все возможные ходы для текущей стороны
-                const legalMoves = tempGame.moves({ verbose: true });
-                console.log('Legal moves:', legalMoves);
-
-                // Ищем любой возможный ход для текущей стороны
-                const possibleMove = legalMoves[0];
-                if (possibleMove) {
-                    console.log('Found alternative move:', possibleMove);
-                    puzzle.move1 = possibleMove.from + possibleMove.to;
-                } else {
-                    throw new Error(`Не найдено возможных ходов для ${tempGame.turn() === 'w' ? 'белых' : 'черных'}`);
-                }
+                throw new Error('Ход из базы данных невозможен в текущей позиции');
             }
 
             // Делаем ход move1
@@ -518,20 +505,7 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             if (!move2IsLegal) {
-                console.log('Move2 is not legal, searching for alternatives');
-                
-                // Получаем все возможные ходы после первого хода
-                const legalMovesAfterMove1 = tempGame.moves({ verbose: true });
-                console.log('Legal moves after move1:', legalMovesAfterMove1);
-
-                // Ищем любой возможный ход
-                const possibleMove2 = legalMovesAfterMove1[0];
-                if (possibleMove2) {
-                    console.log('Found alternative move2:', possibleMove2);
-                    puzzle.move2 = possibleMove2.from + possibleMove2.to;
-                } else {
-                    throw new Error(`Не найдено возможных ходов после первого хода`);
-                }
+                throw new Error('Ответный ход из базы данных невозможен в текущей позиции');
             }
 
             // Сохраняем текущую задачу
@@ -551,6 +525,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('Error loading puzzle:', err);
             showError('Ошибка при загрузке задачи: ' + err.message);
+            // Загружаем новую задачу при ошибке
+            loadPuzzle(username);
         }
     }
 
