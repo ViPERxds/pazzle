@@ -405,6 +405,19 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeBoard(puzzleConfig);
     }
 
+    // Функция для поиска правильного хода на основе FEN и целевого поля
+    function findCorrectMove(fen, targetSquare, pieces) {
+        const game = new Chess(fen);
+        const moves = game.moves({ verbose: true });
+        
+        // Ищем ход, который ведет на целевое поле
+        const possibleMove = moves.find(m => m.to === targetSquare);
+        if (possibleMove) {
+            return possibleMove.from + possibleMove.to;
+        }
+        return null;
+    }
+
     // Улучшенная функция загрузки задачи
     async function loadPuzzle(username) {
         try {
@@ -465,20 +478,21 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             // Проверяем наличие фигуры на начальной позиции
-            const pieceOnSquare = tempGame.get(fromSquare);
-            console.log('Move1 validation:', {
-                fen: puzzle.fen1,
-                from: fromSquare,
-                to: toSquare,
-                piece: pieceOnSquare,
-                turn: tempGame.turn(),
-                possibleMoves: tempGame.moves({ verbose: true })
-            });
+            let pieceOnSquare = tempGame.get(fromSquare);
             
+            // Если на начальной позиции нет фигуры, пытаемся найти правильный ход
             if (!pieceOnSquare) {
-                console.error('No piece found for move1 at square:', fromSquare);
-                console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
-                throw new Error('Неверные данные хода: нет фигуры на начальной позиции');
+                console.log('Trying to find correct move to', toSquare);
+                const correctedMove = findCorrectMove(puzzle.fen1, toSquare, pieces);
+                if (correctedMove) {
+                    console.log('Found corrected move:', correctedMove);
+                    puzzle.move1 = correctedMove;
+                    pieceOnSquare = tempGame.get(correctedMove.substring(0, 2));
+                } else {
+                    console.error('No piece found for move1 at square:', fromSquare);
+                    console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
+                    throw new Error('Неверные данные хода: нет фигуры на начальной позиции');
+                }
             }
 
             // Проверяем, что фигура принадлежит тому, чей ход
