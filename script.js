@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Обновляем функцию submitSolution
-    async function submitSolution(success) {
+    async function submitSolution(userAnswer) {
         try {
             if (!currentPuzzle || !currentPuzzle.id) {
                 console.error('No current puzzle or puzzle ID!');
@@ -319,10 +319,20 @@ document.addEventListener('DOMContentLoaded', function() {
             // Получаем время решения
             const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
 
+            // Проверяем, совпадает ли ответ пользователя с решением из базы данных
+            const isCorrect = (userAnswer && currentPuzzle.solution === 'Good') || 
+                            (!userAnswer && currentPuzzle.solution === 'Blunder');
+
+            console.log('Checking solution:', {
+                userAnswer: userAnswer,
+                puzzleSolution: currentPuzzle.solution,
+                isCorrect: isCorrect
+            });
+
             console.log('Sending solution:', {
                 username: currentUsername,
                 puzzleId: currentPuzzle.id,
-                success: success,
+                success: isCorrect,
                 time: elapsedTime
             });
 
@@ -334,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     username: currentUsername,
                     puzzleId: currentPuzzle.id,
-                    success: success,
+                    success: isCorrect,
                     time: elapsedTime
                 })
             });
@@ -347,8 +357,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Показываем результат
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
-            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
-            resultText.className = success ? 'success' : 'failure';
+            resultText.textContent = isCorrect ? 'Правильно!' : 'Неправильно!';
+            resultText.className = isCorrect ? 'success' : 'failure';
 
         } catch (error) {
             console.error('Error submitting solution:', error);
