@@ -585,8 +585,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Добавляем обработчик для кнопки анализа
     document.querySelector('.analyze-btn').addEventListener('click', () => {
-        // Используем FEN позиции после предварительного хода
-        const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
+        // Используем move1 из puzzleConfig
+        const [from, to] = [
+            puzzleConfig.move1.substring(0, 2),
+            puzzleConfig.move1.substring(2, 4)
+        ];
+        
         game.load(puzzleConfig.initialFen); // Загружаем начальную позицию
         game.move({ from, to, promotion: 'q' }); // Делаем предварительный ход
         
