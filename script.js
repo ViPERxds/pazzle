@@ -44,13 +44,35 @@ document.addEventListener('DOMContentLoaded', function() {
         // Создаем новый экземпляр игры
         game = new Chess();
         
-        // Загружаем начальную позицию
-        const loadSuccess = game.load(puzzleConfig.initialFen);
-        if (!loadSuccess) {
-            console.error('Failed to load initial position');
+        // Загружаем начальную позицию и проверяем ее
+        if (!game.load(puzzleConfig.initialFen)) {
+            console.error('Failed to load initial position:', puzzleConfig.initialFen);
             return;
         }
-        console.log('Initial position loaded:', game.fen());
+        
+        // Получаем координаты предварительного хода
+        const [fromSquare, toSquare] = [
+            puzzleConfig.move1.substring(0, 2),
+            puzzleConfig.move1.substring(2, 4)
+        ];
+        
+        // Проверяем наличие фигуры и возможность хода
+        const pieceOnSquare = game.get(fromSquare);
+        const legalMoves = game.moves({ verbose: true });
+        
+        console.log('Initial position state:', {
+            fen: game.fen(),
+            piece: pieceOnSquare,
+            from: fromSquare,
+            to: toSquare,
+            turn: game.turn(),
+            legalMoves: legalMoves.filter(m => m.from === fromSquare)
+        });
+        
+        if (!pieceOnSquare) {
+            console.error('No piece at starting square:', fromSquare);
+            return;
+        }
 
         // Создаем конфигурацию доски
         const config = {
@@ -60,12 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
             onDragStart: onDragStart,
             onDrop: onDrop,
             onSnapEnd: onSnapEnd,
-            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
-            moveSpeed: 0,
-            snapbackSpeed: 0,
-            snapSpeed: 0,
-            trashSpeed: 0,
-            appearSpeed: 0
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
         };
 
         // Создаем доску
@@ -73,36 +90,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Ждем немного, чтобы доска успела инициализироваться
         setTimeout(() => {
-            // Получаем координаты предварительного хода
-            const from = puzzleConfig.move1.substring(0, 2);
-            const to = puzzleConfig.move1.substring(2, 4);
-            console.log('Attempting premove:', from, 'to', to);
-            
             try {
                 // Проверяем возможность хода
-                const moves = game.moves({ verbose: true });
-                const possibleMove = moves.find(m => m.from === from && m.to === to);
+                const moveIsLegal = legalMoves.some(m => m.from === fromSquare && m.to === toSquare);
                 
-                if (!possibleMove) {
-                    console.error('Move is not possible:', {
-                        from,
-                        to,
-                        piece: game.get(from),
-                        possibleMoves: moves.filter(m => m.from === from)
+                if (!moveIsLegal) {
+                    console.error('Move is not legal:', {
+                        from: fromSquare,
+                        to: toSquare,
+                        piece: pieceOnSquare,
+                        legalMoves: legalMoves.filter(m => m.from === fromSquare)
                     });
                     return;
                 }
 
                 // Делаем ход
-                const premove = game.move({ from, to, promotion: 'q' });
+                const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
                 if (premove) {
                     console.log('Premove successful:', premove);
                     // Обновляем позицию на доске
                     board.position(game.fen(), false);
                     
                     // Показываем стрелку для следующего хода
-                    const move2From = puzzleConfig.move2.substring(0, 2);
-                    const move2To = puzzleConfig.move2.substring(2, 4);
+                    const [move2From, move2To] = [
+                        puzzleConfig.move2.substring(0, 2),
+                        puzzleConfig.move2.substring(2, 4)
+                    ];
                     console.log('Drawing arrow from', move2From, 'to', move2To);
                     drawArrow(move2From, move2To);
                 }
@@ -399,7 +412,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Получаем задачу через API
             const puzzle = await fetchWithAuth(`${API_URL}/api/random-puzzle/${username}`);
-            console.log('Received puzzle data:', {
+            
+            // Подробное логирование полученных данных
+            console.log('Raw puzzle data:', puzzle);
+            console.log('Puzzle details:', {
                 id: puzzle.id,
                 fen1: puzzle.fen1,
                 move1: puzzle.move1,
@@ -412,41 +428,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Не удалось получить данные задачи');
             }
             
-            if (!puzzle.fen1) {
-                throw new Error('Отсутствует FEN позиция');
+            // Проверяем FEN на корректность
+            const tempGame = new Chess();
+            if (!puzzle.fen1 || !tempGame.load(puzzle.fen1)) {
+                console.error('Invalid or missing FEN position:', puzzle.fen1);
+                throw new Error('Неверный формат позиции');
             }
             
-            if (!puzzle.move1) {
-                throw new Error('Отсутствует предварительный ход');
+            // Проверяем ход move1
+            const [fromSquare, toSquare] = [
+                puzzle.move1.substring(0, 2),
+                puzzle.move1.substring(2, 4)
+            ];
+            
+            // Проверяем наличие фигуры на начальной позиции
+            const pieceOnSquare = tempGame.get(fromSquare);
+            console.log('Piece for move1:', {
+                from: fromSquare,
+                to: toSquare,
+                piece: pieceOnSquare,
+                possibleMoves: tempGame.moves({ verbose: true })
+                    .filter(m => m.from === fromSquare)
+            });
+            
+            if (!pieceOnSquare) {
+                console.error('No piece found for move1 at square:', fromSquare);
+                throw new Error('Неверные данные хода: нет фигуры на начальной позиции');
             }
             
-            if (!puzzle.move2) {
-                puzzle.move2 = '';  // Устанавливаем пустую строку если move2 отсутствует
+            if (!puzzle.move1 || !/^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1)) {
+                console.error('Invalid move1 format:', puzzle.move1);
+                throw new Error('Неверный формат хода move1');
+            }
+            
+            if (!puzzle.move2 || !/^[a-h][1-8][a-h][1-8]$/.test(puzzle.move2)) {
+                console.error('Invalid move2 format:', puzzle.move2);
+                throw new Error('Неверный формат хода move2');
             }
             
             if (!puzzle.id) {
                 throw new Error('Отсутствует ID задачи');
-            }
-
-            // Проверяем формат ходов перед сохранением
-            const move1Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1);
-            const move2Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move2);
-            
-            if (!move1Format || !move2Format) {
-                console.error('Invalid move format in received puzzle:', {
-                    move1: puzzle.move1,
-                    move2: puzzle.move2,
-                    move1Valid: move1Format,
-                    move2Valid: move2Format
-                });
-                throw new Error('Неверный формат ходов');
-            }
-
-            // Проверяем FEN на корректность
-            const tempGame = new Chess();
-            if (!tempGame.load(puzzle.fen1)) {
-                console.error('Invalid FEN position:', puzzle.fen1);
-                throw new Error('Неверный формат позиции');
             }
 
             // Сохраняем текущую задачу
