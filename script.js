@@ -58,7 +58,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 orientation: puzzleConfig.orientation,
                 onDragStart: onDragStart,
                 onDrop: onDrop,
-                onSnapEnd: onSnapEnd
+                onSnapEnd: onSnapEnd,
+                pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
             };
             board = Chessboard('board', config);
         } else {
