@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         puzzleConfig.move2.substring(2, 4)
                     ];
                     console.log('Drawing arrow from', move2From, 'to', move2To);
-                    drawArrow(move2From, move2To);
+                    drawArrow(move2From, move2To, 'black');
                 }
             } catch (error) {
                 console.error('Error making premove:', error);
@@ -613,18 +613,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Функция для отрисовки стрелок
-    function drawArrow(from, to) {
+    function drawArrow(from, to, color) {
         console.log('Drawing arrow for move:', from + to);
         
         // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
         if (oldArrow) oldArrow.remove();
-
-        const board = document.querySelector('#board');
-        if (!board) {
-            console.error('Board element not found');
-            return;
-        }
 
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("class", "arrow");
@@ -636,60 +630,50 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        // Получаем координаты квадратов
-        const squares = board.querySelectorAll('.square-55d63');
-        let fromSquare = null;
-        let toSquare = null;
-
-        squares.forEach(square => {
-            const squareData = square.getAttribute('data-square');
-            if (squareData === from) fromSquare = square;
-            if (squareData === to) toSquare = square;
-        });
-        
-        if (!fromSquare || !toSquare) {
-            console.error('Squares not found:', from, to);
+        const board = document.querySelector('#board');
+        if (!board) {
+            console.error('Board element not found');
             return;
         }
-
+        
+        const fromSquare = document.querySelector(`[data-square="${from}"]`);
+        const toSquare = document.querySelector(`[data-square="${to}"]`);
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
-        
-        // Вычисляем координаты центров квадратов
         const squareSize = boardRect.width / 8;
-        const x1 = (fromRect.left + squareSize/2 - boardRect.left);
-        const y1 = (fromRect.top + squareSize/2 - boardRect.top);
-        const x2 = (toRect.left + squareSize/2 - boardRect.left);
-        const y2 = (toRect.top + squareSize/2 - boardRect.top);
+
+        // Координаты
+        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
+        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
+        const x2 = toRect.left - boardRect.left + toRect.width/2;
+        const y2 = toRect.top - boardRect.top + toRect.height/2;
+
+        // Вычисляем угол и размеры
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const width = squareSize * 0.15;
+        const headWidth = squareSize * 0.3;
+        const headLength = squareSize * 0.3;
+
+        // Точки для стрелки
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
 
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        
-        // Параметры стрелки
-        const arrowWidth = squareSize * 0.2;
-        const headSize = squareSize * 0.4;
-        
-        // Вычисляем угол и длину
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
-        
-        // Создаем путь для стрелки с линией и наконечником
-        const arrowPath = `
-            M ${x1} ${y1}
-            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
-            L ${x2 - headSize * Math.cos(angle) - headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) + headSize/2 * Math.cos(angle)}
+        path.setAttribute("d", `
+            M ${x1 - width*dy} ${y1 + width*dx}
+            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
+            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
             L ${x2} ${y2}
-            L ${x2 - headSize * Math.cos(angle) + headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) - headSize/2 * Math.cos(angle)}
-            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
+            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
+            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
+            L ${x1 + width*dy} ${y1 - width*dx}
             Z
-        `;
-        
-        path.setAttribute("d", arrowPath);
-        path.setAttribute("fill", "#00ff00");
+        `);
+        path.setAttribute("fill", color || "#00ff00");
         path.setAttribute("opacity", "0.5");
-        path.setAttribute("stroke", "#00ff00");
-        path.setAttribute("stroke-width", "2");
 
         svg.appendChild(path);
         board.appendChild(svg);
