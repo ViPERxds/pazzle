@@ -428,14 +428,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Подробное логирование полученных данных
             console.log('Raw puzzle data:', puzzle);
-            console.log('Puzzle details:', {
-                id: puzzle.id,
-                fen1: puzzle.fen1,
-                move1: puzzle.move1,
-                fen2: puzzle.fen2,
-                move2: puzzle.move2,
-                color: puzzle.color
-            });
             
             if (!puzzle) {
                 throw new Error('Не удалось получить данные задачи');
@@ -448,100 +440,76 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Неверный формат позиции');
             }
 
-            // Подробное логирование текущей позиции
-            const board = tempGame.board();
-            const pieces = [];
-            for (let i = 0; i < 8; i++) {
-                for (let j = 0; j < 8; j++) {
-                    const piece = board[i][j];
-                    if (piece) {
-                        const square = String.fromCharCode(97 + j) + (8 - i);
-                        pieces.push({
-                            square: square,
-                            piece: piece.type,
-                            color: piece.color
-                        });
-                    }
-                }
-            }
-            
-            console.log('Current board state:', {
-                fen: tempGame.fen(),
-                turn: tempGame.turn(),
-                pieces: pieces
-            });
-            
-            // Проверяем ход move1
+            // Проверяем наличие фигуры для move1
             const [fromSquare, toSquare] = [
                 puzzle.move1.substring(0, 2),
                 puzzle.move1.substring(2, 4)
             ];
             
-            // Получаем все возможные ходы
-            const allLegalMoves = tempGame.moves({ verbose: true });
-            console.log('All legal moves:', allLegalMoves);
-            
-            // Проверяем, есть ли фигура на начальной позиции
             const pieceOnStart = tempGame.get(fromSquare);
-            
-            // Если есть фигура на начальной позиции, ищем любой её возможный ход
-            if (pieceOnStart) {
-                const movesFromStart = allLegalMoves.filter(m => m.from === fromSquare);
-                if (movesFromStart.length > 0) {
-                    // Берем первый возможный ход этой фигуры
-                    console.log('Found alternative move for piece:', movesFromStart[0]);
-                    puzzle.move1 = movesFromStart[0].from + movesFromStart[0].to;
-                } else {
-                    console.error('No legal moves for piece at:', fromSquare);
-                    throw new Error('Неверные данные хода: нет возможных ходов для фигуры');
-                }
-            } else {
-                // Если нет фигуры на начальной позиции, ищем любой возможный ход
-                if (allLegalMoves.length > 0) {
-                    // Берем первый возможный ход
-                    console.log('Using first available move:', allLegalMoves[0]);
-                    puzzle.move1 = allLegalMoves[0].from + allLegalMoves[0].to;
-                } else {
-                    console.error('No legal moves in position');
-                    console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
-                    throw new Error('Неверные данные хода: нет возможных ходов');
-                }
+            if (!pieceOnStart) {
+                console.error('No piece at starting square for move1:', {
+                    square: fromSquare,
+                    move: puzzle.move1,
+                    fen: puzzle.fen1
+                });
+                throw new Error(`Неверные данные хода: нет фигуры на ${fromSquare}`);
             }
-            
-            // Проверяем, что фигура принадлежит тому, чей ход
-            const selectedMove = allLegalMoves.find(m => 
-                m.from === puzzle.move1.substring(0, 2) && 
-                m.to === puzzle.move1.substring(2, 4)
-            );
-            
-            if (!selectedMove) {
-                console.error('Selected move is not legal:', puzzle.move1);
+
+            // Делаем ход move1 и проверяем fen2
+            const move1Result = tempGame.move({
+                from: fromSquare,
+                to: toSquare,
+                promotion: 'q'
+            });
+
+            if (!move1Result) {
+                console.error('Move1 is not legal:', {
+                    move: puzzle.move1,
+                    fen: puzzle.fen1
+                });
                 throw new Error('Неверные данные хода: ход невозможен');
             }
-            
-            const pieceOnSquare = tempGame.get(selectedMove.from);
-            if ((tempGame.turn() === 'w' && pieceOnSquare.color === 'b') ||
-                (tempGame.turn() === 'b' && pieceOnSquare.color === 'w')) {
-                console.error('Wrong color to move:', {
-                    turn: tempGame.turn(),
-                    pieceColor: pieceOnSquare.color
+
+            // Проверяем соответствие fen2
+            const expectedFen2 = tempGame.fen();
+            if (puzzle.fen2 !== expectedFen2) {
+                console.error('FEN2 mismatch:', {
+                    received: puzzle.fen2,
+                    expected: expectedFen2
                 });
-                throw new Error('Неверные данные хода: ход не той стороны');
+                // Исправляем fen2
+                puzzle.fen2 = expectedFen2;
             }
-            
-            // Проверяем формат ходов
-            if (!puzzle.move1 || !/^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1)) {
-                console.error('Invalid move1 format:', puzzle.move1);
-                throw new Error('Неверный формат хода move1');
+
+            // Проверяем возможность хода move2
+            const [move2From, move2To] = [
+                puzzle.move2.substring(0, 2),
+                puzzle.move2.substring(2, 4)
+            ];
+
+            const pieceForMove2 = tempGame.get(move2From);
+            if (!pieceForMove2) {
+                console.error('No piece at starting square for move2:', {
+                    square: move2From,
+                    move: puzzle.move2,
+                    fen: expectedFen2
+                });
+                throw new Error(`Неверные данные хода: нет фигуры на ${move2From}`);
             }
-            
-            if (!puzzle.move2 || !/^[a-h][1-8][a-h][1-8]$/.test(puzzle.move2)) {
-                console.error('Invalid move2 format:', puzzle.move2);
-                throw new Error('Неверный формат хода move2');
-            }
-            
-            if (!puzzle.id) {
-                throw new Error('Отсутствует ID задачи');
+
+            // Проверяем легальность хода move2
+            const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+                m.from === move2From && m.to === move2To
+            );
+
+            if (!move2IsLegal) {
+                console.error('Move2 is not legal:', {
+                    move: puzzle.move2,
+                    fen: expectedFen2,
+                    legalMoves: tempGame.moves({ verbose: true })
+                });
+                throw new Error('Неверные данные хода: ход невозможен');
             }
 
             // Сохраняем текущую задачу
