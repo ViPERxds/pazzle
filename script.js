@@ -46,6 +46,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Создаем новый экземпляр игры
+        game = new Chess();
+        
+        // Загружаем начальную позицию
+        const loadSuccess = game.load(puzzleConfig.initialFen);
+        if (!loadSuccess) {
+            console.error('Failed to load initial position');
+            return;
+        }
+        console.log('Initial position loaded:', game.fen());
+
         const config = {
             draggable: true,
             position: puzzleConfig.initialFen,
@@ -58,33 +69,37 @@ document.addEventListener('DOMContentLoaded', function() {
             snapbackSpeed: 0,
             snapSpeed: 0,
             trashSpeed: 0,
-            appearSpeed: 0,
-            onLoad: function() {
-                // Делаем предварительный ход move1 после полной загрузки доски
-                const from = puzzleConfig.move1.substring(0, 2);
-                const to = puzzleConfig.move1.substring(2, 4);
-                console.log('Making premove:', from, 'to', to);
-                
+            appearSpeed: 0
+        };
+
+        // Создаем доску
+        board = Chessboard('board', config);
+        
+        // Ждем немного, чтобы доска успела инициализироваться
+        setTimeout(() => {
+            // Делаем предварительный ход
+            const from = puzzleConfig.move1.substring(0, 2);
+            const to = puzzleConfig.move1.substring(2, 4);
+            console.log('Attempting premove:', from, 'to', to);
+            
+            try {
                 const premove = game.move({ from: from, to: to, promotion: 'q' });
                 if (premove) {
                     console.log('Premove successful:', premove);
                     board.position(game.fen(), false);
                     
-                    // Показываем стрелку для следующего хода move2
+                    // Показываем стрелку для следующего хода
                     const move2From = puzzleConfig.move2.substring(0, 2);
                     const move2To = puzzleConfig.move2.substring(2, 4);
-                    console.log('Drawing arrow for move2:', move2From, 'to', move2To);
+                    console.log('Drawing arrow from', move2From, 'to', move2To);
                     drawArrow(move2From, move2To);
                 } else {
-                    console.error('Failed to make premove');
+                    console.error('Failed to make premove - move is invalid');
                 }
+            } catch (error) {
+                console.error('Error making premove:', error);
             }
-        };
-
-        // Создаем доску и загружаем начальную позицию
-        board = Chessboard('board', config);
-        game.load(puzzleConfig.initialFen);
-        console.log('Initial position loaded:', game.fen());
+        }, 100);
     }
     
     // Функции для обработки ходов
@@ -320,6 +335,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         console.log('Showing puzzle:', puzzle);
+
+        // Проверяем наличие всех необходимых данных
+        if (!puzzle.fen1 || !puzzle.move1 || !puzzle.move2) {
+            console.error('Missing required puzzle data:', puzzle);
+            return;
+        }
 
         // Определяем цвет из строкового значения 'w' или 'b'
         const orientation = puzzle.color === 'w' ? 'white' : 'black';
