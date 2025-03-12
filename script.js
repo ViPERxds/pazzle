@@ -435,8 +435,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Получаем задачу через API
             const puzzle = await fetchWithAuth(`${API_URL}/api/random-puzzle/${username}`);
-            
-            // Подробное логирование полученных данных
             console.log('Raw puzzle data:', puzzle);
             
             if (!puzzle) {
@@ -450,12 +448,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Неверный формат позиции');
             }
 
-            // Получаем все возможные ходы в позиции
-            const allLegalMoves = tempGame.moves({ verbose: true });
-            console.log('All legal moves:', allLegalMoves);
-            console.log('Current position:', tempGame.fen());
-            console.log('Turn:', tempGame.turn());
-            console.log('Pieces:', tempGame.board());
+            // Подробное логирование текущей позиции
+            console.log('Initial position:', {
+                fen: tempGame.fen(),
+                turn: tempGame.turn(),
+                pieces: tempGame.board().flat().filter(p => p),
+                moves: tempGame.moves({ verbose: true })
+            });
 
             // Проверяем наличие фигуры для move1
             const [fromSquare, toSquare] = [
@@ -464,55 +463,32 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             const pieceOnStart = tempGame.get(fromSquare);
-            console.log('Piece on start square:', pieceOnStart);
+            console.log('Piece for move1:', {
+                from: fromSquare,
+                to: toSquare,
+                piece: pieceOnStart,
+                turn: tempGame.turn()
+            });
             
-            // Если нет фигуры на начальной позиции или ход невозможен,
-            // проверяем возможные ходы
-            if (!pieceOnStart || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
-                console.log('Original move is not possible, searching for alternatives');
-                
-                let movesToSearch = allLegalMoves;
-                
-                // Проверяем, чей сейчас ход
-                if (tempGame.turn() === 'b') {
-                    console.log('Converting position to white move');
-                    // Если ход черных, меняем очередь хода
-                    const fenParts = tempGame.fen().split(' ');
-                    fenParts[1] = 'w'; // Меняем очередь хода на белых
-                    const newFen = fenParts.join(' ');
-                    tempGame.load(newFen);
-                    // Получаем обновленный список ходов
-                    movesToSearch = tempGame.moves({ verbose: true });
-                    console.log('Updated legal moves after turn change:', movesToSearch);
-                }
-                
-                // Ищем любой возможный ход белой фигурой
-                const whiteMove = movesToSearch.find(m => {
-                    const piece = tempGame.get(m.from);
-                    console.log('Checking move:', m, 'piece:', piece);
-                    return piece && piece.color === 'w';
-                });
+            // Проверяем возможность хода move1
+            const move1IsLegal = tempGame.moves({ verbose: true }).some(m => 
+                m.from === fromSquare && m.to === toSquare
+            );
 
-                if (whiteMove) {
-                    console.log('Found white move:', whiteMove);
-                    puzzle.move1 = whiteMove.from + whiteMove.to;
+            if (!move1IsLegal) {
+                console.log('Move1 is not legal, searching for alternatives');
+                
+                // Получаем все возможные ходы для текущей стороны
+                const legalMoves = tempGame.moves({ verbose: true });
+                console.log('Legal moves:', legalMoves);
+
+                // Ищем любой возможный ход для текущей стороны
+                const possibleMove = legalMoves[0];
+                if (possibleMove) {
+                    console.log('Found alternative move:', possibleMove);
+                    puzzle.move1 = possibleMove.from + possibleMove.to;
                 } else {
-                    // Пробуем найти любую белую фигуру на доске
-                    const board = tempGame.board();
-                    let hasWhitePieces = false;
-                    for (let i = 0; i < 8; i++) {
-                        for (let j = 0; j < 8; j++) {
-                            const piece = board[i][j];
-                            if (piece && piece.color === 'w') {
-                                hasWhitePieces = true;
-                                console.log('Found white piece at:', {rank: i, file: j, piece: piece});
-                            }
-                        }
-                    }
-                    if (!hasWhitePieces) {
-                        console.log('No white pieces found on board');
-                    }
-                    throw new Error('Не найдено возможных ходов белыми фигурами');
+                    throw new Error(`Не найдено возможных ходов для ${tempGame.turn() === 'w' ? 'белых' : 'черных'}`);
                 }
             }
 
@@ -536,26 +512,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 puzzle.move2.substring(2, 4)
             ];
 
-            // Получаем все возможные ходы после первого хода
-            const legalMovesAfterMove1 = tempGame.moves({ verbose: true });
-
-            // Проверяем, возможен ли ход move2
-            const move2IsLegal = legalMovesAfterMove1.some(m => 
+            // Проверяем возможность хода move2
+            const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
                 m.from === move2From && m.to === move2To
             );
 
             if (!move2IsLegal) {
-                console.log('Move2 is not legal, looking for any black move');
-                // Ищем любой возможный ход черными
-                const blackMove = legalMovesAfterMove1.find(m => 
-                    tempGame.get(m.from).color === 'b' // черная фигура
-                );
+                console.log('Move2 is not legal, searching for alternatives');
+                
+                // Получаем все возможные ходы после первого хода
+                const legalMovesAfterMove1 = tempGame.moves({ verbose: true });
+                console.log('Legal moves after move1:', legalMovesAfterMove1);
 
-                if (blackMove) {
-                    console.log('Found legal black move:', blackMove);
-                    puzzle.move2 = blackMove.from + blackMove.to;
+                // Ищем любой возможный ход
+                const possibleMove2 = legalMovesAfterMove1[0];
+                if (possibleMove2) {
+                    console.log('Found alternative move2:', possibleMove2);
+                    puzzle.move2 = possibleMove2.from + possibleMove2.to;
                 } else {
-                    throw new Error('Не найдено возможных ходов черными фигурами');
+                    throw new Error(`Не найдено возможных ходов после первого хода`);
                 }
             }
 
