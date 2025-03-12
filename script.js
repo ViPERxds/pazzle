@@ -58,13 +58,10 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Initial position loaded:', game.fen());
 
         // Определяем, чей ход должен быть
-        const moveColor = puzzleConfig.move1.match(/[a-h][1-8]/)[0];
-        const piece = game.get(moveColor);
-        if (piece) {
-            // Устанавливаем ход той стороны, чья фигура должна ходить
-            const fen = game.fen().split(' ');
-            fen[1] = piece.color;
-            game.load(fen.join(' '));
+        const fenParts = puzzleConfig.initialFen.split(' ');
+        if (fenParts.length > 1) {
+            // Используем цвет хода из FEN
+            game.load(puzzleConfig.initialFen);
         }
         console.log('Turn set to:', game.turn());
 
@@ -95,11 +92,27 @@ document.addEventListener('DOMContentLoaded', function() {
             
             try {
                 // Проверяем фигуру и возможные ходы
+                console.log('Current FEN:', game.fen());
+                console.log('Current turn:', game.turn());
+                console.log('All pieces:', game.board());
+                console.log('Legal moves:', game.moves({verbose: true}));
+                
                 const piece = game.get(from);
                 console.log('Piece at', from + ':', piece);
                 
                 if (!piece) {
                     console.error('No piece at', from);
+                    console.log('All squares with pieces:');
+                    for (let i = 0; i < 8; i++) {
+                        for (let j = 0; j < 8; j++) {
+                            const piece = game.board()[i][j];
+                            if (piece) {
+                                const file = String.fromCharCode(97 + j);
+                                const rank = 8 - i;
+                                console.log(`${file}${rank}: ${piece.type} (${piece.color})`);
+                            }
+                        }
+                    }
                     return;
                 }
 
