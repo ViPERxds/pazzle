@@ -443,17 +443,41 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Проверяем наличие фигуры на начальной позиции
             const pieceOnSquare = tempGame.get(fromSquare);
-            console.log('Piece for move1:', {
+            console.log('Move1 validation:', {
+                fen: puzzle.fen1,
                 from: fromSquare,
                 to: toSquare,
                 piece: pieceOnSquare,
+                turn: tempGame.turn(),
                 possibleMoves: tempGame.moves({ verbose: true })
-                    .filter(m => m.from === fromSquare)
             });
             
             if (!pieceOnSquare) {
                 console.error('No piece found for move1 at square:', fromSquare);
                 throw new Error('Неверные данные хода: нет фигуры на начальной позиции');
+            }
+
+            // Проверяем, что фигура принадлежит тому, чей ход
+            if ((tempGame.turn() === 'w' && pieceOnSquare.color === 'b') ||
+                (tempGame.turn() === 'b' && pieceOnSquare.color === 'w')) {
+                console.error('Wrong color to move:', {
+                    turn: tempGame.turn(),
+                    pieceColor: pieceOnSquare.color
+                });
+                throw new Error('Неверные данные хода: ход не той стороны');
+            }
+            
+            // Проверяем возможность хода
+            const isLegalMove = tempGame.moves({ verbose: true })
+                .some(m => m.from === fromSquare && m.to === toSquare);
+            
+            if (!isLegalMove) {
+                console.error('Move is not legal:', {
+                    from: fromSquare,
+                    to: toSquare,
+                    legalMoves: tempGame.moves({ verbose: true })
+                });
+                throw new Error('Неверные данные хода: ход невозможен');
             }
             
             if (!puzzle.move1 || !/^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1)) {
