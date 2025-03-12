@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
             trashSpeed: 0,
             appearSpeed: 0
         };
-        board = Chessboard('myBoard', config);
+        board = Chessboard('board', config);
         game.load(puzzleConfig.initialFen);
         
         // Делаем предварительный ход move1
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
         drawArrow(move2From, move2To);
         
         // Возвращаемся к позиции после хода move1
-        game.load(puzzleConfig.fen1);
+        game.load(puzzleConfig.initialFen);
         game.move({ from: from, to: to, promotion: 'q' });
     }
     
@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        const board = document.querySelector('#myBoard');
+        const board = document.querySelector('#board');
         if (!board) {
             console.error('Board element not found');
             return;
