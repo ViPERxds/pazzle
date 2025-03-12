@@ -436,14 +436,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Подробное логирование текущей позиции
-            console.log('Current position:', {
+            const board = tempGame.board();
+            const pieces = [];
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const piece = board[i][j];
+                    if (piece) {
+                        const square = String.fromCharCode(97 + j) + (8 - i);
+                        pieces.push({
+                            square: square,
+                            piece: piece.type,
+                            color: piece.color
+                        });
+                    }
+                }
+            }
+            
+            console.log('Current board state:', {
                 fen: tempGame.fen(),
                 turn: tempGame.turn(),
-                pieces: tempGame.board().flat().filter(p => p !== null).map(p => ({ 
-                    type: p.type,
-                    color: p.color,
-                    square: p.square
-                }))
+                pieces: pieces
             });
             
             // Проверяем ход move1
@@ -465,6 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!pieceOnSquare) {
                 console.error('No piece found for move1 at square:', fromSquare);
+                console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
                 throw new Error('Неверные данные хода: нет фигуры на начальной позиции');
             }
 
