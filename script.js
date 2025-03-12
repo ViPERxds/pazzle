@@ -37,7 +37,9 @@ document.addEventListener('DOMContentLoaded', function() {
             draggable: true,
             position: puzzleConfig.initialFen,
             orientation: puzzleConfig.orientation,
+            onDragStart: onDragStart,
             onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
             pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             moveSpeed: 0,
             snapbackSpeed: 0,
@@ -90,17 +92,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Если ход невозможен, возвращаем фигуру
-        if (move === null) return 'snapback';
-        
-        // Проверяем, является ли это ходом для оценки
-        if (puzzleConfig.evaluatedMove) {
-            const moveStr = move.from + move.to;
-            if (moveStr === puzzleConfig.evaluatedMove) {
-                submitSolution(true);
-            } else {
-                submitSolution(false);
-            }
+        if (move === null) {
+            return 'snapback';
         }
+        
+        // Отменяем ход, так как мы только оцениваем ход move2
+        game.undo();
+        
+        // Проверяем, совпадает ли ход с move2
+        const moveStr = source + target;
+        if (moveStr === puzzleConfig.move2) {
+            submitSolution(true);
+        } else {
+            submitSolution(false);
+        }
+        
+        return 'snapback';
     }
     
     function onSnapEnd() {
