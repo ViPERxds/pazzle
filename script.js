@@ -428,6 +428,29 @@ document.addEventListener('DOMContentLoaded', function() {
         return null;
     }
 
+    // Функция для отметки некорректной задачи
+    async function markInvalidPuzzle(puzzleId, reason) {
+        try {
+            console.log('Marking invalid puzzle:', {
+                puzzleId: puzzleId,
+                reason: reason
+            });
+            
+            await fetchWithAuth(`${API_URL}/api/mark-invalid-puzzle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    puzzleId: puzzleId,
+                    reason: reason
+                })
+            });
+        } catch (err) {
+            console.error('Error marking invalid puzzle:', err);
+        }
+    }
+
     // Улучшенная функция загрузки задачи
     async function loadPuzzle(username) {
         try {
@@ -444,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Проверяем FEN на корректность
             const tempGame = new Chess();
             if (!puzzle.fen1 || !tempGame.load(puzzle.fen1)) {
-                console.error('Invalid or missing FEN position:', puzzle.fen1);
+                await markInvalidPuzzle(puzzle.id, 'Некорректный FEN');
                 throw new Error('Неверный формат позиции');
             }
 
@@ -477,6 +500,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (!pieceOnStart) {
+                await markInvalidPuzzle(puzzle.id, `На поле ${fromSquare} нет фигуры для хода ${puzzle.move1}`);
                 throw new Error(`Ошибка в базе данных (ID: ${puzzle.id}): на поле ${fromSquare} нет фигуры для хода ${puzzle.move1}`);
             }
 
@@ -487,7 +511,7 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             if (!move1IsLegal) {
-                console.log('Legal moves for position:', legalMoves);
+                await markInvalidPuzzle(puzzle.id, `Ход ${puzzle.move1} невозможен в позиции ${puzzle.fen1}`);
                 throw new Error(`Ошибка в базе данных (ID: ${puzzle.id}): ход ${puzzle.move1} невозможен. Доступные ходы: ${legalMoves.map(m => m.from + m.to).join(', ')}`);
             }
 
