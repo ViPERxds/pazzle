@@ -517,10 +517,20 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.setAttribute("class", "arrow");
         svg.style.width = '100%';
         svg.style.height = '100%';
+        svg.style.position = 'absolute';
+        svg.style.top = '0';
+        svg.style.left = '0';
         
         // Получаем координаты квадратов
-        const fromSquare = board.querySelector(`[data-square="${from}"]`);
-        const toSquare = board.querySelector(`[data-square="${to}"]`);
+        const squares = board.querySelectorAll('.square-55d63');
+        let fromSquare = null;
+        let toSquare = null;
+
+        squares.forEach(square => {
+            const squareData = square.getAttribute('data-square');
+            if (squareData === from) fromSquare = square;
+            if (squareData === to) toSquare = square;
+        });
         
         if (!fromSquare || !toSquare) {
             console.error('Squares not found:', from, to);
@@ -531,42 +541,47 @@ document.addEventListener('DOMContentLoaded', function() {
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
         
-        // Вычисляем относительные координаты
-        const x1 = ((fromRect.left + fromRect.width/2) - boardRect.left) / boardRect.width * 100;
-        const y1 = ((fromRect.top + fromRect.height/2) - boardRect.top) / boardRect.height * 100;
-        const x2 = ((toRect.left + toRect.width/2) - boardRect.left) / boardRect.width * 100;
-        const y2 = ((toRect.top + toRect.height/2) - boardRect.top) / boardRect.height * 100;
+        // Вычисляем координаты центров квадратов
+        const squareSize = boardRect.width / 8;
+        const x1 = (fromRect.left + squareSize/2 - boardRect.left);
+        const y1 = (fromRect.top + squareSize/2 - boardRect.top);
+        const x2 = (toRect.left + squareSize/2 - boardRect.left);
+        const y2 = (toRect.top + squareSize/2 - boardRect.top);
 
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         
-        // Параметры стрелки в процентах от размера доски
-        const arrowWidth = 3; // ширина линии
-        const headSize = 6;   // размер наконечника
+        // Параметры стрелки
+        const arrowWidth = squareSize * 0.2;
+        const headSize = squareSize * 0.4;
         
         // Вычисляем угол и длину
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
         
-        // Создаем путь для стрелки
+        // Создаем путь для стрелки с линией и наконечником
         const arrowPath = `
             M ${x1} ${y1}
-            L ${x2 - dx * headSize} ${y2 - dy * headSize}
-            L ${x2 - dx * headSize - dy * headSize/2} ${y2 - dy * headSize + dx * headSize/2}
+            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
+            L ${x2 - headSize * Math.cos(angle) - headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) + headSize/2 * Math.cos(angle)}
             L ${x2} ${y2}
-            L ${x2 - dx * headSize + dy * headSize/2} ${y2 - dy * headSize - dx * headSize/2}
-            L ${x2 - dx * headSize} ${y2 - dy * headSize}
+            L ${x2 - headSize * Math.cos(angle) + headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) - headSize/2 * Math.cos(angle)}
+            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
             Z
         `;
         
         path.setAttribute("d", arrowPath);
         path.setAttribute("fill", "#00ff00");
         path.setAttribute("opacity", "0.5");
+        path.setAttribute("stroke", "#00ff00");
+        path.setAttribute("stroke-width", "2");
 
         svg.appendChild(path);
         container.appendChild(svg);
         board.appendChild(container);
+
+        // Устанавливаем viewBox для SVG
+        svg.setAttribute('viewBox', `0 0 ${boardRect.width} ${boardRect.height}`);
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
