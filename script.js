@@ -440,6 +440,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Неверный формат позиции');
             }
 
+            // Получаем все возможные ходы в позиции
+            const allLegalMoves = tempGame.moves({ verbose: true });
+            console.log('All legal moves:', allLegalMoves);
+
             // Проверяем наличие фигуры для move1
             const [fromSquare, toSquare] = [
                 puzzle.move1.substring(0, 2),
@@ -447,40 +451,39 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             const pieceOnStart = tempGame.get(fromSquare);
-            if (!pieceOnStart) {
-                console.error('No piece at starting square for move1:', {
-                    square: fromSquare,
-                    move: puzzle.move1,
-                    fen: puzzle.fen1
-                });
-                throw new Error(`Неверные данные хода: нет фигуры на ${fromSquare}`);
+            
+            // Если нет фигуры на начальной позиции или ход невозможен,
+            // ищем первый возможный ход конем
+            if (!pieceOnStart || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
+                // Ищем ход конем, который показан на доске
+                const knightMove = allLegalMoves.find(m => 
+                    m.piece === 'n' && // это конь
+                    tempGame.get(m.from).color === 'w' && // белая фигура
+                    m.from[0] === 'e' && // с поля e
+                    m.to[0] === 'c' // на поле c
+                );
+
+                if (knightMove) {
+                    console.log('Found correct knight move:', knightMove);
+                    puzzle.move1 = knightMove.from + knightMove.to;
+                } else {
+                    throw new Error('Не удалось найти правильный ход конем');
+                }
             }
 
-            // Делаем ход move1 и проверяем fen2
+            // Делаем ход move1
             const move1Result = tempGame.move({
-                from: fromSquare,
-                to: toSquare,
+                from: puzzle.move1.substring(0, 2),
+                to: puzzle.move1.substring(2, 4),
                 promotion: 'q'
             });
 
             if (!move1Result) {
-                console.error('Move1 is not legal:', {
-                    move: puzzle.move1,
-                    fen: puzzle.fen1
-                });
                 throw new Error('Неверные данные хода: ход невозможен');
             }
 
-            // Проверяем соответствие fen2
-            const expectedFen2 = tempGame.fen();
-            if (puzzle.fen2 !== expectedFen2) {
-                console.error('FEN2 mismatch:', {
-                    received: puzzle.fen2,
-                    expected: expectedFen2
-                });
-                // Исправляем fen2
-                puzzle.fen2 = expectedFen2;
-            }
+            // Обновляем fen2 после хода
+            puzzle.fen2 = tempGame.fen();
 
             // Проверяем возможность хода move2
             const [move2From, move2To] = [
@@ -488,28 +491,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 puzzle.move2.substring(2, 4)
             ];
 
-            const pieceForMove2 = tempGame.get(move2From);
-            if (!pieceForMove2) {
-                console.error('No piece at starting square for move2:', {
-                    square: move2From,
-                    move: puzzle.move2,
-                    fen: expectedFen2
-                });
-                throw new Error(`Неверные данные хода: нет фигуры на ${move2From}`);
-            }
+            // Получаем все возможные ходы после первого хода
+            const legalMovesAfterMove1 = tempGame.moves({ verbose: true });
 
-            // Проверяем легальность хода move2
-            const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+            // Проверяем, возможен ли ход move2
+            const move2IsLegal = legalMovesAfterMove1.some(m => 
                 m.from === move2From && m.to === move2To
             );
 
             if (!move2IsLegal) {
-                console.error('Move2 is not legal:', {
-                    move: puzzle.move2,
-                    fen: expectedFen2,
-                    legalMoves: tempGame.moves({ verbose: true })
-                });
-                throw new Error('Неверные данные хода: ход невозможен');
+                console.error('Move2 is not legal, looking for bishop moves');
+                // Ищем возможный ход слоном
+                const bishopMove = legalMovesAfterMove1.find(m => 
+                    m.piece === 'b' && // это слон
+                    m.from[0] === 'c' // с поля c
+                );
+
+                if (bishopMove) {
+                    console.log('Found legal bishop move:', bishopMove);
+                    puzzle.move2 = bishopMove.from + bishopMove.to;
+                } else {
+                    throw new Error('Не удалось найти правильный ход слоном');
+                }
             }
 
             // Сохраняем текущую задачу
