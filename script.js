@@ -88,14 +88,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Делаем предварительный ход
             const from = puzzleConfig.move1.substring(0, 2);
             const to = puzzleConfig.move1.substring(2, 4);
+            console.log('Move1:', puzzleConfig.move1);
             console.log('Attempting premove:', from, 'to', to);
             
             try {
                 // Проверяем фигуру и возможные ходы
                 console.log('Current FEN:', game.fen());
                 console.log('Current turn:', game.turn());
-                console.log('All pieces:', game.board());
-                console.log('Legal moves:', game.moves({verbose: true}));
+                console.log('Move1 details:', {
+                    from: from,
+                    to: to,
+                    piece: game.get(from),
+                    possibleMoves: game.moves({verbose: true}).filter(m => m.from === from)
+                });
                 
                 const piece = game.get(from);
                 console.log('Piece at', from + ':', piece);
@@ -387,6 +392,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Определяем цвет из строкового значения 'w' или 'b'
         const orientation = puzzle.color === 'w' ? 'white' : 'black';
+        
+        // Проверяем формат ходов
+        const move1Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1);
+        const move2Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move2);
+        
+        if (!move1Format || !move2Format) {
+            console.error('Invalid move format:', {
+                move1: puzzle.move1,
+                move2: puzzle.move2,
+                move1Valid: move1Format,
+                move2Valid: move2Format
+            });
+            return;
+        }
         
         // Обновляем конфигурацию
         puzzleConfig = {
