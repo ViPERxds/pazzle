@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
             position: puzzleConfig.initialFen,
             orientation: puzzleConfig.orientation,
             onDrop: onDrop,
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             moveSpeed: 0,
             snapbackSpeed: 0,
             snapSpeed: 0,
