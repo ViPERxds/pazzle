@@ -56,6 +56,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         console.log('Initial position loaded:', game.fen());
+        console.log('Current turn:', game.turn());
+        console.log('Legal moves:', game.moves({ verbose: true }));
 
         const config = {
             draggable: true,
@@ -82,7 +84,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const to = puzzleConfig.move1.substring(2, 4);
             console.log('Attempting premove:', from, 'to', to);
             
+            // Проверяем фигуру на начальной позиции
+            const piece = game.get(from);
+            console.log('Piece at', from + ':', piece);
+            
             try {
+                // Проверяем возможные ходы для этой фигуры
+                const moves = game.moves({ square: from, verbose: true });
+                console.log('Legal moves from', from + ':', moves);
+                
                 const premove = game.move({ from: from, to: to, promotion: 'q' });
                 if (premove) {
                     console.log('Premove successful:', premove);
@@ -95,9 +105,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     drawArrow(move2From, move2To);
                 } else {
                     console.error('Failed to make premove - move is invalid');
+                    console.log('Current position:', game.fen());
+                    console.log('Attempted move:', { from, to });
                 }
             } catch (error) {
                 console.error('Error making premove:', error);
+                console.log('Game state:', {
+                    fen: game.fen(),
+                    turn: game.turn(),
+                    inCheck: game.in_check(),
+                    moves: game.moves()
+                });
             }
         }, 100);
     }
