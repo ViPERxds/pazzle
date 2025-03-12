@@ -463,20 +463,32 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             const pieceOnStart = tempGame.get(fromSquare);
-            console.log('Piece for move1:', {
+            console.log('Move1 validation:', {
                 from: fromSquare,
                 to: toSquare,
                 piece: pieceOnStart,
-                turn: tempGame.turn()
+                turn: tempGame.turn(),
+                puzzleId: puzzle.id,
+                allPieces: tempGame.board().flat().filter(p => p).map(p => ({
+                    type: p.type,
+                    color: p.color,
+                    square: p.square
+                }))
             });
             
+            if (!pieceOnStart) {
+                throw new Error(`Ошибка в базе данных (ID: ${puzzle.id}): на поле ${fromSquare} нет фигуры для хода ${puzzle.move1}`);
+            }
+
             // Проверяем возможность хода move1
-            const move1IsLegal = tempGame.moves({ verbose: true }).some(m => 
+            const legalMoves = tempGame.moves({ verbose: true });
+            const move1IsLegal = legalMoves.some(m => 
                 m.from === fromSquare && m.to === toSquare
             );
 
             if (!move1IsLegal) {
-                throw new Error('Ход из базы данных невозможен в текущей позиции');
+                console.log('Legal moves for position:', legalMoves);
+                throw new Error(`Ошибка в базе данных (ID: ${puzzle.id}): ход ${puzzle.move1} невозможен. Доступные ходы: ${legalMoves.map(m => m.from + m.to).join(', ')}`);
             }
 
             // Делаем ход move1
