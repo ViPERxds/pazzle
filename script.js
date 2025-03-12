@@ -636,22 +636,27 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Получаем все клетки доски
+        // Получаем координаты квадратов
         const squares = board.querySelectorAll('.square-55d63');
         let fromSquare = null;
         let toSquare = null;
 
         squares.forEach(square => {
-            if (square.getAttribute('data-square') === from) fromSquare = square;
-            if (square.getAttribute('data-square') === to) toSquare = square;
+            const squareData = square.getAttribute('data-square');
+            if (squareData === from) fromSquare = square;
+            if (squareData === to) toSquare = square;
         });
-
+        
         if (!fromSquare || !toSquare) {
             console.error('Squares not found:', from, to);
             return;
         }
 
         const boardRect = board.getBoundingClientRect();
+        const fromRect = fromSquare.getBoundingClientRect();
+        const toRect = toSquare.getBoundingClientRect();
+        
+        // Вычисляем координаты центров квадратов
         const squareSize = boardRect.width / 8;
 
         // Получаем координаты клеток
