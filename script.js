@@ -434,6 +434,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Invalid or missing FEN position:', puzzle.fen1);
                 throw new Error('Неверный формат позиции');
             }
+
+            // Подробное логирование текущей позиции
+            console.log('Current position:', {
+                fen: tempGame.fen(),
+                turn: tempGame.turn(),
+                pieces: tempGame.board().flat().filter(p => p !== null).map(p => ({ 
+                    type: p.type,
+                    color: p.color,
+                    square: p.square
+                }))
+            });
             
             // Проверяем ход move1
             const [fromSquare, toSquare] = [
@@ -564,9 +575,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Функция для отрисовки стрелок
     function drawArrow(from, to) {
-        console.log('Drawing arrow from', from, 'to', to);
+        console.log('Drawing arrow for move:', from + to);
         
-        // Удаляем старую стрелку если она есть
+        // Удаляем старую стрелку
         const oldArrow = document.querySelector('.arrow');
         if (oldArrow) oldArrow.remove();
 
@@ -585,7 +596,7 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.height = '100%';
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
-
+        
         // Получаем координаты квадратов
         const squares = board.querySelectorAll('.square-55d63');
         let fromSquare = null;
@@ -596,46 +607,51 @@ document.addEventListener('DOMContentLoaded', function() {
             if (squareData === from) fromSquare = square;
             if (squareData === to) toSquare = square;
         });
-
+        
         if (!fromSquare || !toSquare) {
             console.error('Squares not found:', from, to);
             return;
         }
 
+        const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
-        const boardRect = board.getBoundingClientRect();
+        
+        // Вычисляем координаты центров квадратов
+        const squareSize = boardRect.width / 8;
+        const x1 = (fromRect.left + squareSize/2 - boardRect.left);
+        const y1 = (fromRect.top + squareSize/2 - boardRect.top);
+        const x2 = (toRect.left + squareSize/2 - boardRect.left);
+        const y2 = (toRect.top + squareSize/2 - boardRect.top);
 
-        const x1 = fromRect.left + fromRect.width/2 - boardRect.left;
-        const y1 = fromRect.top + fromRect.height/2 - boardRect.top;
-        const x2 = toRect.left + toRect.width/2 - boardRect.left;
-        const y2 = toRect.top + toRect.height/2 - boardRect.top;
-
+        // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `M ${x1} ${y1} L ${x2} ${y2}`);
-        path.setAttribute("stroke", "#00ff00");
-        path.setAttribute("stroke-width", "5");
+        
+        // Параметры стрелки
+        const arrowWidth = squareSize * 0.2;
+        const headSize = squareSize * 0.4;
+        
+        // Вычисляем угол и длину
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+        
+        // Создаем путь для стрелки с линией и наконечником
+        const arrowPath = `
+            M ${x1} ${y1}
+            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
+            L ${x2 - headSize * Math.cos(angle) - headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) + headSize/2 * Math.cos(angle)}
+            L ${x2} ${y2}
+            L ${x2 - headSize * Math.cos(angle) + headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) - headSize/2 * Math.cos(angle)}
+            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
+            Z
+        `;
+        
+        path.setAttribute("d", arrowPath);
+        path.setAttribute("fill", "#00ff00");
         path.setAttribute("opacity", "0.5");
-        path.setAttribute("marker-end", "url(#arrowhead)");
+        path.setAttribute("stroke", "#00ff00");
+        path.setAttribute("stroke-width", "2");
 
-        // Добавляем определение маркера для стрелки
-        const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-        const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-        marker.setAttribute("id", "arrowhead");
-        marker.setAttribute("markerWidth", "10");
-        marker.setAttribute("markerHeight", "7");
-        marker.setAttribute("refX", "9");
-        marker.setAttribute("refY", "3.5");
-        marker.setAttribute("orient", "auto");
-
-        const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
-        polygon.setAttribute("fill", "#00ff00");
-        polygon.setAttribute("opacity", "0.5");
-
-        marker.appendChild(polygon);
-        defs.appendChild(marker);
-        svg.appendChild(defs);
         svg.appendChild(path);
         board.appendChild(svg);
     }
