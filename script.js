@@ -33,6 +33,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Функция инициализации доски
     function initializeBoard(puzzleConfig) {
+        console.log('Initializing board with config:', puzzleConfig);
+        
+        // Проверяем наличие всех необходимых данных
+        if (!puzzleConfig.initialFen || !puzzleConfig.move1 || !puzzleConfig.fen2 || !puzzleConfig.move2) {
+            console.error('Missing required puzzle data:', {
+                initialFen: puzzleConfig.initialFen,
+                move1: puzzleConfig.move1,
+                fen2: puzzleConfig.fen2,
+                move2: puzzleConfig.move2
+            });
+            return;
+        }
+
         const config = {
             draggable: true,
             position: puzzleConfig.initialFen,
@@ -47,24 +60,31 @@ document.addEventListener('DOMContentLoaded', function() {
             trashSpeed: 0,
             appearSpeed: 0
         };
+
+        // Создаем доску и загружаем начальную позицию
         board = Chessboard('board', config);
         game.load(puzzleConfig.initialFen);
+        console.log('Initial position loaded:', game.fen());
         
         // Делаем предварительный ход move1
         const from = puzzleConfig.move1.substring(0, 2);
         const to = puzzleConfig.move1.substring(2, 4);
-        game.move({ from: from, to: to, promotion: 'q' });
-        board.position(game.fen(), false);
+        console.log('Making premove:', from, 'to', to);
+        
+        const premove = game.move({ from: from, to: to, promotion: 'q' });
+        if (premove) {
+            console.log('Premove successful:', premove);
+            board.position(game.fen(), false);
+        } else {
+            console.error('Failed to make premove');
+            return;
+        }
 
-        // Загружаем fen2 и показываем стрелку для хода move2, который нужно оценить
-        game.load(puzzleConfig.fen2);
+        // Показываем стрелку для следующего хода move2
         const move2From = puzzleConfig.move2.substring(0, 2);
         const move2To = puzzleConfig.move2.substring(2, 4);
+        console.log('Drawing arrow for move2:', move2From, 'to', move2To);
         drawArrow(move2From, move2To);
-        
-        // Возвращаемся к позиции после хода move1
-        game.load(puzzleConfig.initialFen);
-        game.move({ from: from, to: to, promotion: 'q' });
     }
     
     // Функции для обработки ходов
@@ -305,16 +325,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const orientation = puzzle.color === 'w' ? 'white' : 'black';
         
         // Обновляем конфигурацию
-        puzzleConfig.initialFen = puzzle.fen1;
-        puzzleConfig.fen2 = puzzle.fen2;
-        puzzleConfig.move1 = puzzle.move1;
-        puzzleConfig.move2 = puzzle.move2;
-        puzzleConfig.orientation = orientation;
-        puzzleConfig.solution = puzzle.solution === 'Good';
+        puzzleConfig = {
+            initialFen: puzzle.fen1,
+            fen2: puzzle.fen2,
+            move1: puzzle.move1,
+            move2: puzzle.move2,
+            orientation: orientation,
+            solution: puzzle.solution === 'Good'
+        };
 
         console.log('Updated puzzle config:', puzzleConfig);
 
-        // Сбрасываем состояние игры
+        // Сбрасываем состояние игры и инициализируем доску
         game = new Chess();
         initializeBoard(puzzleConfig);
     }
