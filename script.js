@@ -461,6 +461,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!pieceOnStart || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
                 console.log('Original move is not possible, searching for alternatives');
                 
+                let movesToSearch = allLegalMoves;
+                
                 // Проверяем, чей сейчас ход
                 if (tempGame.turn() === 'b') {
                     console.log('Converting position to white move');
@@ -470,12 +472,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const newFen = fenParts.join(' ');
                     tempGame.load(newFen);
                     // Получаем обновленный список ходов
-                    const updatedMoves = tempGame.moves({ verbose: true });
-                    console.log('Updated legal moves after turn change:', updatedMoves);
+                    movesToSearch = tempGame.moves({ verbose: true });
+                    console.log('Updated legal moves after turn change:', movesToSearch);
                 }
                 
                 // Ищем любой возможный ход белой фигурой
-                const whiteMove = allLegalMoves.find(m => {
+                const whiteMove = movesToSearch.find(m => {
                     const piece = tempGame.get(m.from);
                     console.log('Checking move:', m, 'piece:', piece);
                     return piece && piece.color === 'w';
@@ -485,7 +487,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Found white move:', whiteMove);
                     puzzle.move1 = whiteMove.from + whiteMove.to;
                 } else {
-                    console.log('No white moves found in position');
+                    // Пробуем найти любую белую фигуру на доске
+                    const board = tempGame.board();
+                    let hasWhitePieces = false;
+                    for (let i = 0; i < 8; i++) {
+                        for (let j = 0; j < 8; j++) {
+                            const piece = board[i][j];
+                            if (piece && piece.color === 'w') {
+                                hasWhitePieces = true;
+                                console.log('Found white piece at:', {rank: i, file: j, piece: piece});
+                            }
+                        }
+                    }
+                    if (!hasWhitePieces) {
+                        console.log('No white pieces found on board');
+                    }
                     throw new Error('Не найдено возможных ходов белыми фигурами');
                 }
             }
