@@ -635,48 +635,70 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Board element not found');
             return;
         }
-        
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+
+        // Получаем все клетки доски
+        const squares = board.querySelectorAll('.square-55d63');
+        let fromSquare = null;
+        let toSquare = null;
+
+        squares.forEach(square => {
+            if (square.getAttribute('data-square') === from) fromSquare = square;
+            if (square.getAttribute('data-square') === to) toSquare = square;
+        });
+
+        if (!fromSquare || !toSquare) {
+            console.error('Squares not found:', from, to);
+            return;
+        }
+
         const boardRect = board.getBoundingClientRect();
-        const fromRect = fromSquare.getBoundingClientRect();
-        const toRect = toSquare.getBoundingClientRect();
         const squareSize = boardRect.width / 8;
 
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
+        // Получаем координаты клеток
+        const fromCoords = getSquareCoords(from);
+        const toCoords = getSquareCoords(to);
 
-        // Вычисляем угол и размеры
+        // Вычисляем центры клеток
+        const x1 = fromCoords.x * squareSize + squareSize / 2;
+        const y1 = fromCoords.y * squareSize + squareSize / 2;
+        const x2 = toCoords.x * squareSize + squareSize / 2;
+        const y2 = toCoords.y * squareSize + squareSize / 2;
+
+        // Параметры стрелки
+        const headSize = squareSize * 0.4;
+        const arrowWidth = squareSize * 0.15;
+
+        // Вычисляем угол и длину
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.15;
-        const headWidth = squareSize * 0.3;
-        const headLength = squareSize * 0.3;
-
-        // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
 
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `
-            M ${x1 - width*dy} ${y1 + width*dx}
-            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
-            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
+        const arrowPath = `
+            M ${x1} ${y1}
+            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
+            L ${x2 - headSize * Math.cos(angle) - headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) + headSize/2 * Math.cos(angle)}
             L ${x2} ${y2}
-            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
-            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
-            L ${x1 + width*dy} ${y1 - width*dx}
+            L ${x2 - headSize * Math.cos(angle) + headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) - headSize/2 * Math.cos(angle)}
+            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
             Z
-        `);
+        `;
+
+        path.setAttribute("d", arrowPath);
         path.setAttribute("fill", color || "#00ff00");
         path.setAttribute("opacity", "0.5");
+        path.setAttribute("stroke", color || "#00ff00");
+        path.setAttribute("stroke-width", "2");
 
         svg.appendChild(path);
         board.appendChild(svg);
+    }
+
+    // Вспомогательная функция для получения координат клетки
+    function getSquareCoords(square) {
+        const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
+        const rank = 8 - parseInt(square[1]);
+        return { x: file, y: rank };
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
