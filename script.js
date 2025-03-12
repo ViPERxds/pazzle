@@ -56,12 +56,21 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         console.log('Initial position loaded:', game.fen());
-        console.log('Current turn:', game.turn());
-        console.log('Legal moves:', game.moves({ verbose: true }));
+
+        // Определяем, чей ход должен быть
+        const moveColor = puzzleConfig.move1.match(/[a-h][1-8]/)[0];
+        const piece = game.get(moveColor);
+        if (piece) {
+            // Устанавливаем ход той стороны, чья фигура должна ходить
+            const fen = game.fen().split(' ');
+            fen[1] = piece.color;
+            game.load(fen.join(' '));
+        }
+        console.log('Turn set to:', game.turn());
 
         const config = {
             draggable: true,
-            position: puzzleConfig.initialFen,
+            position: game.fen(),
             orientation: puzzleConfig.orientation,
             onDragStart: onDragStart,
             onDrop: onDrop,
@@ -84,18 +93,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const to = puzzleConfig.move1.substring(2, 4);
             console.log('Attempting premove:', from, 'to', to);
             
-            // Проверяем фигуру на начальной позиции
-            const piece = game.get(from);
-            console.log('Piece at', from + ':', piece);
-            
             try {
-                // Проверяем возможные ходы для этой фигуры
-                const moves = game.moves({ square: from, verbose: true });
-                console.log('Legal moves from', from + ':', moves);
+                // Проверяем фигуру и возможные ходы
+                const piece = game.get(from);
+                console.log('Piece at', from + ':', piece);
                 
+                if (!piece) {
+                    console.error('No piece at', from);
+                    return;
+                }
+
                 const premove = game.move({ from: from, to: to, promotion: 'q' });
                 if (premove) {
                     console.log('Premove successful:', premove);
+                    // Обновляем позицию на доске
                     board.position(game.fen(), false);
                     
                     // Показываем стрелку для следующего хода
@@ -107,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Failed to make premove - move is invalid');
                     console.log('Current position:', game.fen());
                     console.log('Attempted move:', { from, to });
+                    console.log('Legal moves:', game.moves({ verbose: true }));
                 }
             } catch (error) {
                 console.error('Error making premove:', error);
