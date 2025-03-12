@@ -445,17 +445,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const tempGame = new Chess();
             if (!puzzle.fen1 || !tempGame.load(puzzle.fen1)) {
                 console.error('Invalid FEN position:', puzzle.fen1);
-                // Загружаем новую задачу
                 return loadPuzzle(username);
             }
-
-            // Подробное логирование текущей позиции
-            console.log('Initial position:', {
-                fen: tempGame.fen(),
-                turn: tempGame.turn(),
-                pieces: tempGame.board().flat().filter(p => p),
-                moves: tempGame.moves({ verbose: true })
-            });
 
             // Проверяем наличие фигуры для move1
             const [fromSquare, toSquare] = [
@@ -464,53 +455,28 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             const pieceOnStart = tempGame.get(fromSquare);
-            console.log('Move1 validation:', {
-                from: fromSquare,
-                to: toSquare,
-                piece: pieceOnStart,
-                turn: tempGame.turn(),
-                puzzleId: puzzle.id,
-                allPieces: tempGame.board().flat().filter(p => p).map(p => ({
-                    type: p.type,
-                    color: p.color,
-                    square: p.square
-                }))
-            });
-            
             if (!pieceOnStart) {
-                console.error(`No piece at square ${fromSquare} for move ${puzzle.move1} in puzzle ${puzzle.id}`);
-                // Загружаем новую задачу
+                console.error('No piece at starting square:', fromSquare);
                 return loadPuzzle(username);
             }
 
             // Проверяем возможность хода move1
-            const legalMoves = tempGame.moves({ verbose: true });
-            const move1IsLegal = legalMoves.some(m => 
-                m.from === fromSquare && m.to === toSquare
-            );
-
-            if (!move1IsLegal) {
-                console.error(`Move ${puzzle.move1} is not legal in puzzle ${puzzle.id}. Legal moves:`, 
-                    legalMoves.map(m => m.from + m.to).join(', '));
-                // Загружаем новую задачу
-                return loadPuzzle(username);
-            }
-
-            // Делаем ход move1
             const move1Result = tempGame.move({
-                from: puzzle.move1.substring(0, 2),
-                to: puzzle.move1.substring(2, 4),
+                from: fromSquare,
+                to: toSquare,
                 promotion: 'q'
             });
 
             if (!move1Result) {
-                console.error('Move is not possible:', puzzle.move1);
-                // Загружаем новую задачу
+                console.error('Move1 is not possible:', puzzle.move1);
                 return loadPuzzle(username);
             }
 
-            // Обновляем fen2 после хода
-            puzzle.fen2 = tempGame.fen();
+            // Проверяем, что позиция после хода соответствует fen2
+            if (tempGame.fen() !== puzzle.fen2) {
+                console.error('Position after move1 does not match fen2');
+                return loadPuzzle(username);
+            }
 
             // Проверяем возможность хода move2
             const [move2From, move2To] = [
@@ -518,22 +484,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 puzzle.move2.substring(2, 4)
             ];
 
-            // Проверяем возможность хода move2
-            const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
-                m.from === move2From && m.to === move2To
-            );
+            const move2Result = tempGame.move({
+                from: move2From,
+                to: move2To,
+                promotion: 'q'
+            });
 
-            if (!move2IsLegal) {
-                console.error(`Move2 ${puzzle.move2} is not legal in puzzle ${puzzle.id}`);
-                // Загружаем новую задачу
+            if (!move2Result) {
+                console.error('Move2 is not possible:', puzzle.move2);
                 return loadPuzzle(username);
             }
 
-            // Сохраняем текущую задачу
+            // Если все проверки пройдены, сохраняем текущую задачу
             currentPuzzle = puzzle;
             
+            // Определяем цвет хода из начальной позиции
+            const orientation = tempGame.load(puzzle.fen1) && tempGame.turn() === 'w' ? 'white' : 'black';
+            
             // Показываем задачу
-            showPuzzle(puzzle);
+            showPuzzle({
+                ...puzzle,
+                color: orientation === 'white' ? 'w' : 'b'
+            });
             
             // Запускаем таймер
             startStopwatch();
@@ -545,7 +517,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (err) {
             console.error('Error loading puzzle:', err);
-            // Загружаем новую задачу при ошибке
             return loadPuzzle(username);
         }
     }
