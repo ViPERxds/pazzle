@@ -443,6 +443,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Получаем все возможные ходы в позиции
             const allLegalMoves = tempGame.moves({ verbose: true });
             console.log('All legal moves:', allLegalMoves);
+            console.log('Current position:', tempGame.fen());
+            console.log('Turn:', tempGame.turn());
+            console.log('Pieces:', tempGame.board());
 
             // Проверяем наличие фигуры для move1
             const [fromSquare, toSquare] = [
@@ -451,31 +454,39 @@ document.addEventListener('DOMContentLoaded', function() {
             ];
             
             const pieceOnStart = tempGame.get(fromSquare);
+            console.log('Piece on start square:', pieceOnStart);
             
             // Если нет фигуры на начальной позиции или ход невозможен,
-            // ищем первый возможный ход конем
+            // проверяем возможные ходы
             if (!pieceOnStart || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
-                console.log('Looking for knight moves:', allLegalMoves);
-                // Ищем любой возможный ход конем
-                const knightMove = allLegalMoves.find(m => 
-                    m.piece === 'n' && // это конь
-                    tempGame.get(m.from).color === 'w' // белая фигура
-                );
+                console.log('Original move is not possible, searching for alternatives');
+                
+                // Проверяем, чей сейчас ход
+                if (tempGame.turn() === 'b') {
+                    console.log('Converting position to white move');
+                    // Если ход черных, меняем очередь хода
+                    const fenParts = tempGame.fen().split(' ');
+                    fenParts[1] = 'w'; // Меняем очередь хода на белых
+                    const newFen = fenParts.join(' ');
+                    tempGame.load(newFen);
+                    // Получаем обновленный список ходов
+                    const updatedMoves = tempGame.moves({ verbose: true });
+                    console.log('Updated legal moves after turn change:', updatedMoves);
+                }
+                
+                // Ищем любой возможный ход белой фигурой
+                const whiteMove = allLegalMoves.find(m => {
+                    const piece = tempGame.get(m.from);
+                    console.log('Checking move:', m, 'piece:', piece);
+                    return piece && piece.color === 'w';
+                });
 
-                if (knightMove) {
-                    console.log('Found knight move:', knightMove);
-                    puzzle.move1 = knightMove.from + knightMove.to;
+                if (whiteMove) {
+                    console.log('Found white move:', whiteMove);
+                    puzzle.move1 = whiteMove.from + whiteMove.to;
                 } else {
-                    // Если не нашли ход конем, ищем любой возможный ход белой фигурой
-                    const anyWhiteMove = allLegalMoves.find(m => 
-                        tempGame.get(m.from).color === 'w'
-                    );
-                    if (anyWhiteMove) {
-                        console.log('Found alternative white move:', anyWhiteMove);
-                        puzzle.move1 = anyWhiteMove.from + anyWhiteMove.to;
-                    } else {
-                        throw new Error('Не найдено возможных ходов белыми фигурами');
-                    }
+                    console.log('No white moves found in position');
+                    throw new Error('Не найдено возможных ходов белыми фигурами');
                 }
             }
 
