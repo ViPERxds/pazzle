@@ -508,18 +508,17 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             if (!move2IsLegal) {
-                console.error('Move2 is not legal, looking for bishop moves');
-                // Ищем возможный ход слоном
-                const bishopMove = legalMovesAfterMove1.find(m => 
-                    m.piece === 'b' && // это слон
-                    m.from[0] === 'c' // с поля c
+                console.log('Move2 is not legal, looking for any black move');
+                // Ищем любой возможный ход черными
+                const blackMove = legalMovesAfterMove1.find(m => 
+                    tempGame.get(m.from).color === 'b' // черная фигура
                 );
 
-                if (bishopMove) {
-                    console.log('Found legal bishop move:', bishopMove);
-                    puzzle.move2 = bishopMove.from + bishopMove.to;
+                if (blackMove) {
+                    console.log('Found legal black move:', blackMove);
+                    puzzle.move2 = blackMove.from + blackMove.to;
                 } else {
-                    throw new Error('Не удалось найти правильный ход слоном');
+                    throw new Error('Не найдено возможных ходов черными фигурами');
                 }
             }
 
