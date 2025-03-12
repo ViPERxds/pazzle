@@ -20,8 +20,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация конфигурации задачи
     let puzzleConfig = {
         initialFen: '',
-        preMove: '',
-        evaluatedMove: '',
+        fen2: '',
+        move1: '',
+        move2: '',
         orientation: 'white',
         solution: false
     };
@@ -31,64 +32,36 @@ document.addEventListener('DOMContentLoaded', function() {
     let board = null;
     
     // Функция инициализации доски
-    function initializeBoard() {
-        // Если доска уже существует, уничтожаем её
-        if (board) {
-            board.destroy();
-        }
-        
-        console.log('Loading initial position:', puzzleConfig.initialFen);
-        // Устанавливаем начальную позицию
-        game.load(puzzleConfig.initialFen);
-        
-        // Создаем новую доску без анимаций
-        board = Chessboard('board', {
+    function initializeBoard(puzzleConfig) {
+        const config = {
+            draggable: true,
             position: puzzleConfig.initialFen,
             orientation: puzzleConfig.orientation,
-            draggable: true,
-            onDragStart: onDragStart,
             onDrop: onDrop,
-            onSnapEnd: onSnapEnd,
-            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
             moveSpeed: 0,
             snapbackSpeed: 0,
             snapSpeed: 0,
             trashSpeed: 0,
             appearSpeed: 0
-        });
+        };
+        board = Chessboard('myBoard', config);
+        game.load(puzzleConfig.initialFen);
+        
+        // Делаем предварительный ход move1
+        const from = puzzleConfig.move1.substring(0, 2);
+        const to = puzzleConfig.move1.substring(2, 4);
+        game.move({ from: from, to: to, promotion: 'q' });
+        board.position(game.fen(), false);
 
-        // Ждем немного и делаем ход
-        setTimeout(() => {
-            if (puzzleConfig.preMove) {
-                console.log('Making premove after timeout');
-                const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-                console.log('Move from', from, 'to', to);
-                
-                // Проверяем текущую позицию
-                const piece = game.get(from);
-                console.log('Piece at', from, ':', piece);
-                
-                // Делаем ход в игре
-                const move = game.move({
-                    from: from,
-                    to: to,
-                    promotion: 'q'
-                });
-
-                if (move) {
-                    console.log('Move made in game:', move);
-                    // Обновляем позицию на доске без анимации
-                    board.position(game.fen(), false);
-                    // Рисуем стрелку
-                    drawArrow(from, to, '#00ff00');
-                } else {
-                    console.error('Failed to make move:', from, to);
-                    showError('Невозможный ход: ' + from + ' -> ' + to);
-                }
-            }
-        }, 100);
-
-        console.log('Board initialized');
+        // Загружаем fen2 и показываем стрелку для хода move2, который нужно оценить
+        game.load(puzzleConfig.fen2);
+        const move2From = puzzleConfig.move2.substring(0, 2);
+        const move2To = puzzleConfig.move2.substring(2, 4);
+        drawArrow(move2From, move2To);
+        
+        // Возвращаемся к позиции после хода move1
+        game.load(puzzleConfig.fen1);
+        game.move({ from: from, to: to, promotion: 'q' });
     }
     
     // Функции для обработки ходов
@@ -325,8 +298,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Обновляем конфигурацию
         puzzleConfig.initialFen = puzzle.fen1;
-        puzzleConfig.preMove = puzzle.move1;
-        puzzleConfig.evaluatedMove = puzzle.move2;
+        puzzleConfig.fen2 = puzzle.fen2;
+        puzzleConfig.move1 = puzzle.move1;
+        puzzleConfig.move2 = puzzle.move2;
         puzzleConfig.orientation = orientation;
         puzzleConfig.solution = puzzle.solution === 'Good';
 
@@ -334,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Сбрасываем состояние игры
         game = new Chess();
-        initializeBoard();
+        initializeBoard(puzzleConfig);
     }
 
     // Улучшенная функция загрузки задачи
@@ -435,7 +409,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Функция для отрисовки стрелок
-    function drawArrow(from, to, color) {
+    function drawArrow(from, to) {
         console.log('Drawing arrow for move:', from + to);
         
         // Удаляем старую стрелку
@@ -452,14 +426,14 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        const board = document.querySelector('#board');
+        const board = document.querySelector('#myBoard');
         if (!board) {
             console.error('Board element not found');
             return;
         }
         
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        const fromSquare = board.querySelector(`[data-square="${from}"]`);
+        const toSquare = board.querySelector(`[data-square="${to}"]`);
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
@@ -494,7 +468,8 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
-        path.setAttribute("fill", color);
+        // Всегда используем зеленый цвет для стрелки
+        path.setAttribute("fill", "#00ff00");
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
