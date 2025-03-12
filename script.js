@@ -657,28 +657,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const toRect = toSquare.getBoundingClientRect();
         
         // Вычисляем координаты центров квадратов
-        const squareSize = boardRect.width / 8;
-
-        // Получаем координаты клеток
-        const fromCoords = getSquareCoords(from);
-        const toCoords = getSquareCoords(to);
-
-        // Вычисляем центры клеток
-        const x1 = fromCoords.x * squareSize + squareSize / 2;
-        const y1 = fromCoords.y * squareSize + squareSize / 2;
-        const x2 = toCoords.x * squareSize + squareSize / 2;
-        const y2 = toCoords.y * squareSize + squareSize / 2;
+        const x1 = (fromRect.left - boardRect.left + fromRect.width/2);
+        const y1 = (fromRect.top - boardRect.top + fromRect.height/2);
+        const x2 = (toRect.left - boardRect.left + toRect.width/2);
+        const y2 = (toRect.top - boardRect.top + toRect.height/2);
 
         // Параметры стрелки
+        const squareSize = boardRect.width / 8;
+        const arrowWidth = squareSize * 0.2;
         const headSize = squareSize * 0.4;
-        const arrowWidth = squareSize * 0.15;
-
+        
         // Вычисляем угол и длину
         const angle = Math.atan2(y2 - y1, x2 - x1);
         const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
-
-        // Создаем путь для стрелки
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        
+        // Создаем путь для стрелки с линией и наконечником
         const arrowPath = `
             M ${x1} ${y1}
             L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
@@ -688,7 +681,8 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
             Z
         `;
-
+        
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("d", arrowPath);
         path.setAttribute("fill", color || "#00ff00");
         path.setAttribute("opacity", "0.5");
