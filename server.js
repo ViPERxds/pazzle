@@ -59,7 +59,6 @@ pool.connect(async (err, client, release) => {
 
             CREATE TABLE IF NOT EXISTS Puzzles (
                 id SERIAL PRIMARY KEY,
-                unique_task INTEGER,
                 rating NUMERIC(12,8) DEFAULT 1500,
                 rd NUMERIC(12,8) DEFAULT 350,
                 volatility NUMERIC(8,8) DEFAULT 0.06,
@@ -230,7 +229,7 @@ async function initializePuzzles() {
                 fen1: '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2',
                 move1: 'e1e6',
                 fen2: '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2',
-                move2: '',
+                move2: 'c5a5',
                 solution: false,
                 type_id: 4,
                 color: true
@@ -244,7 +243,7 @@ async function initializePuzzles() {
                 fen1: 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2',
                 move1: 'd2e4',
                 fen2: 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2',
-                move2: '',
+                move2: 'c6e4',
                 solution: true,
                 type_id: 3,
                 color: false
@@ -258,7 +257,7 @@ async function initializePuzzles() {
                 fen1: 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1',
                 move1: 'g4e2',
                 fen2: 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1',
-                move2: '',
+                move2: 'f3e2',
                 solution: false,
                 type_id: 5,
                 color: false
@@ -272,7 +271,7 @@ async function initializePuzzles() {
                 fen1: 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1',
                 move1: 'e6c4',
                 fen2: 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1',
-                move2: '',
+                move2: 'd4c6',
                 solution: false,
                 type_id: 7,
                 color: true
@@ -286,7 +285,7 @@ async function initializePuzzles() {
                 fen1: 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 1 2',
                 move1: 'e1e3',
                 fen2: 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 1 2',
-                move2: '',
+                move2: 'h3f1',
                 solution: true,
                 type_id: 1,
                 color: false
@@ -300,7 +299,7 @@ async function initializePuzzles() {
                 fen1: '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 1 1',
                 move1: 'f4g1',
                 fen2: '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 1 1',
-                move2: '',
+                move2: 'e7e8',
                 solution: false,
                 type_id: 4,
                 color: false
@@ -314,7 +313,7 @@ async function initializePuzzles() {
                 fen1: 'rn1qkbnr/pp3ppp/2pp4/4p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5',
                 move1: 'b7b5',
                 fen2: 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6',
-                move2: '',
+                move2: 'c4f7',
                 solution: false,
                 type_id: 5,
                 color: true
@@ -328,7 +327,7 @@ async function initializePuzzles() {
                 fen1: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/4P3/2PP4/PP3PPP/RN1QKBNR w KQkq - 0 5',
                 move1: 'b2b4',
                 fen2: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 5',
-                move2: '',
+                move2: 'c5b4',
                 solution: true,
                 type_id: 2,
                 color: false
@@ -342,7 +341,7 @@ async function initializePuzzles() {
                 fen1: 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6',
                 move1: 'c4f7',
                 fen2: 'rn1qkbnr/p4Bpp/2pp4/1p2p3/4P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 6',
-                move2: '',
+                move2: 'e8f7',
                 solution: true,
                 type_id: 1,
                 color: true
@@ -356,7 +355,7 @@ async function initializePuzzles() {
                 fen1: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 6',
                 move1: 'f6f2',
                 fen2: 'r1bqk2r/ppp2ppp/2np1n2/4p1B1/1P2P3/2PP4/P4bPP/RN1QKBNR w KQkq - 0 7',
-                move2: '',
+                move2: 'd1f2',
                 solution: false,
                 type_id: 4,
                 color: true
@@ -370,7 +369,7 @@ async function initializePuzzles() {
                 fen1: '8/3b2p1/pppBk2p/2P5/1P6/P7/5PPP/4K3 w - - 0 26',
                 move1: 'c5c6',
                 fen2: '8/3b2p1/pPpBk2p/8/1P6/P7/5PPP/4K3 b - - 0 26',
-                move2: '',
+                move2: 'e6d6',
                 solution: true,
                 type_id: 1,
                 color: true
@@ -384,7 +383,7 @@ async function initializePuzzles() {
                 fen1: '4k3/5ppp/p7/1p6/2p5/PPPbK2P/3B2P1/8 b - - 0 26',
                 move1: 'c4b3',
                 fen2: '4k3/5ppp/p7/1p6/8/PpPbK2P/3B2P1/8 w - - 0 27',
-                move2: '',
+                move2: 'e3d3',
                 solution: false,
                 type_id: 2,
                 color: true
@@ -398,7 +397,7 @@ async function initializePuzzles() {
                 fen1: '3RR3/1kr5/1ppB1r2/8/p1P4P/P7/1P3bK1/8 b - - 0 1',
                 move1: 'f6g6',
                 fen2: '3RR3/1k4r1/1ppB1r2/8/p1P4P/P7/1P3bK1/8 w - - 1 2',
-                move2: '',
+                move2: 'd6b8',
                 solution: false,
                 type_id: 6,
                 color: true
@@ -412,7 +411,7 @@ async function initializePuzzles() {
                 fen1: '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/P3QPP1/3R2K1 w - - 0 1',
                 move1: 'e2b2',
                 fen2: '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/PQ3PP1/3R2K1 b - - 1 1',
-                move2: '',
+                move2: 'g4e3',
                 solution: false,
                 type_id: 7,
                 color: true
@@ -426,7 +425,7 @@ async function initializePuzzles() {
                 fen1: '1r6/kb1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 b - - 0 1',
                 move1: 'b8a8',
                 fen2: 'kr6/1b1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 w - - 1 2',
-                move2: '',
+                move2: 'c5c7',
                 solution: false,
                 type_id: 4,
                 color: true
