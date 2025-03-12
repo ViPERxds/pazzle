@@ -477,21 +477,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 puzzle.move1.substring(2, 4)
             ];
             
+            // Проверяем возможность хода
+            const allLegalMoves = tempGame.moves({ verbose: true });
+            console.log('All legal moves:', allLegalMoves.map(m => `${m.from}${m.to}`));
+            
             // Проверяем наличие фигуры на начальной позиции
             let pieceOnSquare = tempGame.get(fromSquare);
             
-            // Если на начальной позиции нет фигуры, пытаемся найти правильный ход
-            if (!pieceOnSquare) {
-                console.log('Trying to find correct move to', toSquare);
-                const correctedMove = findCorrectMove(puzzle.fen1, toSquare, pieces);
-                if (correctedMove) {
+            // Если на начальной позиции нет фигуры или ход невозможен,
+            // пытаемся найти любой ход, ведущий на целевое поле
+            if (!pieceOnSquare || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
+                console.log('Trying to find any legal move to', toSquare);
+                const possibleMoves = allLegalMoves.filter(m => m.to === toSquare);
+                
+                if (possibleMoves.length > 0) {
+                    // Берем первый возможный ход на это поле
+                    const correctedMove = possibleMoves[0];
                     console.log('Found corrected move:', correctedMove);
-                    puzzle.move1 = correctedMove;
-                    pieceOnSquare = tempGame.get(correctedMove.substring(0, 2));
+                    puzzle.move1 = correctedMove.from + correctedMove.to;
+                    pieceOnSquare = tempGame.get(correctedMove.from);
+                    console.log('Updated move1 to:', puzzle.move1);
                 } else {
-                    console.error('No piece found for move1 at square:', fromSquare);
+                    console.error('No legal moves to square:', toSquare);
                     console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
-                    throw new Error('Неверные данные хода: нет фигуры на начальной позиции');
+                    throw new Error('Неверные данные хода: ход невозможен');
                 }
             }
 
@@ -505,15 +514,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Неверные данные хода: ход не той стороны');
             }
             
-            // Проверяем возможность хода
-            const isLegalMove = tempGame.moves({ verbose: true })
-                .some(m => m.from === fromSquare && m.to === toSquare);
+            // Проверяем возможность хода после всех исправлений
+            const isLegalMove = allLegalMoves.some(m => 
+                m.from === puzzle.move1.substring(0, 2) && 
+                m.to === puzzle.move1.substring(2, 4)
+            );
             
             if (!isLegalMove) {
-                console.error('Move is not legal:', {
-                    from: fromSquare,
-                    to: toSquare,
-                    legalMoves: tempGame.moves({ verbose: true })
+                console.error('Move is still not legal after corrections:', {
+                    move: puzzle.move1,
+                    from: puzzle.move1.substring(0, 2),
+                    to: puzzle.move1.substring(2, 4),
+                    legalMoves: allLegalMoves
                 });
                 throw new Error('Неверные данные хода: ход невозможен');
             }
