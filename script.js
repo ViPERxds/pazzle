@@ -635,59 +635,45 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Board element not found');
             return;
         }
-
-        // Получаем координаты квадратов
-        const squares = board.querySelectorAll('.square-55d63');
-        let fromSquare = null;
-        let toSquare = null;
-
-        squares.forEach(square => {
-            const squareData = square.getAttribute('data-square');
-            if (squareData === from) fromSquare = square;
-            if (squareData === to) toSquare = square;
-        });
         
-        if (!fromSquare || !toSquare) {
-            console.error('Squares not found:', from, to);
-            return;
-        }
-
+        const fromSquare = document.querySelector(`[data-square="${from}"]`);
+        const toSquare = document.querySelector(`[data-square="${to}"]`);
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
-        
-        // Вычисляем координаты центров квадратов
-        const x1 = (fromRect.left - boardRect.left + fromRect.width/2);
-        const y1 = (fromRect.top - boardRect.top + fromRect.height/2);
-        const x2 = (toRect.left - boardRect.left + toRect.width/2);
-        const y2 = (toRect.top - boardRect.top + toRect.height/2);
-
-        // Параметры стрелки
         const squareSize = boardRect.width / 8;
-        const arrowWidth = squareSize * 0.2;
-        const headSize = squareSize * 0.4;
-        
-        // Вычисляем угол и длину
+
+        // Координаты
+        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
+        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
+        const x2 = toRect.left - boardRect.left + toRect.width/2;
+        const y2 = toRect.top - boardRect.top + toRect.height/2;
+
+        // Вычисляем угол и размеры
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
-        
-        // Создаем путь для стрелки с линией и наконечником
-        const arrowPath = `
-            M ${x1} ${y1}
-            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
-            L ${x2 - headSize * Math.cos(angle) - headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) + headSize/2 * Math.cos(angle)}
-            L ${x2} ${y2}
-            L ${x2 - headSize * Math.cos(angle) + headSize/2 * Math.sin(angle)} ${y2 - headSize * Math.sin(angle) - headSize/2 * Math.cos(angle)}
-            L ${x2 - headSize * Math.cos(angle)} ${y2 - headSize * Math.sin(angle)}
-            Z
-        `;
-        
+        const width = squareSize * 0.15;
+        const headWidth = squareSize * 0.3;
+        const headLength = squareSize * 0.3;
+
+        // Точки для стрелки
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
+
+        // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", arrowPath);
-        path.setAttribute("fill", color || "#00ff00");
+        path.setAttribute("d", `
+            M ${x1 - width*dy} ${y1 + width*dx}
+            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
+            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
+            L ${x2} ${y2}
+            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
+            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
+            L ${x1 + width*dy} ${y1 - width*dx}
+            Z
+        `);
+        path.setAttribute("fill", color);
         path.setAttribute("opacity", "0.5");
-        path.setAttribute("stroke", color || "#00ff00");
-        path.setAttribute("stroke-width", "2");
 
         svg.appendChild(path);
         board.appendChild(svg);
