@@ -402,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Функция для отрисовки стрелок
-    function drawArrow(from, to, color) {
+    function drawArrow(from, to) {
         console.log('Drawing arrow for move:', from + to);
         
         // Удаляем старую стрелку
@@ -419,14 +419,14 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        const board = document.querySelector('#board');
+        const board = document.querySelector('#myBoard');
         if (!board) {
             console.error('Board element not found');
             return;
         }
         
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        const fromSquare = board.querySelector(`[data-square="${from}"]`);
+        const toSquare = board.querySelector(`[data-square="${to}"]`);
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
@@ -461,7 +461,8 @@ document.addEventListener('DOMContentLoaded', function() {
             L ${x1 + width*dy} ${y1 - width*dx}
             Z
         `);
-        path.setAttribute("fill", color);
+        // Всегда используем зеленый цвет для стрелки
+        path.setAttribute("fill", "#00ff00");
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
