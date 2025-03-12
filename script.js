@@ -58,33 +58,33 @@ document.addEventListener('DOMContentLoaded', function() {
             snapbackSpeed: 0,
             snapSpeed: 0,
             trashSpeed: 0,
-            appearSpeed: 0
+            appearSpeed: 0,
+            onLoad: function() {
+                // Делаем предварительный ход move1 после полной загрузки доски
+                const from = puzzleConfig.move1.substring(0, 2);
+                const to = puzzleConfig.move1.substring(2, 4);
+                console.log('Making premove:', from, 'to', to);
+                
+                const premove = game.move({ from: from, to: to, promotion: 'q' });
+                if (premove) {
+                    console.log('Premove successful:', premove);
+                    board.position(game.fen(), false);
+                    
+                    // Показываем стрелку для следующего хода move2
+                    const move2From = puzzleConfig.move2.substring(0, 2);
+                    const move2To = puzzleConfig.move2.substring(2, 4);
+                    console.log('Drawing arrow for move2:', move2From, 'to', move2To);
+                    drawArrow(move2From, move2To);
+                } else {
+                    console.error('Failed to make premove');
+                }
+            }
         };
 
         // Создаем доску и загружаем начальную позицию
         board = Chessboard('board', config);
         game.load(puzzleConfig.initialFen);
         console.log('Initial position loaded:', game.fen());
-        
-        // Делаем предварительный ход move1
-        const from = puzzleConfig.move1.substring(0, 2);
-        const to = puzzleConfig.move1.substring(2, 4);
-        console.log('Making premove:', from, 'to', to);
-        
-        const premove = game.move({ from: from, to: to, promotion: 'q' });
-        if (premove) {
-            console.log('Premove successful:', premove);
-            board.position(game.fen(), false);
-        } else {
-            console.error('Failed to make premove');
-            return;
-        }
-
-        // Показываем стрелку для следующего хода move2
-        const move2From = puzzleConfig.move2.substring(0, 2);
-        const move2To = puzzleConfig.move2.substring(2, 4);
-        console.log('Drawing arrow for move2:', move2From, 'to', move2To);
-        drawArrow(move2From, move2To);
     }
     
     // Функции для обработки ходов
@@ -446,64 +446,76 @@ document.addEventListener('DOMContentLoaded', function() {
         const oldArrow = document.querySelector('.arrow');
         if (oldArrow) oldArrow.remove();
 
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("class", "arrow");
-        svg.style.position = 'absolute';
-        svg.style.top = '0';
-        svg.style.left = '0';
-        svg.style.width = '100%';
-        svg.style.height = '100%';
-        svg.style.pointerEvents = 'none';
-        svg.style.zIndex = '1000';
-        
         const board = document.querySelector('#board');
         if (!board) {
             console.error('Board element not found');
             return;
         }
+
+        // Создаем контейнер для SVG
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.pointerEvents = 'none';
+        container.style.zIndex = '1000';
+
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "arrow");
+        svg.style.width = '100%';
+        svg.style.height = '100%';
         
+        // Получаем координаты квадратов
         const fromSquare = board.querySelector(`[data-square="${from}"]`);
         const toSquare = board.querySelector(`[data-square="${to}"]`);
+        
+        if (!fromSquare || !toSquare) {
+            console.error('Squares not found:', from, to);
+            return;
+        }
+
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
-
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
-
-        // Вычисляем угол и размеры
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.15;
-        const headWidth = squareSize * 0.3;
-        const headLength = squareSize * 0.3;
-
-        // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
+        
+        // Вычисляем относительные координаты
+        const x1 = ((fromRect.left + fromRect.width/2) - boardRect.left) / boardRect.width * 100;
+        const y1 = ((fromRect.top + fromRect.height/2) - boardRect.top) / boardRect.height * 100;
+        const x2 = ((toRect.left + toRect.width/2) - boardRect.left) / boardRect.width * 100;
+        const y2 = ((toRect.top + toRect.height/2) - boardRect.top) / boardRect.height * 100;
 
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `
-            M ${x1 - width*dy} ${y1 + width*dx}
-            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
-            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
+        
+        // Параметры стрелки в процентах от размера доски
+        const arrowWidth = 3; // ширина линии
+        const headSize = 6;   // размер наконечника
+        
+        // Вычисляем угол и длину
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        
+        // Создаем путь для стрелки
+        const arrowPath = `
+            M ${x1} ${y1}
+            L ${x2 - dx * headSize} ${y2 - dy * headSize}
+            L ${x2 - dx * headSize - dy * headSize/2} ${y2 - dy * headSize + dx * headSize/2}
             L ${x2} ${y2}
-            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
-            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
-            L ${x1 + width*dy} ${y1 - width*dx}
+            L ${x2 - dx * headSize + dy * headSize/2} ${y2 - dy * headSize - dx * headSize/2}
+            L ${x2 - dx * headSize} ${y2 - dy * headSize}
             Z
-        `);
-        // Всегда используем зеленый цвет для стрелки
+        `;
+        
+        path.setAttribute("d", arrowPath);
         path.setAttribute("fill", "#00ff00");
         path.setAttribute("opacity", "0.5");
 
         svg.appendChild(path);
-        board.appendChild(svg);
+        container.appendChild(svg);
+        board.appendChild(container);
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
