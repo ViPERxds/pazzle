@@ -477,34 +477,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 puzzle.move1.substring(2, 4)
             ];
             
-            // Проверяем возможность хода
+            // Получаем все возможные ходы
             const allLegalMoves = tempGame.moves({ verbose: true });
-            console.log('All legal moves:', allLegalMoves.map(m => `${m.from}${m.to}`));
+            console.log('All legal moves:', allLegalMoves);
             
-            // Проверяем наличие фигуры на начальной позиции
-            let pieceOnSquare = tempGame.get(fromSquare);
+            // Находим все ходы, ведущие на целевое поле
+            const movesToTarget = allLegalMoves.filter(m => m.to === toSquare);
+            console.log('Moves to target square:', movesToTarget);
             
-            // Если на начальной позиции нет фигуры или ход невозможен,
-            // пытаемся найти любой ход, ведущий на целевое поле
-            if (!pieceOnSquare || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
-                console.log('Trying to find any legal move to', toSquare);
-                const possibleMoves = allLegalMoves.filter(m => m.to === toSquare);
-                
-                if (possibleMoves.length > 0) {
-                    // Берем первый возможный ход на это поле
-                    const correctedMove = possibleMoves[0];
-                    console.log('Found corrected move:', correctedMove);
-                    puzzle.move1 = correctedMove.from + correctedMove.to;
-                    pieceOnSquare = tempGame.get(correctedMove.from);
-                    console.log('Updated move1 to:', puzzle.move1);
-                } else {
-                    console.error('No legal moves to square:', toSquare);
-                    console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
-                    throw new Error('Неверные данные хода: ход невозможен');
-                }
+            if (movesToTarget.length === 0) {
+                console.error('No legal moves to target square:', toSquare);
+                console.error('Available pieces:', pieces.map(p => `${p.color}${p.piece} on ${p.square}`).join(', '));
+                throw new Error('Неверные данные хода: ход невозможен');
             }
-
+            
+            // Пытаемся найти ход с указанной начальной позицией
+            let selectedMove = movesToTarget.find(m => m.from === fromSquare);
+            
+            // Если такого хода нет, берем первый возможный ход на это поле
+            if (!selectedMove) {
+                console.log('Original move not found, using alternative:', movesToTarget[0]);
+                selectedMove = movesToTarget[0];
+                puzzle.move1 = selectedMove.from + selectedMove.to;
+            }
+            
             // Проверяем, что фигура принадлежит тому, чей ход
+            const pieceOnSquare = tempGame.get(selectedMove.from);
             if ((tempGame.turn() === 'w' && pieceOnSquare.color === 'b') ||
                 (tempGame.turn() === 'b' && pieceOnSquare.color === 'w')) {
                 console.error('Wrong color to move:', {
@@ -514,22 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Неверные данные хода: ход не той стороны');
             }
             
-            // Проверяем возможность хода после всех исправлений
-            const isLegalMove = allLegalMoves.some(m => 
-                m.from === puzzle.move1.substring(0, 2) && 
-                m.to === puzzle.move1.substring(2, 4)
-            );
-            
-            if (!isLegalMove) {
-                console.error('Move is still not legal after corrections:', {
-                    move: puzzle.move1,
-                    from: puzzle.move1.substring(0, 2),
-                    to: puzzle.move1.substring(2, 4),
-                    legalMoves: allLegalMoves
-                });
-                throw new Error('Неверные данные хода: ход невозможен');
-            }
-            
+            // Проверяем формат ходов
             if (!puzzle.move1 || !/^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1)) {
                 console.error('Invalid move1 format:', puzzle.move1);
                 throw new Error('Неверный формат хода move1');
