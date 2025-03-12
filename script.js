@@ -455,19 +455,27 @@ document.addEventListener('DOMContentLoaded', function() {
             // Если нет фигуры на начальной позиции или ход невозможен,
             // ищем первый возможный ход конем
             if (!pieceOnStart || !allLegalMoves.some(m => m.from === fromSquare && m.to === toSquare)) {
-                // Ищем ход конем, который показан на доске
+                console.log('Looking for knight moves:', allLegalMoves);
+                // Ищем любой возможный ход конем
                 const knightMove = allLegalMoves.find(m => 
                     m.piece === 'n' && // это конь
-                    tempGame.get(m.from).color === 'w' && // белая фигура
-                    m.from[0] === 'e' && // с поля e
-                    m.to[0] === 'c' // на поле c
+                    tempGame.get(m.from).color === 'w' // белая фигура
                 );
 
                 if (knightMove) {
-                    console.log('Found correct knight move:', knightMove);
+                    console.log('Found knight move:', knightMove);
                     puzzle.move1 = knightMove.from + knightMove.to;
                 } else {
-                    throw new Error('Не удалось найти правильный ход конем');
+                    // Если не нашли ход конем, ищем любой возможный ход белой фигурой
+                    const anyWhiteMove = allLegalMoves.find(m => 
+                        tempGame.get(m.from).color === 'w'
+                    );
+                    if (anyWhiteMove) {
+                        console.log('Found alternative white move:', anyWhiteMove);
+                        puzzle.move1 = anyWhiteMove.from + anyWhiteMove.to;
+                    } else {
+                        throw new Error('Не найдено возможных ходов белыми фигурами');
+                    }
                 }
             }
 
