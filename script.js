@@ -30,18 +30,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация игры
     let game = new Chess();
     let board = null;
-
-    // Создаем начальную доску
-    const config = {
-        draggable: true,
-        position: 'start',
-        orientation: 'white',
-        onDragStart: onDragStart,
-        onDrop: onDrop,
-        onSnapEnd: onSnapEnd,
-        pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
-    };
-    board = Chessboard('board', config);
     
     // Функция инициализации доски
     function initializeBoard(puzzleConfig) {
@@ -61,10 +49,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Failed to load initial position:', puzzleConfig.initialFen);
             return;
         }
-
-        // Обновляем ориентацию и позицию доски
-        board.orientation(puzzleConfig.orientation);
-        board.position(puzzleConfig.initialFen, false);
         
         // Получаем координаты предварительного хода
         const [fromSquare, toSquare] = [
@@ -72,39 +56,79 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzleConfig.move1.substring(2, 4)
         ];
         
-        // Проверяем наличие фигуры и делаем ход
-        const piece = game.get(fromSquare);
-        if (!piece) {
+        // Проверяем наличие фигуры и возможность хода
+        const pieceOnSquare = game.get(fromSquare);
+        const legalMoves = game.moves({ verbose: true });
+        
+        console.log('Initial position state:', {
+            fen: game.fen(),
+            piece: pieceOnSquare,
+            from: fromSquare,
+            to: toSquare,
+            turn: game.turn(),
+            legalMoves: legalMoves.filter(m => m.from === fromSquare)
+        });
+        
+        if (!pieceOnSquare) {
             console.error('No piece at starting square:', fromSquare);
             return;
         }
 
-        // Делаем предварительный ход
-        const premove = game.move({
-            from: fromSquare,
-            to: toSquare,
-            promotion: 'q'
-        });
+        // Создаем конфигурацию доски
+        const config = {
+            draggable: true,
+            position: puzzleConfig.initialFen,
+            orientation: puzzleConfig.orientation,
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
+        };
 
-        if (premove) {
-            console.log('Premove successful:', premove);
-            // Обновляем позицию на доске
-            board.position(game.fen(), false);
-            
-            // Показываем стрелку для следующего хода
-            const [move2From, move2To] = [
-                puzzleConfig.move2.substring(0, 2),
-                puzzleConfig.move2.substring(2, 4)
-            ];
-            console.log('Drawing arrow from', move2From, 'to', move2To);
-            drawArrow(move2From, move2To, 'black');
-        } else {
-            console.error('Premove failed:', {
-                from: fromSquare,
-                to: toSquare,
-                legalMoves: game.moves({ verbose: true })
-            });
-        }
+        // Создаем доску
+        board = Chessboard('board', config);
+        
+        // Ждем немного, чтобы доска успела инициализироваться
+        setTimeout(() => {
+            try {
+                // Проверяем возможность хода
+                const moveIsLegal = legalMoves.some(m => m.from === fromSquare && m.to === toSquare);
+                
+                if (!moveIsLegal) {
+                    console.error('Move is not legal:', {
+                        from: fromSquare,
+                        to: toSquare,
+                        piece: pieceOnSquare,
+                        legalMoves: legalMoves.filter(m => m.from === fromSquare)
+                    });
+                    return;
+                }
+
+                // Делаем ход
+                const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
+                if (premove) {
+                    console.log('Premove successful:', premove);
+                    // Обновляем позицию на доске
+                    board.position(game.fen(), false);
+                    
+                    // Показываем стрелку для следующего хода
+                    const [move2From, move2To] = [
+                        puzzleConfig.move2.substring(0, 2),
+                        puzzleConfig.move2.substring(2, 4)
+                    ];
+                    console.log('Drawing arrow from', move2From, 'to', move2To);
+                    drawArrow(move2From, move2To, 'black');
+                }
+            } catch (error) {
+                console.error('Error making premove:', error);
+                console.log('Game state:', {
+                    fen: game.fen(),
+                    turn: game.turn(),
+                    inCheck: game.in_check(),
+                    moves: game.moves()
+                });
+            }
+        }, 100);
     }
     
     // Функции для обработки ходов
@@ -279,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Обновляем функцию submitSolution
-    async function submitSolution(userAnswer) {
+    async function submitSolution(success) {
         try {
             if (!currentPuzzle || !currentPuzzle.id) {
                 console.error('No current puzzle or puzzle ID!');
@@ -295,20 +319,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Получаем время решения
             const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
 
-            // Проверяем, совпадает ли ответ пользователя с решением из базы данных
-            const isCorrect = (userAnswer && currentPuzzle.solution === 'Good') || 
-                            (!userAnswer && currentPuzzle.solution === 'Blunder');
-
-            console.log('Checking solution:', {
-                userAnswer: userAnswer,
-                puzzleSolution: currentPuzzle.solution,
-                isCorrect: isCorrect
-            });
-
             console.log('Sending solution:', {
                 username: currentUsername,
                 puzzleId: currentPuzzle.id,
-                success: isCorrect,
+                success: success,
                 time: elapsedTime
             });
 
@@ -320,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     username: currentUsername,
                     puzzleId: currentPuzzle.id,
-                    success: isCorrect,
+                    success: success,
                     time: elapsedTime
                 })
             });
@@ -333,8 +347,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Показываем результат
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
-            resultText.textContent = isCorrect ? 'Правильно!' : 'Неправильно!';
-            resultText.className = isCorrect ? 'success' : 'failure';
+            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
+            resultText.className = success ? 'success' : 'failure';
 
         } catch (error) {
             console.error('Error submitting solution:', error);
@@ -411,118 +425,98 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Получаем задачу через API
             const puzzle = await fetchWithAuth(`${API_URL}/api/random-puzzle/${username}`);
+            
+            // Подробное логирование полученных данных
             console.log('Raw puzzle data:', puzzle);
             
             if (!puzzle) {
                 throw new Error('Не удалось получить данные задачи');
             }
-
-            // Подробное логирование данных задачи
-            console.log('Puzzle details:', {
-                id: puzzle.id,
-                fen1: puzzle.fen1,
-                fen2: puzzle.fen2,
-                move1: puzzle.move1,
-                move2: puzzle.move2,
-                solution: puzzle.solution
-            });
             
             // Проверяем FEN на корректность
             const tempGame = new Chess();
             if (!puzzle.fen1 || !tempGame.load(puzzle.fen1)) {
-                console.error('Invalid FEN position:', puzzle.fen1);
-                return loadPuzzle(username);
+                console.error('Invalid or missing FEN position:', puzzle.fen1);
+                throw new Error('Неверный формат позиции');
             }
 
             // Проверяем наличие фигуры для move1
-            const [fromSquare1, toSquare1] = [
+            const [fromSquare, toSquare] = [
                 puzzle.move1.substring(0, 2),
                 puzzle.move1.substring(2, 4)
             ];
             
-            const piece1 = tempGame.get(fromSquare1);
-            if (!piece1) {
+            const pieceOnStart = tempGame.get(fromSquare);
+            if (!pieceOnStart) {
                 console.error('No piece at starting square for move1:', {
-                    square: fromSquare1,
-                    puzzleId: puzzle.id
+                    square: fromSquare,
+                    move: puzzle.move1,
+                    fen: puzzle.fen1
                 });
-                return loadPuzzle(username);
+                throw new Error(`Неверные данные хода: нет фигуры на ${fromSquare}`);
             }
 
-            // Делаем первый ход
+            // Делаем ход move1 и проверяем fen2
             const move1Result = tempGame.move({
-                from: fromSquare1,
-                to: toSquare1,
+                from: fromSquare,
+                to: toSquare,
                 promotion: 'q'
             });
 
             if (!move1Result) {
                 console.error('Move1 is not legal:', {
-                    from: fromSquare1,
-                    to: toSquare1,
-                    legalMoves: tempGame.moves({ verbose: true }),
-                    puzzleId: puzzle.id
+                    move: puzzle.move1,
+                    fen: puzzle.fen1
                 });
-                return loadPuzzle(username);
+                throw new Error('Неверные данные хода: ход невозможен');
             }
 
-            // Сравниваем FEN после хода с fen2
-            const currentFen = tempGame.fen();
-            const normalizedCurrentFen = currentFen.split(' ').slice(0, 4).join(' ');
-            const normalizedFen2 = puzzle.fen2.split(' ').slice(0, 4).join(' ');
-
-            if (normalizedCurrentFen !== normalizedFen2) {
-                console.error('FEN mismatch after move1:', {
-                    current: normalizedCurrentFen,
-                    expected: normalizedFen2,
-                    puzzleId: puzzle.id
+            // Проверяем соответствие fen2
+            const expectedFen2 = tempGame.fen();
+            if (puzzle.fen2 !== expectedFen2) {
+                console.error('FEN2 mismatch:', {
+                    received: puzzle.fen2,
+                    expected: expectedFen2
                 });
-                return loadPuzzle(username);
+                // Исправляем fen2
+                puzzle.fen2 = expectedFen2;
             }
 
-            // Проверяем второй ход
-            const [fromSquare2, toSquare2] = [
+            // Проверяем возможность хода move2
+            const [move2From, move2To] = [
                 puzzle.move2.substring(0, 2),
                 puzzle.move2.substring(2, 4)
             ];
 
-            const piece2 = tempGame.get(fromSquare2);
-            if (!piece2) {
+            const pieceForMove2 = tempGame.get(move2From);
+            if (!pieceForMove2) {
                 console.error('No piece at starting square for move2:', {
-                    square: fromSquare2,
-                    puzzleId: puzzle.id
+                    square: move2From,
+                    move: puzzle.move2,
+                    fen: expectedFen2
                 });
-                return loadPuzzle(username);
+                throw new Error(`Неверные данные хода: нет фигуры на ${move2From}`);
             }
 
-            // Проверяем возможность второго хода
-            const move2Result = tempGame.move({
-                from: fromSquare2,
-                to: toSquare2,
-                promotion: 'q'
-            });
+            // Проверяем легальность хода move2
+            const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+                m.from === move2From && m.to === move2To
+            );
 
-            if (!move2Result) {
+            if (!move2IsLegal) {
                 console.error('Move2 is not legal:', {
-                    from: fromSquare2,
-                    to: toSquare2,
-                    legalMoves: tempGame.moves({ verbose: true }),
-                    puzzleId: puzzle.id
+                    move: puzzle.move2,
+                    fen: expectedFen2,
+                    legalMoves: tempGame.moves({ verbose: true })
                 });
-                return loadPuzzle(username);
+                throw new Error('Неверные данные хода: ход невозможен');
             }
 
-            // Если все проверки пройдены, сохраняем текущую задачу
+            // Сохраняем текущую задачу
             currentPuzzle = puzzle;
             
-            // Определяем цвет хода из начальной позиции
-            const orientation = tempGame.load(puzzle.fen1) && tempGame.turn() === 'w' ? 'white' : 'black';
-            
             // Показываем задачу
-            showPuzzle({
-                ...puzzle,
-                color: orientation === 'white' ? 'w' : 'b'
-            });
+            showPuzzle(puzzle);
             
             // Запускаем таймер
             startStopwatch();
@@ -534,7 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (err) {
             console.error('Error loading puzzle:', err);
-            return loadPuzzle(username);
+            showError('Ошибка при загрузке задачи: ' + err.message);
         }
     }
 
@@ -569,12 +563,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Добавляем обработчик для кнопки анализа
     document.querySelector('.analyze-btn').addEventListener('click', () => {
-        // Используем move1 из puzzleConfig
-        const [from, to] = [
-            puzzleConfig.move1.substring(0, 2),
-            puzzleConfig.move1.substring(2, 4)
-        ];
-        
+        // Используем FEN позиции после предварительного хода
+        const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
         game.load(puzzleConfig.initialFen); // Загружаем начальную позицию
         game.move({ from, to, promotion: 'q' }); // Делаем предварительный ход
         
@@ -669,13 +659,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const arrow = document.querySelector('.arrow');
         if (arrow) {
             arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
-        }
-    });
-
-    // Обработчик изменения размера окна
-    $(window).resize(function() {
-        if (board) {
-            board.resize();
         }
     });
 
