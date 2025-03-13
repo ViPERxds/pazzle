@@ -129,10 +129,48 @@
             transform: scale(1.05);
         }
 
+        /* Улучшенные стили для результата */
+        #resultPage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+
         .result {
             font-size: 32px;
             font-weight: bold;
             margin: 20px 0;
+            padding: 15px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.5s ease-in-out;
+            transition: all 0.3s ease;
+        }
+
+        .success {
+            background-color: #E8F5E9;
+            color: #2E7D32;
+            border-left: 5px solid #2E7D32;
+        }
+
+        .failure {
+            background-color: #FFEBEE;
+            color: #C62828;
+            border-left: 5px solid #C62828;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
         }
 
         /* Стили для фигур */
@@ -173,7 +211,7 @@
 
     <div id="resultPage" class="hidden">
         <div class="rating">1564</div>
-        <div class="result" id="resultText">Wrong!</div>
+        <div class="result" id="resultText">Неправильно!</div>
         <div class="buttons">
             <button class="analyze-btn">Analyze</button>
             <button class="next-btn">Next</button>
