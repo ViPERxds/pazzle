@@ -683,7 +683,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Отображаем результат в зависимости от того, совпадает ли ответ пользователя с ожидаемым решением
             resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
-            resultText.className = success ? 'success' : 'failure';
+            resultText.className = success ? 'result success' : 'result failure';
 
             // Удаляем существующий элемент с изменением рейтинга, если он есть
             const existingRatingChange = document.querySelector('.rating-change');
@@ -1117,7 +1117,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Получаем координаты хода
+            // Получаем координаты хода move1
             const [fromSquare, toSquare] = [
                 puzzleConfig.move1.substring(0, 2),
                 puzzleConfig.move1.substring(2, 4)
@@ -1157,10 +1157,32 @@ document.addEventListener('DOMContentLoaded', function() {
             // Используем ориентацию доски из конфигурации
             const orientation = puzzleConfig.orientation;
             
-            console.log('Opening analysis with FEN:', fen, 'orientation:', orientation);
+            // Получаем информацию о ходе move2 для отображения в анализе
+            const [move2From, move2To] = [
+                puzzleConfig.move2.substring(0, 2),
+                puzzleConfig.move2.substring(2, 4)
+            ];
             
-            // Открываем страницу анализа на lichess с правильной ориентацией
-            window.open(`https://lichess.org/analysis/${fen}?color=${orientation === 'white' ? 'white' : 'black'}`, '_blank');
+            // Проверяем, есть ли фигура на начальной позиции для move2
+            const pieceForMove2 = tempGame.get(move2From);
+            let move2Info = '';
+            
+            if (pieceForMove2) {
+                // Проверяем, является ли ход move2 легальным
+                const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+                    m.from === move2From && m.to === move2To
+                );
+                
+                if (move2IsLegal) {
+                    // Добавляем информацию о ходе move2 в URL
+                    move2Info = `&arrow=${move2From}${move2To}`;
+                }
+            }
+            
+            console.log('Opening analysis with FEN:', fen, 'orientation:', orientation, 'move2:', move2Info);
+            
+            // Открываем страницу анализа на lichess с правильной ориентацией и стрелкой для хода move2
+            window.open(`https://lichess.org/analysis/${fen}?color=${orientation === 'white' ? 'white' : 'black'}${move2Info}`, '_blank');
         } catch (error) {
             console.error('Error in analyze function:', error);
             showError('Ошибка при анализе: ' + error.message);
