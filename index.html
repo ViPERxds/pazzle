@@ -6,6 +6,7 @@
     <title>Chess Puzzles</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -184,6 +185,11 @@
             position: relative;
             z-index: 1;
         }
+        
+        /* Стили для иконок в кнопках */
+        .btn-icon {
+            margin-right: 8px;
+        }
     </style>
     <script>
         // Добавляем глобальную конфигурацию
@@ -197,15 +203,15 @@
 <body>
     <div id="startPage">
         <div class="rating">1564</div>
-        <button class="start-btn" id="startButton">START</button>
+        <button class="start-btn" id="startButton"><i class="fas fa-chess-knight btn-icon"></i>СТАРТ</button>
     </div>
 
     <div id="puzzlePage" class="hidden">
         <div class="timer">2:53</div>
         <div id="board"></div>
         <div class="button-container">
-            <button class="blunder-btn">Blunder</button>
-            <button class="good-btn">Good</button>
+            <button class="blunder-btn"><i class="fas fa-times-circle btn-icon"></i>Blunder</button>
+            <button class="good-btn"><i class="fas fa-check-circle btn-icon"></i>Good</button>
         </div>
     </div>
 
@@ -213,8 +219,8 @@
         <div class="rating">1564</div>
         <div class="result" id="resultText">Неправильно!</div>
         <div class="buttons">
-            <button class="analyze-btn">Analyze</button>
-            <button class="next-btn">Next</button>
+            <button class="analyze-btn"><i class="fas fa-search-plus btn-icon"></i>Анализ</button>
+            <button class="next-btn"><i class="fas fa-forward btn-icon"></i>Далее</button>
         </div>
     </div>
 
