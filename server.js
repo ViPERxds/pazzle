@@ -823,6 +823,7 @@ app.post('/api/record-solution', async (req, res) => {
                 ]
             );
             userId = newUser.rows[0].id;
+            console.log('Created new user with ID:', userId);
         } else {
             userId = userResult.rows[0].id;
         }
@@ -838,10 +839,11 @@ app.post('/api/record-solution', async (req, res) => {
                 newVolatility: userRating.volatility
             });
             
-            await pool.query(
+            const updateUserResult = await pool.query(
                 `UPDATE Users 
                  SET rating = $1, rd = $2, volatility = $3 
-                 WHERE username = $4`,
+                 WHERE username = $4
+                 RETURNING id, rating, rd, volatility`,
                 [
                     userRating.rating,
                     userRating.rd,
@@ -851,12 +853,21 @@ app.post('/api/record-solution', async (req, res) => {
             );
             
             // Проверяем, что рейтинг обновился
-            const updatedUserResult = await pool.query(
-                'SELECT rating, rd, volatility FROM Users WHERE username = $1',
-                [username]
-            );
-            
-            console.log('User rating after update:', updatedUserResult.rows[0]);
+            if (updateUserResult.rows.length > 0) {
+                console.log('User rating after update:', updateUserResult.rows[0]);
+            } else {
+                console.error('Failed to update user rating!');
+            }
+        }
+        
+        // Получаем текущий рейтинг задачи для журнала
+        const puzzleResult = await pool.query(
+            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+            [puzzleId]
+        );
+        
+        if (puzzleResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Puzzle not found' });
         }
         
         // Обновляем рейтинг задачи
@@ -877,10 +888,11 @@ app.post('/api/record-solution', async (req, res) => {
                 newVolatility: puzzleRating.volatility
             });
             
-            await pool.query(
+            const updatePuzzleResult = await pool.query(
                 `UPDATE Puzzles 
                  SET rating = $1, rd = $2, volatility = $3 
-                 WHERE id = $4`,
+                 WHERE id = $4
+                 RETURNING id, rating, rd, volatility`,
                 [
                     puzzleRating.rating,
                     puzzleRating.rd,
@@ -890,29 +902,19 @@ app.post('/api/record-solution', async (req, res) => {
             );
             
             // Проверяем, что рейтинг задачи обновился
-            const updatedPuzzleResult = await pool.query(
-                'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-                [puzzleId]
-            );
-            
-            console.log('Puzzle rating after update:', updatedPuzzleResult.rows[0]);
-        }
-        
-        // Получаем рейтинг задачи для записи в журнал
-        const puzzleResult = await pool.query(
-            'SELECT rating FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (puzzleResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Puzzle not found' });
+            if (updatePuzzleResult.rows.length > 0) {
+                console.log('Puzzle rating after update:', updatePuzzleResult.rows[0]);
+            } else {
+                console.error('Failed to update puzzle rating!');
+            }
         }
         
         // Записываем решение в журнал
-        await pool.query(
+        const journalResult = await pool.query(
             `INSERT INTO Journal 
             (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after)
-            VALUES ($1, $2, $3, $4, $5, $6)`,
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id`,
             [
                 userId, 
                 puzzleId, 
@@ -923,14 +925,23 @@ app.post('/api/record-solution', async (req, res) => {
             ]
         );
         
+        console.log('Solution recorded in journal with ID:', journalResult.rows[0].id);
+        
+        // Получаем обновленный рейтинг пользователя для ответа
+        const updatedUserRating = await pool.query(
+            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
+            [username]
+        );
+        
         res.json({
             status: 'success',
             message: 'Solution recorded successfully',
-            userRating: userRating || null,
+            userRating: updatedUserRating.rows.length > 0 ? updatedUserRating.rows[0] : userRating,
             puzzleRating: puzzleRating || null
         });
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
+        console.error('Error stack:', err.stack);
         res.status(500).json({ 
             error: 'Internal server error',
             message: err.message,
@@ -1944,7 +1955,7 @@ async function getUserRating(username) {
     try {
         console.log('Getting rating for user:', username);
         const result = await pool.query(
-            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
+            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
             [username]
         );
         
@@ -1954,16 +1965,34 @@ async function getUserRating(username) {
             const newUser = await pool.query(
                 `INSERT INTO Users (username, rating, rd, volatility, status) 
                  VALUES ($1, 1500, 350, 0.06, true) 
-                 RETURNING rating, rd, volatility`,
+                 RETURNING id, rating, rd, volatility`,
                 [username]
             );
+            console.log('New user created with rating data:', newUser.rows[0]);
             return newUser.rows[0];
         }
         
-        console.log('Found user rating:', result.rows[0]);
-        return result.rows[0];
+        console.log('Found user rating data:', {
+            id: result.rows[0].id,
+            rating: parseFloat(result.rows[0].rating),
+            rd: parseFloat(result.rows[0].rd),
+            volatility: parseFloat(result.rows[0].volatility)
+        });
+        
+        return {
+            rating: parseFloat(result.rows[0].rating),
+            rd: parseFloat(result.rows[0].rd),
+            volatility: parseFloat(result.rows[0].volatility)
+        };
     } catch (err) {
         console.error('Error getting user rating:', err);
-        throw err;
+        console.error('Error stack:', err.stack);
+        // В случае ошибки возвращаем значения по умолчанию
+        console.log('Returning default rating values due to error');
+        return {
+            rating: 1500,
+            rd: 350,
+            volatility: 0.06
+        };
     }
 }
