@@ -1,1998 +1,1406 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-const path = require('path');
-const crypto = require('crypto');
-const app = express();
-
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
-app.use(express.json());
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
-});
-
-// Проверяем подключение при запуске
-pool.connect(async (err, client, release) => {
-    if (err) {
-        console.error('Error connecting to the database:', err);
-        return;
-    }
-    console.log('Successfully connected to database');
+document.addEventListener('DOMContentLoaded', function() {
+    const startPage = document.getElementById('startPage');
+    const puzzlePage = document.getElementById('puzzlePage');
+    const resultPage = document.getElementById('resultPage');
+    const startButton = document.querySelector('.start-btn');
+    const resultText = document.getElementById('resultText');
+    const ratingElements = document.querySelectorAll('.rating');
+    const goodButton = document.querySelector('.good-btn');
+    const blunderButton = document.querySelector('.blunder-btn');
+    const timerElement = document.querySelector('.timer');
     
-    try {
-        // Создаем таблицы если они не существуют
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS Users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(255),
-                telegram_id BIGINT,
-                rating NUMERIC(12,8) DEFAULT 1500,
-                rd NUMERIC(12,8) DEFAULT 350,
-                volatility NUMERIC(8,8) DEFAULT 0.06,
-                status BOOLEAN DEFAULT true
-            );
-
-            CREATE TABLE IF NOT EXISTS Settings (
-                id SERIAL PRIMARY KEY,
-                setting VARCHAR(255),
-                meaning NUMERIC(10,3)
-            );
-
-            CREATE TABLE IF NOT EXISTS Tags (
-                id SERIAL PRIMARY KEY,
-                tag VARCHAR(255)
-            );
-
-            CREATE TABLE IF NOT EXISTS Types (
-                id SERIAL PRIMARY KEY,
-                type VARCHAR(255)
-            );
-
-            CREATE TABLE IF NOT EXISTS Puzzles (
-                id SERIAL PRIMARY KEY,
-                rating NUMERIC(12,8) DEFAULT 1500,
-                rd NUMERIC(12,8) DEFAULT 350,
-                volatility NUMERIC(8,8) DEFAULT 0.06,
-                number INTEGER DEFAULT 0,
-                fen1 VARCHAR(255),
-                move1 VARCHAR(10),
-                fen2 VARCHAR(255),
-                move2 VARCHAR(10),
-                solution BOOLEAN,
-                type_id INTEGER REFERENCES Types(id),
-                color BOOLEAN
-            );
-
-            CREATE TABLE IF NOT EXISTS Puzzles_Tags (
-                id SERIAL PRIMARY KEY,
-                puzzle_id INTEGER REFERENCES Puzzles(id),
-                tag_id INTEGER REFERENCES Tags(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Complexity (
-                id SERIAL PRIMARY KEY,
-                complexity_type VARCHAR(255)
-            );
-
-            CREATE TABLE IF NOT EXISTS Journal (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES Users(id),
-                puzzle_id INTEGER REFERENCES Puzzles(id),
-                success BOOLEAN,
-                time_success NUMERIC(5,2),
-                puzzle_rating_before NUMERIC(12,8),
-                user_rating_after NUMERIC(12,8),
-                complexity_id INTEGER REFERENCES Complexity(id),
-                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-
-        // Инициализируем в правильном порядке
-        // Сначала удаляем данные из зависимых таблиц
-        await client.query('DELETE FROM Journal');
-        await client.query('DELETE FROM Puzzles_Tags');
-        await client.query('DELETE FROM Puzzles');
+    // Определяем API URL
+    const API_URL = window.location.origin;  // Используем текущий домен
+    
+    let currentPuzzle = null;
+    let timer = null;
+    let startTime = null;
+    let seconds = 180;
+    
+    // Инициализация конфигурации задачи
+    let puzzleConfig = {
+        initialFen: '',
+        fen2: '',
+        move1: '',
+        move2: '',
+        orientation: 'white',
+        solution: false
+    };
+    
+    // Инициализация игры
+    let game = new Chess();
+    let board = null;
+    
+    // Функция инициализации доски
+    function initializeBoard(puzzleConfig) {
+        console.log('Initializing board with config:', puzzleConfig);
         
-        // Теперь инициализируем базовые таблицы
-        await initializeComplexity();
-        await initializeTypes();
-        await initializeUsers();
-        await initializeSettings();
-        await initializeTags();
+        // Проверяем наличие всех необходимых данных
+        if (!puzzleConfig.initialFen || !puzzleConfig.move1 || !puzzleConfig.fen2 || !puzzleConfig.move2) {
+            console.error('Missing required puzzle data:', puzzleConfig);
+            return;
+        }
+
+        // Создаем новый экземпляр игры
+        game = new Chess();
         
-        // Затем инициализируем таблицы с зависимостями
-        await initializePuzzles();
-        await initializePuzzlesTags();
-        await initializeJournal();
-
-    } catch (err) {
-        console.error('Error during initialization:', err);
-    } finally {
-        release();
-    }
-});
-
-// Добавляем обработчик ошибок для пула
-pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
-    process.exit(-1);
-});
-
-// Функция для проверки доступа пользователя
-async function checkUserAccess(username) {
-    try {
-        const result = await pool.query(
-            'SELECT username FROM Users WHERE username = $1',
-            [username]
-        );
-        return result.rows.length > 0;
-    } catch (err) {
-        console.error('Error checking user access:', err);
-        return false;
-    }
-}
-
-// Временно заменяем функцию generatePuzzlesList для отладки
-async function generatePuzzlesList() {
-    try {
-        const result = await pool.query('SELECT * FROM Puzzles');
-        console.log(`Found ${result.rows.length} puzzles in database`);
-        
-        if (result.rows.length === 0) {
-            console.warn('No puzzles found in Puzzles table!');
-            await initializePuzzles();
-            return pool.query('SELECT * FROM Puzzles');
+        // Загружаем начальную позицию и проверяем ее
+        if (!game.load(puzzleConfig.initialFen)) {
+            console.error('Failed to load initial position:', puzzleConfig.initialFen);
+            return;
         }
         
-        return result.rows;
-    } catch (err) {
-        console.error('Error getting puzzles from database:', err);
-        console.error(err.stack);
-        throw err;
-    }
-}
-
-// Упрощаем generateRandomPuzzle, так как он больше не нужен
-async function generateRandomPuzzle() {
-    // Эта функция больше не используется
-    throw new Error('Use findPuzzleForUser instead');
-}
-
-// Функция для проверки, пытался ли пользователь решить задачу
-async function hasPuzzleAttempt(username, fen) {
-    try {
-        const result = await pool.query(
-            'SELECT id FROM PuzzleAttempts WHERE username = $1 AND puzzle_fen = $2',
-            [username, fen]
-        );
-        return result.rows.length > 0;
-    } catch (err) {
-        console.error('Error checking puzzle attempt:', err);
-        return false;
-    }
-}
-
-// Функция для получения нерешенных задач (упрощенная версия)
-async function getUnsolvedPuzzles(username) {
-    try {
-        console.log(`Getting unsolved puzzles for user: ${username}`);
-        
-        // Получаем все попытки пользователя
-        const attemptedResult = await pool.query(
-            'SELECT puzzle_fen FROM PuzzleAttempts WHERE username = $1',
-            [username]
-        );
-        const attemptedFens = attemptedResult.rows.map(row => row.puzzle_fen);
-        console.log(`User has attempted ${attemptedFens.length} puzzles`);
-        
-        // Получаем все доступные задачи
-        const puzzles = await generatePuzzlesList();
-        console.log(`Total available puzzles: ${puzzles.length}`);
-        
-        // Возвращаем только те задачи, которые пользователь еще не пытался решить
-        const unsolvedPuzzles = puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
-        console.log(`Unsolved puzzles: ${unsolvedPuzzles.length}`);
-        
-        return unsolvedPuzzles;
-    } catch (err) {
-        console.error('Error getting unsolved puzzles:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию для инициализации задач
-async function initializePuzzles() {
-    try {
-        // Очищаем существующие задачи
-        await pool.query('DELETE FROM Puzzles');
-        
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE puzzles_id_seq RESTART WITH 1');
-        
-        // Добавляем задачи из таблицы
-        const puzzles = [
-            {
-                id: 1,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '2B5/2r1k3/1p1R2pp/p1r5/P1P2P2/6P1/2K4P/4R3 b - - 0 1',
-                move1: 'e7d6',
-                fen2: '2B5/2r5/1p1k2pp/p1r5/P1P2P2/6P1/2K4P/4R3 w - - 0 2',
-                move2: 'c8a6',
-                solution: false,
-                type_id: 4,
-                color: true
-            },
-            {
-                id: 2,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'r1bqk2r/ppp1bpp1/2n2n2/3p2B1/4P3/2P2NPp/PPQNPP1P/R3KB1R b KQkq - 0 1',
-                move1: 'd5e4',
-                fen2: 'r1bqk2r/ppp1bpp1/2n2n2/6B1/4p3/2P2NPp/PPQNPP1P/R3KB1R w KQkq - 0 2',
-                move2: 'd2e4',
-                solution: true,
-                type_id: 3,
-                color: false
-            },
-            {
-                id: 3,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'r3kb1r/ppqnpp1p/2p2npP/4p3/3P2b1/2N2N2/PPP1BPP1/R1BQ1RK1 w kq - 0 1',
-                move1: 'd4e5',
-                fen2: 'r3kb1r/ppqnpp1p/2p2npP/4P3/6b1/2N2N2/PPP1BPP1/R1BQ1RK1 b kq - 0 1',
-                move2: 'd7e5',
-                solution: false,
-                type_id: 5,
-                color: false
-            },
-            {
-                id: 4,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'r2qk2r/pp2npbp/2npb1p1/1N6/2Pp4/5NP1/PP3PBP/R1BQ1RK1 w kq - 0 1',
-                move1: 'f3d4',
-                fen2: 'r2qk2r/pp2npbp/2npb1p1/1N6/2PN4/6P1/PP3PBP/R1BQ1RK1 b kq - 0 1',
-                move2: 'e6c4',
-                solution: false,
-                type_id: 7,
-                color: true
-            },
-            {
-                id: 5,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'r3r1k1/1pp2ppp/p2p4/3B4/2Q2Pb1/2N1b1Pq/PPP4P/4RR1K b - - 1 2',
-                move1: 'g4e6',
-                fen2: 'r3r1k1/1pp2ppp/p2pb3/3B4/2Q2P2/2N1b1Pq/PPP4P/4RR1K w - - 2 3',
-                move2: 'e1e3',
-                solution: true,
-                type_id: 1,
-                color: false
-            },
-            {
-                id: 6,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '8/1pBrR3/p1bP4/P6p/5k2/7p/5K2/8 w - - 1 1',
-                move1: 'f2g1',
-                fen2: '8/1pBrR3/p1bP4/P6p/5k2/7p/8/6K1 b - - 2 1',
-                move2: 'd7e7',
-                solution: false,
-                type_id: 4,
-                color: false
-            },
-            {
-                id: 7,
-                rating: 1400.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'rn1qkbnr/pp3ppp/2pp4/4p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5',
-                move1: 'b7b5',
-                fen2: 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6',
-                move2: 'c4f7',
-                solution: false,
-                type_id: 5,
-                color: true
-            },
-            {
-                id: 8,
-                rating: 1400.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/4P3/2PP4/PP3PPP/RN1QKBNR w KQkq - 0 5',
-                move1: 'b2b4',
-                fen2: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 5',
-                move2: 'c5b4',
-                solution: true,
-                type_id: 2,
-                color: false
-            },
-            {
-                id: 9,
-                rating: 1200.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6',
-                move1: 'c4f7',
-                fen2: 'rn1qkbnr/p4Bpp/2pp4/1p2p3/4P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 6',
-                move2: 'e8f7',
-                solution: true,
-                type_id: 1,
-                color: true
-            },
-            {
-                id: 10,
-                rating: 1300.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1B1/1P2P3/2PP4/P4PPP/RN1QKBNR b KQkq - 0 6',
-                move1: 'c5f2',
-                fen2: 'r1bqk2r/ppp2ppp/2np1n2/4p1B1/1P2P3/2PP4/P4bPP/RN1QKBNR w KQkq - 0 7',
-                move2: 'e1d2',
-                solution: false,
-                type_id: 4,
-                color: true
-            },
-            {
-                id: 11,
-                rating: 1200.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '8/3b2p1/pppBk2p/2P5/1P6/P7/5PPP/4K3 w - - 0 26',
-                move1: 'c5b6',
-                fen2: '8/3b2p1/pPpBk2p/8/1P6/P7/5PPP/4K3 b - - 0 26',
-                move2: 'e6d6',
-                solution: true,
-                type_id: 1,
-                color: true
-            },
-            {
-                id: 12,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '4k3/5ppp/p7/1p6/2p5/PPPbK2P/3B2P1/8 b - - 0 26',
-                move1: 'c4b3',
-                fen2: '4k3/5ppp/p7/1p6/8/PpPbK2P/3B2P1/8 w - - 0 27',
-                move2: 'd2c1',
-                solution: false,
-                type_id: 2,
-                color: true
-            },
-            {
-                id: 13,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '3RR3/1kr5/1ppB1r2/8/p1P4P/P7/1P3bK1/8 b - - 0 1',
-                move1: 'c7g7',
-                fen2: '3RR3/1k4r1/1ppB1r2/8/p1P4P/P7/1P3bK1/8 w - - 1 2',
-                move2: 'g2h2',
-                solution: false,
-                type_id: 6,
-                color: true
-            },
-            {
-                id: 14,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/P3QPP1/3R2K1 w - - 0 1',
-                move1: 'e2b2',
-                fen2: '8/4ppkp/p3q1p1/1pr3P1/6n1/1P2PN2/PQ3PP1/3R2K1 b - - 1 1',
-                move2: 'g4e5',
-                solution: false,
-                type_id: 7,
-                color: true
-            },
-            {
-                id: 15,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                number: 0,
-                fen1: '1r6/kb1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 b - - 0 1',
-                move1: 'a7a8',
-                fen2: 'kr6/1b1q1p1p/p3p1pP/B1QpPnP1/3P1P2/P7/K3N3/1R6 w - - 1 2',
-                move2: 'e2c3',
-                solution: false,
-                type_id: 4,
-                color: true
-            }
+        // Получаем координаты предварительного хода
+        const [fromSquare, toSquare] = [
+            puzzleConfig.move1.substring(0, 2),
+            puzzleConfig.move1.substring(2, 4)
         ];
-
-        // Вставляем все задачи
-        for (const puzzle of puzzles) {
-            await pool.query(
-                `INSERT INTO Puzzles (
-                    id, rating, rd, volatility, number, 
-                    fen1, move1, fen2, move2, 
-                    solution, type_id, color
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-                [
-                    puzzle.id,
-                    puzzle.rating,
-                    puzzle.rd,
-                    puzzle.volatility,
-                    puzzle.number,
-                    puzzle.fen1,
-                    puzzle.move1,
-                    puzzle.fen2,
-                    puzzle.move2,
-                    puzzle.solution,
-                    puzzle.type_id,
-                    puzzle.color
-                ]
-            );
-        }
         
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'puzzles_id_seq\', (SELECT MAX(id) FROM Puzzles))');
+        // Проверяем наличие фигуры и возможность хода
+        const pieceOnSquare = game.get(fromSquare);
+        const legalMoves = game.moves({ verbose: true });
         
-        console.log('Puzzles initialized successfully');
-    } catch (err) {
-        console.error('Error initializing puzzles:', err);
-        throw err;
-    }
-}
-
-// Функция для поиска задачи с учетом всех критериев
-async function findPuzzleWithCriteria(userId, userRating) {
-    try {
-        console.log(`Finding puzzle with criteria for user ${userId} with rating ${userRating}`);
+        console.log('Initial position state:', {
+            fen: game.fen(),
+            piece: pieceOnSquare,
+            from: fromSquare,
+            to: toSquare,
+            turn: game.turn(),
+            legalMoves: legalMoves.filter(m => m.from === fromSquare)
+        });
         
-        // Получаем все нерешенные задачи
-        const puzzlesResult = await pool.query(`
-            SELECT 
-                p.*,
-                t.type as puzzle_type
-            FROM Puzzles p
-            LEFT JOIN Types t ON p.type_id = t.id
-            WHERE p.id NOT IN (
-                SELECT DISTINCT puzzle_id 
-                FROM Journal 
-                WHERE user_id = $1
-            )
-        `, [userId]);
-
-        console.log(`Found ${puzzlesResult.rows.length} unsolved puzzles`);
-
-        if (puzzlesResult.rows.length === 0) {
-            // Если все задачи решены, очищаем половину истории
-            console.log('All puzzles solved, clearing half of history');
-            await pool.query(`
-                DELETE FROM Journal 
-                WHERE user_id = $1 
-                AND id IN (
-                    SELECT id 
-                    FROM Journal 
-                    WHERE user_id = $1 
-                    ORDER BY date ASC 
-                    LIMIT (SELECT COUNT(*)/2 FROM Journal WHERE user_id = $1)
-                )
-            `, [userId]);
-            return findPuzzleWithCriteria(userId, userRating);
+        if (!pieceOnSquare) {
+            console.error('No piece at starting square:', fromSquare);
+            return;
         }
 
-        // Выбираем случайную задачу из доступных
-        const randomIndex = Math.floor(Math.random() * puzzlesResult.rows.length);
-        const selectedPuzzle = puzzlesResult.rows[randomIndex];
-
-        console.log('Selected puzzle:', selectedPuzzle);
-
-        // Преобразуем данные в нужный формат
-        return {
-            id: selectedPuzzle.id,
-            rating: selectedPuzzle.rating,
-            rd: selectedPuzzle.rd,
-            volatility: selectedPuzzle.volatility,
-            fen1: selectedPuzzle.fen1,
-            move1: selectedPuzzle.move1,
-            fen2: selectedPuzzle.fen2 || selectedPuzzle.fen1,
-            move2: selectedPuzzle.move2 || '',
-            solution: selectedPuzzle.solution,
-            color: selectedPuzzle.color,
-            type_id: selectedPuzzle.type_id
+        // Создаем конфигурацию доски
+        const config = {
+            draggable: true,
+            position: puzzleConfig.initialFen,
+            orientation: puzzleConfig.orientation,
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
         };
-    } catch (err) {
-        console.error('Error in findPuzzleWithCriteria:', err);
-        throw err;
-    }
-}
 
-// Обновляем функцию findPuzzleForUser
-async function findPuzzleForUser(username) {
-    try {
-        console.log(`Finding puzzle for user: ${username}`);
+        // Создаем доску
+        board = Chessboard('board', config);
         
-        // Получаем информацию о пользователе
-        const userResult = await pool.query(
-            'SELECT id, rating FROM Users WHERE username = $1',
-            [username]
+        // Ждем немного, чтобы доска успела инициализироваться
+        setTimeout(() => {
+            try {
+                // Проверяем возможность хода
+                const moveIsLegal = legalMoves.some(m => m.from === fromSquare && m.to === toSquare);
+                
+                if (!moveIsLegal) {
+                    console.error('Move is not legal:', {
+                        from: fromSquare,
+                        to: toSquare,
+                        piece: pieceOnSquare,
+                        legalMoves: legalMoves.filter(m => m.from === fromSquare)
+                    });
+                    return;
+                }
+
+                // Делаем ход
+                const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
+                if (premove) {
+                    console.log('Premove successful:', premove);
+                    // Обновляем позицию на доске
+                    board.position(game.fen(), false);
+                    
+                    // Показываем стрелку для следующего хода
+                    const [move2From, move2To] = [
+                        puzzleConfig.move2.substring(0, 2),
+                        puzzleConfig.move2.substring(2, 4)
+                    ];
+                    
+                    // Подробное логирование для отладки
+                    console.log('Move2 details:', {
+                        move2: puzzleConfig.move2,
+                        from: move2From,
+                        to: move2To,
+                        orientation: puzzleConfig.orientation,
+                        currentPosition: game.fen()
+                    });
+                    
+                    // Проверяем, есть ли фигура на начальной позиции для move2
+                    const pieceForMove2 = game.get(move2From);
+                    if (!pieceForMove2) {
+                        console.error('No piece at starting square for move2:', move2From);
+                        console.log('Current board state:', game.fen());
+                        console.log('All pieces:', game.board());
+                        
+                        // Пытаемся найти правильный ход
+                        const legalMoves = game.moves({ verbose: true });
+                        console.log('Legal moves after move1:', legalMoves);
+                        
+                        // Ищем ход, который ведет на целевую клетку
+                        const possibleMove = legalMoves.find(m => m.to === move2To);
+                        
+                        if (possibleMove) {
+                            console.log('Found alternative move2:', possibleMove);
+                            // Используем найденный ход для отображения стрелки
+                            drawArrow(possibleMove.from, possibleMove.to, 'black');
+                            return;
+                        }
+                        
+                        // Если не нашли подходящий ход, пробуем найти любой ход той же фигурой
+                        const currentTurn = game.turn();
+                        const figureType = move2From.charAt(0);
+                        const sameTypeMoves = legalMoves.filter(m => {
+                            const piece = game.get(m.from);
+                            return piece && piece.type === figureType && 
+                                  ((currentTurn === 'w' && piece.color === 'w') || 
+                                   (currentTurn === 'b' && piece.color === 'b'));
+                        });
+                        
+                        if (sameTypeMoves.length > 0) {
+                            console.log('Using move with same piece type:', sameTypeMoves[0]);
+                            drawArrow(sameTypeMoves[0].from, sameTypeMoves[0].to, 'black');
+                            return;
+                        }
+                        
+                        // Если не нашли ход той же фигурой, используем первый доступный ход
+                        if (legalMoves.length > 0) {
+                            console.log('Using first available move:', legalMoves[0]);
+                            drawArrow(legalMoves[0].from, legalMoves[0].to, 'black');
+                            return;
+                        }
+                    } else {
+                        console.log('Piece for move2:', pieceForMove2);
+                        
+                        // Проверяем, является ли ход move2 легальным
+                        const move2IsLegal = game.moves({ verbose: true }).some(m => 
+                            m.from === move2From && m.to === move2To
+                        );
+                        
+                        if (!move2IsLegal) {
+                            console.warn('Move2 is not legal in current position:', {
+                                from: move2From,
+                                to: move2To,
+                                legalMoves: game.moves({ verbose: true })
+                            });
+                            
+                            // Пытаемся найти легальный ход той же фигурой
+                            const legalMoves = game.moves({ verbose: true });
+                            const movesWithSamePiece = legalMoves.filter(m => m.from === move2From);
+                            
+                            if (movesWithSamePiece.length > 0) {
+                                console.log('Using alternative move with same piece:', movesWithSamePiece[0]);
+                                drawArrow(movesWithSamePiece[0].from, movesWithSamePiece[0].to, 'black');
+                                return;
+                            }
+                        }
+                        
+                        // Рисуем стрелку с учетом ориентации доски
+                        console.log('Drawing arrow from', move2From, 'to', move2To);
+                        drawArrow(move2From, move2To, 'black');
+                    }
+                }
+            } catch (error) {
+                console.error('Error making premove:', error);
+                console.log('Game state:', {
+                    fen: game.fen(),
+                    turn: game.turn(),
+                    inCheck: game.in_check(),
+                    moves: game.moves()
+                });
+            }
+        }, 100);
+    }
+    
+    // Функции для обработки ходов
+    function onDragStart(source, piece, position, orientation) {
+        // Разрешаем перемещение только после предварительного хода
+        if (game.history().length === 0) {
+            return false;
+        }
+        
+        // Разрешаем перемещение только своих фигур
+        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    function onDrop(source, target) {
+        // Проверяем возможность хода
+        const move = game.move({
+            from: source,
+            to: target,
+            promotion: 'q' // Всегда превращаем в ферзя
+        });
+        
+        // Если ход невозможен, возвращаем фигуру
+        if (move === null) {
+            return 'snapback';
+        }
+        
+        // Отменяем ход, так как мы только оцениваем ход move2
+        game.undo();
+        
+        // Получаем ожидаемый ход move2
+        const expectedMove = puzzleConfig.move2;
+        const [expectedFrom, expectedTo] = [
+            expectedMove.substring(0, 2),
+            expectedMove.substring(2, 4)
+        ];
+        
+        console.log('Comparing moves:', {
+            userMove: source + target,
+            expectedMove: expectedMove,
+            userFrom: source,
+            userTo: target,
+            expectedFrom: expectedFrom,
+            expectedTo: expectedTo,
+            expectedSolution: puzzleConfig.solution
+        });
+        
+        // Проверяем, совпадает ли ход с move2
+        let moveMatches = false;
+        
+        // Сначала проверяем точное совпадение
+        if (source + target === expectedMove) {
+            console.log('Exact match with move2');
+            moveMatches = true;
+        } 
+        // Если не совпадает точно, проверяем, совпадает ли целевая клетка
+        // Это может быть случай, когда несколько фигур могут пойти на одну и ту же клетку
+        else if (target === expectedTo) {
+            // Проверяем, является ли это ходом той же фигурой
+            const userPiece = game.get(source);
+            const expectedPiece = game.get(expectedFrom);
+            
+            if (expectedPiece && userPiece && 
+                userPiece.type === expectedPiece.type && 
+                userPiece.color === expectedPiece.color) {
+                console.log('Same piece type moving to the expected target square');
+                moveMatches = true;
+            }
+        }
+        
+        // Определяем правильность решения на основе соответствия хода и ожидаемого решения
+        // Если puzzleConfig.solution === true (Good), то правильный ответ - сделать ход
+        // Если puzzleConfig.solution === false (Blunder), то правильный ответ - НЕ делать ход
+        
+        // Проверяем, совпадает ли ход с ожидаемым
+        const moveIsCorrect = moveMatches;
+        
+        // Определяем правильность ответа в зависимости от значения solution
+        // Если solution === true (Good), то правильный ответ - сделать ход
+        // Если solution === false (Blunder), то правильный ответ - НЕ делать ход
+        const isCorrect = (puzzleConfig.solution === true && moveIsCorrect) || 
+                         (puzzleConfig.solution === false && !moveIsCorrect);
+        
+        console.log('Solution evaluation:', {
+            moveMatches: moveMatches,
+            moveIsCorrect: moveIsCorrect,
+            expectedSolution: puzzleConfig.solution,
+            isCorrect: isCorrect
+        });
+        
+        // Отправляем результат
+        submitSolution(isCorrect);
+        
+        return 'snapback';
+    }
+    
+    function onSnapEnd() {
+        board.position(game.fen());
+    }
+    
+    // Проверяем, найдены ли элементы
+    console.log('API URL:', API_URL);
+    console.log('Elements found:', {
+        goodButton,
+        blunderButton,
+        startButton,
+        puzzlePage,
+        resultPage
+    });
+
+    // Инициализация Telegram WebApp
+    const tg = window.Telegram.WebApp;
+    tg.expand(); // Раскрываем на весь экран
+    
+    // Получаем имя пользователя из Telegram
+    let currentUsername = tg.initDataUnsafe?.user?.username || 'test_user';
+    
+    // Добавляем цвета из темы Telegram
+    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
+    document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
+    document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
+    document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
+
+    // Упрощенная функция для запросов к API
+    async function fetchWithAuth(url, options = {}) {
+        try {
+            console.log('Fetching:', url, options);
+            
+            // Используем реальный запрос к API
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            
+            if (options.headers) {
+                Object.keys(options.headers).forEach(key => {
+                    headers[key] = options.headers[key];
+                });
+            }
+            
+            const response = await fetch(url, {
+                ...options,
+                headers: headers,
+                mode: 'cors'
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API error:', response.status, errorText);
+                throw new Error(`Ошибка API: ${response.status} ${response.statusText}. ${errorText}`);
+            }
+            
+            const data = await response.json();
+            console.log('API response:', data);
+            return data;
+        } catch (err) {
+            console.error('Fetch error:', err);
+            throw err;
+        }
+    }
+
+    // Функция для обновления отображения рейтинга
+    async function updateRatingDisplay(username) {
+        try {
+            console.log('Updating rating display for user:', username);
+            const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${username}`);
+            console.log('Received user rating from API:', userRating);
+            
+            if (!userRating || !userRating.rating) {
+                console.error('Invalid user rating data:', userRating);
+                throw new Error('Некорректные данные рейтинга');
+            }
+            
+            const rating = parseFloat(userRating.rating).toFixed(0);
+            const rd = parseFloat(userRating.rd).toFixed(0);
+            
+            console.log('Updating rating elements with new rating:', rating);
+            ratingElements.forEach(el => {
+                // Сохраняем предыдущее значение для анимации
+                const oldRating = el.textContent;
+                
+                // Обновляем значение
+                el.textContent = rating;
+                el.style.color = 'black';
+                
+                // Добавляем всплывающую подсказку с дополнительной информацией
+                el.title = `Рейтинг: ${rating}\nОтклонение: ${rd}\nВолатильность: ${parseFloat(userRating.volatility).toFixed(5)}`;
+                
+                // Добавляем анимацию изменения рейтинга
+                if (oldRating && oldRating !== rating) {
+                    const isIncrease = parseInt(rating) > parseInt(oldRating);
+                    el.classList.add(isIncrease ? 'rating-increase' : 'rating-decrease');
+                    setTimeout(() => {
+                        el.classList.remove('rating-increase', 'rating-decrease');
+                    }, 2000);
+                }
+            });
+            
+            // Добавляем стили для анимации, если их еще нет
+            if (!document.getElementById('rating-animation-styles')) {
+                const styleEl = document.createElement('style');
+                styleEl.id = 'rating-animation-styles';
+                styleEl.textContent = `
+                    .rating-increase {
+                        animation: pulse-green 2s;
+                        color: green !important;
+                    }
+                    .rating-decrease {
+                        animation: pulse-red 2s;
+                        color: red !important;
+                    }
+                    @keyframes pulse-green {
+                        0% { transform: scale(1); }
+                        50% { transform: scale(1.2); }
+                        100% { transform: scale(1); }
+                    }
+                    @keyframes pulse-red {
+                        0% { transform: scale(1); }
+                        50% { transform: scale(1.2); }
+                        100% { transform: scale(1); }
+                    }
+                `;
+                document.head.appendChild(styleEl);
+            }
+            
+            return userRating;
+        } catch (err) {
+            console.error('Error updating rating display:', err);
+            ratingElements.forEach(el => {
+                el.textContent = '1500';
+                el.style.color = 'red';
+                el.title = 'Ошибка при получении рейтинга: ' + err.message;
+            });
+            
+            return {
+                rating: 1500,
+                rd: 350,
+                volatility: 0.06
+            };
+        }
+    }
+
+    // Вызываем обновление рейтинга при загрузке страницы
+    updateRatingDisplay(currentUsername);
+    
+    function startStopwatch() {
+        // Очищаем предыдущий интервал если он был
+        if (window.timerInterval) {
+            clearInterval(window.timerInterval);
+        }
+
+        // Устанавливаем начальное время
+        startTime = Date.now();
+
+        // Обновляем таймер сразу и затем каждую секунду
+        updateTimer();
+        window.timerInterval = setInterval(updateTimer, 1000);
+
+        // Устанавливаем максимальное время (3 минуты)
+        const maxTime = 180; // в секундах
+        
+        // Устанавливаем таймер для автоматического завершения через maxTime секунд
+        window.timeoutTimer = setTimeout(() => {
+            clearInterval(window.timerInterval);
+            // Автоматически отправляем текущее решение как неверное
+            handlePuzzleResult(false);
+        }, maxTime * 1000);
+    }
+
+    // Обновляем функцию submitSolution
+    async function submitSolution(success) {
+        try {
+            if (!currentPuzzle || !currentPuzzle.id) {
+                console.error('No current puzzle or puzzle ID!');
+                showError('Нет текущей задачи!');
+                return;
+            }
+
+            // Останавливаем таймер
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+            }
+            if (window.timeoutTimer) {
+                clearTimeout(window.timeoutTimer);
+            }
+
+            // Получаем время решения
+            const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+
+            console.log('Sending solution:', {
+                username: currentUsername,
+                puzzleId: currentPuzzle.id,
+                success: success,
+                successType: typeof success,
+                time: elapsedTime,
+                expectedSolution: puzzleConfig.solution,
+                expectedSolutionType: typeof puzzleConfig.solution,
+                currentPuzzleSolution: currentPuzzle.solution,
+                currentPuzzleSolutionType: typeof currentPuzzle.solution
+            });
+
+            // Получаем текущий рейтинг пользователя
+            const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${currentUsername}`);
+            console.log('Current user rating:', userRating);
+            
+            // Получаем рейтинг задачи
+            const puzzleRating = parseFloat(currentPuzzle.rating);
+            const puzzleRD = parseFloat(currentPuzzle.rd);
+            const puzzleVolatility = parseFloat(currentPuzzle.volatility);
+            
+            console.log('Current puzzle rating:', {
+                rating: puzzleRating,
+                rd: puzzleRD,
+                volatility: puzzleVolatility
+            });
+            
+            // Рассчитываем новый рейтинг пользователя по системе Glicko-2
+            const newUserRatingData = updateRating(
+                parseFloat(userRating.rating),
+                parseFloat(userRating.rd),
+                parseFloat(userRating.volatility),
+                puzzleRating,
+                puzzleRD,
+                success
+            );
+            
+            // Рассчитываем новый рейтинг задачи
+            const newPuzzleRatingData = updatePuzzleRating(
+                puzzleRating,
+                puzzleRD,
+                puzzleVolatility,
+                parseFloat(userRating.rating),
+                parseFloat(userRating.rd),
+                success
+            );
+            
+            console.log('Rating calculation:', {
+                user: {
+                    oldRating: userRating.rating,
+                    newRating: newUserRatingData.rating,
+                    oldRD: userRating.rd,
+                    newRD: newUserRatingData.rd,
+                    oldVolatility: userRating.volatility,
+                    newVolatility: newUserRatingData.volatility,
+                    difference: newUserRatingData.rating - parseFloat(userRating.rating)
+                },
+                puzzle: {
+                    oldRating: puzzleRating,
+                    newRating: newPuzzleRatingData.rating,
+                    oldRD: puzzleRD,
+                    newRD: newPuzzleRatingData.rd,
+                    oldVolatility: puzzleVolatility,
+                    newVolatility: newPuzzleRatingData.volatility,
+                    difference: newPuzzleRatingData.rating - puzzleRating
+                },
+                success: success
+            });
+
+            // Отправляем результат на сервер
+            const result = await fetchWithAuth(`${API_URL}/api/record-solution`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: currentUsername,
+                    puzzleId: currentPuzzle.id,
+                    success: success,
+                    time: elapsedTime,
+                    userRating: {
+                        rating: newUserRatingData.rating.toFixed(8),
+                        rd: newUserRatingData.rd.toFixed(8),
+                        volatility: newUserRatingData.volatility.toFixed(8)
+                    },
+                    puzzleRating: {
+                        rating: newPuzzleRatingData.rating.toFixed(8),
+                        rd: newPuzzleRatingData.rd.toFixed(8),
+                        volatility: newPuzzleRatingData.volatility.toFixed(8)
+                    }
+                })
+            });
+
+            console.log('Solution recorded, server response:', result);
+            console.log('Server response details:', {
+                status: result.status,
+                message: result.message,
+                userRating: result.userRating,
+                puzzleRating: result.puzzleRating
+            });
+
+            // Принудительно обновляем рейтинг в элементах интерфейса
+            const newRating = parseFloat(newUserRatingData.rating).toFixed(0);
+            const newRD = parseFloat(newUserRatingData.rd).toFixed(0);
+            
+            console.log('Updating rating elements directly with new rating:', newRating);
+            ratingElements.forEach(el => {
+                el.textContent = newRating;
+                el.style.color = 'black';
+                el.title = `Рейтинг: ${newRating}\nОтклонение: ${newRD}\nВолатильность: ${parseFloat(newUserRatingData.volatility).toFixed(5)}`;
+            });
+            
+            // Также обновляем через API для синхронизации
+            console.log('Updating rating display after solution submission');
+            const updatedRating = await updateRatingDisplay(currentUsername);
+            console.log('Rating display updated with new rating:', updatedRating);
+
+            // Показываем результат
+            puzzlePage.classList.add('hidden');
+            resultPage.classList.remove('hidden');
+            
+            // Отображаем результат в зависимости от того, совпадает ли ответ пользователя с ожидаемым решением
+            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
+            resultText.className = success ? 'success' : 'failure';
+            
+            // Добавляем информацию об изменении рейтинга
+            const ratingChange = newUserRatingData.rating - parseFloat(userRating.rating);
+            const ratingChangeText = document.createElement('div');
+            ratingChangeText.className = 'rating-change';
+            ratingChangeText.textContent = `Изменение рейтинга: ${ratingChange > 0 ? '+' : ''}${ratingChange.toFixed(1)}`;
+            ratingChangeText.style.color = ratingChange > 0 ? 'green' : (ratingChange < 0 ? 'red' : 'gray');
+            ratingChangeText.style.marginTop = '10px';
+            ratingChangeText.style.fontWeight = 'bold';
+            
+            // Добавляем элемент с изменением рейтинга после текста результата
+            resultText.parentNode.insertBefore(ratingChangeText, resultText.nextSibling);
+            
+            console.log('Result displayed:', {
+                userAnswer: success,
+                expectedSolution: puzzleConfig.solution,
+                isCorrect: success,
+                ratingChange: ratingChange
+            });
+
+        } catch (error) {
+            console.error('Error submitting solution:', error);
+            showError('Ошибка при отправке решения: ' + error.message);
+        }
+    }
+
+    // Функция для проверки и исправления ходов
+    function validateAndFixMoves(puzzle) {
+        console.log('Validating moves for puzzle:', puzzle);
+        
+        // Создаем временный экземпляр игры для проверки
+        const tempGame = new Chess();
+        
+        // Загружаем начальную позицию
+        if (!tempGame.load(puzzle.fen1)) {
+            console.error('Invalid FEN1:', puzzle.fen1);
+            return false;
+        }
+        
+        // Проверяем move1
+        const [move1From, move1To] = [
+            puzzle.move1.substring(0, 2),
+            puzzle.move1.substring(2, 4)
+        ];
+        
+        // Проверяем наличие фигуры на начальной позиции для move1
+        const pieceForMove1 = tempGame.get(move1From);
+        if (!pieceForMove1) {
+            console.error('No piece at starting square for move1:', move1From);
+            
+            // Пытаемся найти правильный ход
+            const legalMoves = tempGame.moves({ verbose: true });
+            const possibleMove = legalMoves.find(m => m.to === move1To);
+            
+            if (possibleMove) {
+                console.log('Found alternative move1:', possibleMove);
+                puzzle.move1 = possibleMove.from + possibleMove.to;
+            } else {
+                console.error('Could not find alternative move1');
+                return false;
+            }
+        }
+        
+        // Делаем ход move1
+        const move1Result = tempGame.move({
+            from: puzzle.move1.substring(0, 2),
+            to: puzzle.move1.substring(2, 4),
+            promotion: 'q'
+        });
+        
+        if (!move1Result) {
+            console.error('Move1 is not legal:', puzzle.move1);
+            return false;
+        }
+        
+        // Проверяем соответствие fen2
+        if (puzzle.fen2 !== tempGame.fen()) {
+            console.warn('FEN2 mismatch, updating:', {
+                original: puzzle.fen2,
+                corrected: tempGame.fen()
+            });
+            puzzle.fen2 = tempGame.fen();
+        }
+        
+        // Проверяем move2
+        const [move2From, move2To] = [
+            puzzle.move2.substring(0, 2),
+            puzzle.move2.substring(2, 4)
+        ];
+        
+        // Проверяем наличие фигуры на начальной позиции для move2
+        const pieceForMove2 = tempGame.get(move2From);
+        if (!pieceForMove2) {
+            console.error('No piece at starting square for move2:', move2From);
+            
+            // Пытаемся найти правильный ход
+            const legalMoves = tempGame.moves({ verbose: true });
+            console.log('Legal moves after move1:', legalMoves);
+            
+            // Ищем ход, который ведет на целевую клетку
+            const possibleMove = legalMoves.find(m => m.to === move2To);
+            
+            if (possibleMove) {
+                console.log('Found alternative move2:', possibleMove);
+                puzzle.move2 = possibleMove.from + possibleMove.to;
+            } else {
+                console.error('Could not find alternative move2');
+                return false;
+            }
+        }
+        
+        // Проверяем, является ли ход move2 легальным
+        const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+            m.from === puzzle.move2.substring(0, 2) && m.to === puzzle.move2.substring(2, 4)
         );
         
-        console.log('User query result:', userResult.rows);
-        
-        if (userResult.rows.length === 0) {
-            // Если пользователь не найден, создаем нового
-            console.log(`Creating new user: ${username}`);
-            const newUser = await pool.query(
-                `INSERT INTO Users (username, rating, rd, volatility, status) 
-                 VALUES ($1, 1500, 350, 0.06, true) 
-                 RETURNING id, rating`,
-                [username]
+        if (!move2IsLegal) {
+            console.error('Move2 is not legal:', puzzle.move2);
+            
+            // Пытаемся найти правильный ход
+            const legalMoves = tempGame.moves({ verbose: true });
+            
+            // Ищем ход той же фигурой
+            const sameTypeMoves = legalMoves.filter(m => 
+                tempGame.get(m.from).type === tempGame.get(puzzle.move2.substring(0, 2)).type
             );
-            console.log('New user created:', newUser.rows[0]);
-            return findPuzzleWithCriteria(newUser.rows[0].id, newUser.rows[0].rating);
+            
+            if (sameTypeMoves.length > 0) {
+                console.log('Found alternative move2 with same piece type:', sameTypeMoves[0]);
+                puzzle.move2 = sameTypeMoves[0].from + sameTypeMoves[0].to;
+            } else if (legalMoves.length > 0) {
+                console.log('Using first legal move as alternative move2:', legalMoves[0]);
+                puzzle.move2 = legalMoves[0].from + legalMoves[0].to;
+            } else {
+                console.error('No legal moves available for move2');
+                return false;
+            }
         }
         
-        const userId = userResult.rows[0].id;
-        const userRating = userResult.rows[0].rating;
-        console.log(`Found user: id=${userId}, rating=${userRating}`);
-
-        // Используем новую функцию для поиска задачи
-        const puzzle = await findPuzzleWithCriteria(userId, userRating);
-        console.log('Found puzzle:', puzzle);
-        
-        if (!puzzle) {
-            throw new Error('No available puzzles found');
-        }
-
-        return puzzle;
-    } catch (err) {
-        console.error('Error in findPuzzleForUser:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию calculateNewRatings без жесткого ограничения
-function calculateNewRatings(userRating, puzzleRating, R) {
-    try {
-        console.log('Calculating new ratings with:', { userRating, puzzleRating, R });
-        
-        // Преобразуем строковые значения в числовые
-        const userRatingNum = parseFloat(userRating.rating);
-        const userRDNum = parseFloat(userRating.rd);
-        const puzzleRatingNum = parseFloat(puzzleRating.rating);
-        const puzzleRDNum = parseFloat(puzzleRating.rd);
-        
-        // Константы
-        const q = Math.log(10) / 400;
-        const c = 34.6;
-        
-        // Шаг 1: Определение отклонения рейтинга (RD)
-        const RD = Math.min(Math.sqrt(userRDNum * userRDNum + c * c), 350);
-        
-        // Шаг 2: Определение нового рейтинга
-        const g = 1 / Math.sqrt(1 + 3 * q * q * puzzleRDNum * puzzleRDNum / (Math.PI * Math.PI));
-        const E = 1 / (1 + Math.pow(10, g * (userRatingNum - puzzleRatingNum) / -400));
-        const d2 = 1 / (q * q * g * g * E * (1 - E));
-        
-        // Вычисляем изменение рейтинга
-        const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
-        
-        // Вычисляем новый рейтинг
-        const newRating = userRatingNum + ratingChange;
-        
-        // Шаг 3: Определение нового отклонения рейтинга
-        const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
-        
-        // Формируем результат с фиксированным количеством знаков после запятой
-        const result = {
-            userRating: newRating.toFixed(8),
-            userRD: newRD,
-            userVolatility: userRating.volatility,
-            puzzleRating: (puzzleRatingNum - ratingChange).toFixed(8),
-            puzzleRD: puzzleRDNum,
-            puzzleVolatility: puzzleRating.volatility
-        };
-        
-        console.log('Calculated new ratings:', result);
-        return result;
-    } catch (err) {
-        console.error('Error calculating new ratings:', err);
-        throw err;
-    }
-}
-
-// API endpoints
-app.get('/api/user-rating/:username', async (req, res) => {
-    try {
-        console.log('Received request for user rating:', req.params.username);
-        const result = await getUserRating(req.params.username);
-        console.log('Sending user rating response:', {
-            rating: result.rating,
-            rd: result.rd,
-            volatility: result.volatility
-        });
-        res.json({
-            rating: result.rating,
-            rd: result.rd,
-            volatility: result.volatility
-        });
-    } catch (err) {
-        console.error('Error getting user rating:', err);
-        console.error('Error stack:', err.stack);
-        res.status(500).json({ 
-            error: err.message,
-            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
-        });
-    }
-});
-
-app.get('/api/check-access/:username', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT status FROM Users WHERE username = $1',
-            [req.params.username]
-        );
-        res.json({ hasAccess: result.rows.length > 0 && result.rows[0].status });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/random-puzzle/:username', async (req, res) => {
-    try {
-        const username = req.params.username;
-        console.log(`Getting random puzzle for user: ${username}`);
-        
-        // Получаем случайную задачу
-        const puzzle = await findPuzzleForUser(username);
-        
-        if (!puzzle) {
-            console.error('No puzzle found for user:', username);
-            return res.status(404).json({ error: 'No available puzzles found' });
-        }
-
-        console.log('Found puzzle:', puzzle);
-
-        // Преобразуем данные в нужный формат
-        const response = {
-            id: puzzle.id,
-            rating: parseFloat(puzzle.rating).toFixed(2),
-            rd: parseFloat(puzzle.rd).toFixed(2),
-            volatility: parseFloat(puzzle.volatility).toFixed(8),
-            fen1: puzzle.fen1,
+        console.log('Moves validated and fixed:', {
             move1: puzzle.move1,
-            fen2: puzzle.fen2 || puzzle.fen1,
-            move2: puzzle.move2 || '',
-            solution: puzzle.solution ? 'Good' : 'Blunder',
-            color: puzzle.color,
-            type_id: puzzle.type_id
-        };
-
-        console.log('Sending response:', response);
-        
-        // Проверяем, что все необходимые поля присутствуют
-        if (!response.fen1 || !response.move1 || response.color === undefined) {
-            console.error('Invalid puzzle data:', response);
-            return res.status(500).json({ error: 'Invalid puzzle data' });
-        }
-
-        res.json(response);
-    } catch (err) {
-        console.error('Error in /api/random-puzzle:', err);
-        res.status(500).json({ 
-            error: err.message,
-            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+            move2: puzzle.move2,
+            fen1: puzzle.fen1,
+            fen2: puzzle.fen2
         });
+        
+        return true;
     }
-});
 
-// Добавляем функцию для записи решения задачи
-async function recordPuzzleSolution(username, puzzleId, success, time) {
-    try {
-        console.log('Recording solution:', { username, puzzleId, success, time });
+    // Функция для отображения задачи
+    async function showPuzzle(puzzle) {
+        try {
+            console.log('Showing puzzle:', puzzle);
+            
+            // Сохраняем текущую задачу
+            currentPuzzle = puzzle;
+            
+            // Сохраняем конфигурацию задачи
+            puzzleConfig = {
+                initialFen: puzzle.fen1,
+                move1: puzzle.move1,
+                fen2: puzzle.fen2,
+                move2: puzzle.move2,
+                solution: puzzle.solution === 'Good',
+                orientation: puzzle.color ? 'white' : 'black'
+            };
+            
+            console.log('Board orientation:', puzzleConfig.orientation);
+            
+            // Инициализируем доску
+            initializeBoard(puzzleConfig);
+            
+            // Отображаем страницу с задачей
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            resultPage.classList.add('hidden');
+            
+            // Запускаем таймер
+            startStopwatch();
+            
+            console.log('Puzzle displayed successfully');
+        } catch (error) {
+            console.error('Error showing puzzle:', error);
+            showError('Ошибка при отображении задачи: ' + error.message);
+        }
+    }
+
+    // Функция для обновления таймера
+    function updateTimer() {
+        if (!startTime) return;
         
-        // Получаем ID пользователя
-        const userResult = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
         
-        if (userResult.rows.length === 0) {
-            throw new Error('User not found');
+        timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    // Функция для поиска правильного хода на основе FEN и целевого поля
+    function findCorrectMove(fen, targetSquare, pieces) {
+        const game = new Chess(fen);
+        const moves = game.moves({ verbose: true });
+        
+        // Ищем ход, который ведет на целевое поле
+        const possibleMove = moves.find(m => m.to === targetSquare);
+        if (possibleMove) {
+            return possibleMove.from + possibleMove.to;
+        }
+        return null;
+    }
+
+    // Улучшенная функция загрузки задачи
+    async function loadPuzzle(username) {
+        try {
+            console.log('Loading puzzle for user:', username);
+            
+            // Получаем задачу через API
+            const puzzle = await fetchWithAuth(`${API_URL}/api/random-puzzle/${username}`);
+            
+            // Подробное логирование полученных данных
+            console.log('Raw puzzle data:', puzzle);
+            console.log('Solution from database:', {
+                value: puzzle.solution,
+                type: typeof puzzle.solution,
+                boolValue: Boolean(puzzle.solution)
+            });
+            
+            if (!puzzle) {
+                throw new Error('Не удалось получить данные задачи');
+            }
+            
+            // Проверяем FEN на корректность
+            const tempGame = new Chess();
+            if (!puzzle.fen1 || !tempGame.load(puzzle.fen1)) {
+                console.error('Invalid or missing FEN position:', puzzle.fen1);
+                throw new Error('Неверный формат позиции');
+            }
+
+            // Проверяем наличие фигуры для move1
+            const [fromSquare, toSquare] = [
+                puzzle.move1.substring(0, 2),
+                puzzle.move1.substring(2, 4)
+            ];
+            
+            const pieceOnStart = tempGame.get(fromSquare);
+            if (!pieceOnStart) {
+                console.error('No piece at starting square for move1:', {
+                    square: fromSquare,
+                    move: puzzle.move1,
+                    fen: puzzle.fen1
+                });
+                throw new Error(`Неверные данные хода: нет фигуры на ${fromSquare}`);
+            }
+
+            // Делаем ход move1 и проверяем fen2
+            const move1Result = tempGame.move({
+                from: fromSquare,
+                to: toSquare,
+                promotion: 'q'
+            });
+
+            if (!move1Result) {
+                console.error('Move1 is not legal:', {
+                    move: puzzle.move1,
+                    fen: puzzle.fen1
+                });
+                throw new Error('Неверные данные хода: ход невозможен');
+            }
+
+            // Проверяем соответствие fen2
+            const expectedFen2 = tempGame.fen();
+            if (puzzle.fen2 !== expectedFen2) {
+                console.error('FEN2 mismatch:', {
+                    received: puzzle.fen2,
+                    expected: expectedFen2
+                });
+                // Исправляем fen2
+                puzzle.fen2 = expectedFen2;
+            }
+
+            // Проверяем возможность хода move2
+            const [move2From, move2To] = [
+                puzzle.move2.substring(0, 2),
+                puzzle.move2.substring(2, 4)
+            ];
+
+            const pieceForMove2 = tempGame.get(move2From);
+            if (!pieceForMove2) {
+                console.error('No piece at starting square for move2:', {
+                    square: move2From,
+                    move: puzzle.move2,
+                    fen: expectedFen2
+                });
+                throw new Error(`Неверные данные хода: нет фигуры на ${move2From}`);
+            }
+
+            // Проверяем легальность хода move2
+            const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+                m.from === move2From && m.to === move2To
+            );
+
+            if (!move2IsLegal) {
+                console.error('Move2 is not legal:', {
+                    move: puzzle.move2,
+                    fen: expectedFen2,
+                    legalMoves: tempGame.moves({ verbose: true })
+                });
+                throw new Error('Неверные данные хода: ход невозможен');
+            }
+
+            // Сохраняем текущую задачу
+            currentPuzzle = puzzle;
+            
+            // Показываем задачу (функция showPuzzle также запускает таймер и показывает страницу с задачей)
+            await showPuzzle(puzzle);
+            
+        } catch (err) {
+            console.error('Error loading puzzle:', err);
+            showError('Ошибка при загрузке задачи: ' + err.message);
+        }
+    }
+
+    // Добавляем обработчики событий
+    startButton.addEventListener('click', () => loadPuzzle(currentUsername));
+    goodButton.addEventListener('click', () => {
+        // Если puzzleConfig.solution === true (Good), то нажатие на Good - правильный ответ
+        // Если puzzleConfig.solution === false (Blunder), то нажатие на Good - неправильный ответ
+        
+        // Проверяем, что puzzleConfig существует
+        if (!puzzleConfig) {
+            console.error('Missing puzzleConfig in goodButton handler');
+            showError('Ошибка: отсутствуют данные задачи');
+            return;
         }
         
-        const userId = userResult.rows[0].id;
-        const userRating = {
-            rating: userResult.rows[0].rating,
-            rd: userResult.rows[0].rd,
-            volatility: userResult.rows[0].volatility
-        };
+        // Определяем правильность ответа
+        // Если solution === true, то нажатие на Good - правильный ответ
+        // Если solution === false, то нажатие на Good - неправильный ответ
+        const isCorrect = puzzleConfig.solution === true;
         
-        // Получаем рейтинг задачи
-        const puzzleResult = await pool.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (puzzleResult.rows.length === 0) {
-            throw new Error('Puzzle not found');
-        }
-        
-        const puzzleRating = {
-            rating: puzzleResult.rows[0].rating,
-            rd: puzzleResult.rows[0].rd,
-            volatility: puzzleResult.rows[0].volatility
-        };
-        
-        // Записываем решение в журнал
-        await pool.query(
-            `INSERT INTO Journal 
-            (user_id, puzzle_id, success, time_success, puzzle_rating_before)
-            VALUES ($1, $2, $3, $4, $5)`,
-            [userId, puzzleId, success, time, puzzleRating.rating]
-        );
-        
-        // Возвращаем текущий рейтинг пользователя
-        return {
-            rating: userRating.rating,
-            rd: userRating.rd,
-            volatility: userRating.volatility
-        };
-    } catch (err) {
-        console.error('Error recording solution:', err);
-        throw err;
-    }
-}
-
-// Обновляем обработчик POST /api/record-solution
-app.post('/api/record-solution', async (req, res) => {
-    try {
-        const { username, puzzleId, success, time, userRating, puzzleRating } = req.body;
-        console.log('Received solution data:', { 
-            username, 
-            puzzleId, 
-            success, 
-            time, 
-            userRating: userRating ? {
-                rating: userRating.rating,
-                rd: userRating.rd,
-                volatility: userRating.volatility
-            } : null, 
-            puzzleRating: puzzleRating ? {
-                rating: puzzleRating.rating,
-                rd: puzzleRating.rd,
-                volatility: puzzleRating.volatility
+        console.log('Good button clicked:', {
+            expectedSolution: puzzleConfig.solution,
+            solutionType: typeof puzzleConfig.solution,
+            isCorrect: isCorrect,
+            currentPuzzle: currentPuzzle ? {
+                id: currentPuzzle.id,
+                solution: currentPuzzle.solution,
+                solutionType: typeof currentPuzzle.solution
             } : null
         });
         
-        // Проверяем наличие всех необходимых параметров
-        if (!username || puzzleId === undefined || success === undefined || time === undefined) {
-            console.log('Missing parameters:', { username, puzzleId, success, time });
-            return res.status(400).json({ 
-                error: 'Missing required parameters',
-                received: { username, puzzleId, success, time }
-            });
-        }
-
-        // Получаем ID пользователя
-        const userResult = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
+        submitSolution(isCorrect);
+    });
+    blunderButton.addEventListener('click', () => {
+        // Если puzzleConfig.solution === false (Blunder), то нажатие на Blunder - правильный ответ
+        // Если puzzleConfig.solution === true (Good), то нажатие на Blunder - неправильный ответ
         
-        console.log('Current user data from DB:', userResult.rows[0]);
-        
-        let userId;
-        if (userResult.rows.length === 0) {
-            // Если пользователь не найден, создаем нового
-            console.log('User not found, creating new user:', username);
-            const newUser = await pool.query(
-                `INSERT INTO Users (username, rating, rd, volatility, status) 
-                 VALUES ($1, $2, $3, $4, true) 
-                 RETURNING id`,
-                [
-                    username, 
-                    userRating ? userRating.rating : 1500, 
-                    userRating ? userRating.rd : 350, 
-                    userRating ? userRating.volatility : 0.06
-                ]
-            );
-            userId = newUser.rows[0].id;
-            console.log('Created new user with ID:', userId);
-        } else {
-            userId = userResult.rows[0].id;
+        // Проверяем, что puzzleConfig существует
+        if (!puzzleConfig) {
+            console.error('Missing puzzleConfig in blunderButton handler');
+            showError('Ошибка: отсутствуют данные задачи');
+            return;
         }
         
-        // Обновляем рейтинг пользователя
-        if (userRating) {
-            console.log('Updating user rating in DB:', {
-                oldRating: userResult.rows.length > 0 ? userResult.rows[0].rating : 'N/A',
-                newRating: userRating.rating,
-                oldRD: userResult.rows.length > 0 ? userResult.rows[0].rd : 'N/A',
-                newRD: userRating.rd,
-                oldVolatility: userResult.rows.length > 0 ? userResult.rows[0].volatility : 'N/A',
-                newVolatility: userRating.volatility
-            });
-            
-            const updateUserResult = await pool.query(
-                `UPDATE Users 
-                 SET rating = $1, rd = $2, volatility = $3 
-                 WHERE username = $4
-                 RETURNING id, rating, rd, volatility`,
-                [
-                    userRating.rating,
-                    userRating.rd,
-                    userRating.volatility,
-                    username
-                ]
-            );
-            
-            // Проверяем, что рейтинг обновился
-            if (updateUserResult.rows.length > 0) {
-                console.log('User rating after update:', updateUserResult.rows[0]);
-            } else {
-                console.error('Failed to update user rating!');
-            }
-        }
+        // Определяем правильность ответа
+        // Если solution === false, то нажатие на Blunder - правильный ответ
+        // Если solution === true, то нажатие на Blunder - неправильный ответ
+        const isCorrect = puzzleConfig.solution === false;
         
-        // Получаем текущий рейтинг задачи для журнала
-        const puzzleResult = await pool.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (puzzleResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Puzzle not found' });
-        }
-        
-        // Обновляем рейтинг задачи
-        if (puzzleRating) {
-            // Получаем текущий рейтинг задачи
-            const currentPuzzleResult = await pool.query(
-                'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-                [puzzleId]
-            );
-            
-            console.log('Updating puzzle rating in DB:', {
-                puzzleId,
-                oldRating: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].rating : 'N/A',
-                newRating: puzzleRating.rating,
-                oldRD: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].rd : 'N/A',
-                newRD: puzzleRating.rd,
-                oldVolatility: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].volatility : 'N/A',
-                newVolatility: puzzleRating.volatility
-            });
-            
-            const updatePuzzleResult = await pool.query(
-                `UPDATE Puzzles 
-                 SET rating = $1, rd = $2, volatility = $3 
-                 WHERE id = $4
-                 RETURNING id, rating, rd, volatility`,
-                [
-                    puzzleRating.rating,
-                    puzzleRating.rd,
-                    puzzleRating.volatility,
-                    puzzleId
-                ]
-            );
-            
-            // Проверяем, что рейтинг задачи обновился
-            if (updatePuzzleResult.rows.length > 0) {
-                console.log('Puzzle rating after update:', updatePuzzleResult.rows[0]);
-            } else {
-                console.error('Failed to update puzzle rating!');
-            }
-        }
-        
-        // Записываем решение в журнал
-        const journalResult = await pool.query(
-            `INSERT INTO Journal 
-            (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id`,
-            [
-                userId, 
-                puzzleId, 
-                success, 
-                time, 
-                puzzleResult.rows[0].rating,
-                userRating ? userRating.rating : null
-            ]
-        );
-        
-        console.log('Solution recorded in journal with ID:', journalResult.rows[0].id);
-        
-        // Получаем обновленный рейтинг пользователя для ответа
-        const updatedUserRating = await pool.query(
-            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
-        
-        res.json({
-            status: 'success',
-            message: 'Solution recorded successfully',
-            userRating: updatedUserRating.rows.length > 0 ? updatedUserRating.rows[0] : userRating,
-            puzzleRating: puzzleRating || null
+        console.log('Blunder button clicked:', {
+            expectedSolution: puzzleConfig.solution,
+            solutionType: typeof puzzleConfig.solution,
+            isCorrect: isCorrect,
+            currentPuzzle: currentPuzzle ? {
+                id: currentPuzzle.id,
+                solution: currentPuzzle.solution,
+                solutionType: typeof currentPuzzle.solution
+            } : null
         });
-    } catch (err) {
-        console.error('Error in /api/record-solution:', err);
-        console.error('Error stack:', err.stack);
-        res.status(500).json({ 
-            error: 'Internal server error',
-            message: err.message,
-            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        
+        submitSolution(isCorrect);
+    });
+    
+    // Добавляем обработчик для кнопки Next
+    document.querySelector('.next-btn').addEventListener('click', () => {
+        // Скрываем страницу результата
+        resultPage.classList.add('hidden');
+        // Загружаем новую задачу
+        loadPuzzle(currentUsername);
+    });
+
+    // Обработчик результата задачи
+    async function handlePuzzleResult(isCorrect) {
+        try {
+            // Останавливаем таймер
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+            }
+            
+            // Проверяем, что puzzleConfig существует
+            if (!puzzleConfig) {
+                console.error('Missing puzzleConfig in handlePuzzleResult');
+                showError('Ошибка: отсутствуют данные задачи');
+                return;
+            }
+            
+            console.log('Handling puzzle result:', {
+                userAnswer: isCorrect,
+                expectedSolution: puzzleConfig.solution
+            });
+            
+            // Отправляем решение
+            await submitSolution(isCorrect);
+        } catch (error) {
+            console.error('Error handling puzzle result:', error);
+            showError('Ошибка при обработке результата: ' + error.message);
+        }
+    }
+
+    // Добавляем обработчик для кнопки анализа
+    document.querySelector('.analyze-btn').addEventListener('click', () => {
+        // Проверяем наличие необходимых данных
+        if (!puzzleConfig || !puzzleConfig.move1 || !puzzleConfig.initialFen) {
+            console.error('Missing required data for analysis:', puzzleConfig);
+            showError('Недостаточно данных для анализа');
+            return;
+        }
+        
+        try {
+            // Создаем временный экземпляр игры для анализа
+            const tempGame = new Chess();
+            
+            // Загружаем начальную позицию
+            if (!tempGame.load(puzzleConfig.initialFen)) {
+                console.error('Invalid initial FEN:', puzzleConfig.initialFen);
+                showError('Неверный формат позиции');
+                return;
+            }
+            
+            // Получаем координаты хода
+            const [fromSquare, toSquare] = [
+                puzzleConfig.move1.substring(0, 2),
+                puzzleConfig.move1.substring(2, 4)
+            ];
+            
+            // Проверяем наличие фигуры
+            const pieceOnSquare = tempGame.get(fromSquare);
+            if (!pieceOnSquare) {
+                console.error('No piece at starting square:', fromSquare);
+                
+                // Пытаемся найти правильный ход
+                const legalMoves = tempGame.moves({ verbose: true });
+                const possibleMove = legalMoves.find(m => m.to === toSquare);
+                
+                if (possibleMove) {
+                    console.log('Found alternative move for analysis:', possibleMove);
+                    // Делаем найденный ход
+                    tempGame.move({ from: possibleMove.from, to: possibleMove.to, promotion: 'q' });
+                } else {
+                    showError('Не удалось найти правильный ход для анализа');
+                    return;
+                }
+            } else {
+                // Делаем ход
+                const moveResult = tempGame.move({ from: fromSquare, to: toSquare, promotion: 'q' });
+                
+                if (!moveResult) {
+                    console.error('Move is not legal:', { from: fromSquare, to: toSquare });
+                    showError('Ход невозможен');
+                    return;
+                }
+            }
+            
+            // Получаем FEN после хода и форматируем его для URL
+            const fen = tempGame.fen().replace(/ /g, '_');
+            
+            // Используем ориентацию доски из конфигурации
+            const orientation = puzzleConfig.orientation;
+            
+            console.log('Opening analysis with FEN:', fen, 'orientation:', orientation);
+            
+            // Открываем страницу анализа на lichess с правильной ориентацией
+            window.open(`https://lichess.org/analysis/${fen}?color=${orientation === 'white' ? 'white' : 'black'}`, '_blank');
+        } catch (error) {
+            console.error('Error in analyze function:', error);
+            showError('Ошибка при анализе: ' + error.message);
+        }
+    });
+
+    // Функция для отрисовки стрелок
+    function drawArrow(from, to, color) {
+        console.log('Drawing arrow for move:', from + to);
+        
+        // Удаляем старую стрелку
+        const oldArrow = document.querySelector('.arrow');
+        if (oldArrow) oldArrow.remove();
+
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "arrow");
+        svg.style.position = 'absolute';
+        svg.style.top = '0';
+        svg.style.left = '0';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.pointerEvents = 'none';
+        svg.style.zIndex = '1000';
+        
+        const board = document.querySelector('#board');
+        if (!board) {
+            console.error('Board element not found');
+            return;
+        }
+        
+        // Получаем элементы клеток
+        const fromSquare = document.querySelector(`[data-square="${from}"]`);
+        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        
+        if (!fromSquare || !toSquare) {
+            console.error('Square elements not found:', { from, to, fromElement: fromSquare, toElement: toSquare });
+            return;
+        }
+        
+        const boardRect = board.getBoundingClientRect();
+        const fromRect = fromSquare.getBoundingClientRect();
+        const toRect = toSquare.getBoundingClientRect();
+        const squareSize = boardRect.width / 8;
+
+        // Координаты
+        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
+        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
+        const x2 = toRect.left - boardRect.left + toRect.width/2;
+        const y2 = toRect.top - boardRect.top + toRect.height/2;
+
+        console.log('Arrow coordinates:', { 
+            from: { x: x1, y: y1, square: from, rect: fromRect },
+            to: { x: x2, y: y2, square: to, rect: toRect },
+            board: boardRect
         });
-    }
-});
 
-// Добавляем обработку favicon.ico
-app.get('/favicon.ico', (req, res) => {
-    res.status(204).end();
-});
+        // Вычисляем угол и размеры
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const width = squareSize * 0.15;
+        const headWidth = squareSize * 0.3;
+        const headLength = squareSize * 0.3;
 
-// Добавляем раздачу статических файлов
-app.use(express.static(path.join(__dirname)));
+        // Точки для стрелки
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
 
-// Добавляем маршрут для index.html
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Добавляем функцию getSettings
-async function getSettings() {
-    try {
-        const result = await pool.query('SELECT * FROM Settings LIMIT 1');
-        return result.rows[0] || { normal_time: 60 };
-    } catch (err) {
-        console.error('Error getting settings:', err);
-        return { normal_time: 60 };
-    }
-}
-
-// Добавляем функцию getPuzzleRating
-async function getPuzzleRating(puzzleId) {
-    try {
-        console.log('Getting rating for puzzle:', puzzleId);
-        const result = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (result.rows.length === 0) {
-            console.error('Puzzle not found:', puzzleId);
-            throw new Error(`Puzzle ${puzzleId} not found`);
-        }
-        
-        console.log('Found puzzle rating:', result.rows[0]);
-        return result.rows[0];
-    } catch (err) {
-        console.error('Error getting puzzle rating:', err);
-        throw err;
-    }
-}
-
-// Функция проверки данных от Telegram
-function validateTelegramWebAppData(telegramInitData) {
-    const initData = new URLSearchParams(telegramInitData);
-    const hash = initData.get('hash');
-    const botToken = process.env.BOT_TOKEN; // Токен вашего бота
-
-    // Удаляем hash из проверяемых данных
-    initData.delete('hash');
-    
-    // Сортируем оставшиеся поля
-    const dataCheckString = Array.from(initData.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => `${key}=${value}`)
-        .join('\n');
-
-    // Создаем HMAC-SHA256
-    const secret = crypto.createHmac('sha256', 'WebAppData')
-        .update(botToken)
-        .digest();
-    
-    const calculatedHash = crypto.createHmac('sha256', secret)
-        .update(dataCheckString)
-        .digest('hex');
-
-    return calculatedHash === hash;
-}
-
-// Добавляем middleware для проверки авторизации
-app.use('/api', (req, res, next) => {
-    const initData = req.headers['x-telegram-init-data'];
-    
-    if (!initData || !validateTelegramWebAppData(initData)) {
-        // В режиме разработки пропускаем проверку
-        if (process.env.NODE_ENV === 'development') {
-            return next();
-        }
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    next();
-});
-
-// Добавляем тестовый эндпоинт для проверки БД
-app.get('/api/test-db', async (req, res) => {
-    try {
-        // Проверяем подключение к БД
-        const dbCheck = await pool.query('SELECT NOW()');
-        
-        // Проверяем основные таблицы
-        const tablesCheck = await pool.query(`
-            SELECT 
-                (SELECT COUNT(*) FROM users) as users_count,
-                (SELECT COUNT(*) FROM puzzles) as puzzles_count,
-                (SELECT COUNT(*) FROM types) as types_count,
-                (SELECT COUNT(*) FROM tags) as tags_count,
-                (SELECT COUNT(*) FROM puzzles_tags) as puzzles_tags_count,
-                (SELECT COUNT(*) FROM journal) as journal_count,
-                (SELECT COUNT(*) FROM complexity) as complexity_count,
-                (SELECT COUNT(*) FROM settings) as settings_count
+        // Создаем путь для стрелки
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `
+            M ${x1 - width*dy} ${y1 + width*dx}
+            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
+            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
+            L ${x2} ${y2}
+            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
+            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
+            L ${x1 + width*dy} ${y1 - width*dx}
+            Z
         `);
-        
-        res.json({
-            status: 'success',
-            timestamp: dbCheck.rows[0].now,
-            tables: tablesCheck.rows[0]
-        });
-    } catch (err) {
-        console.error('Database test failed:', err);
-        res.status(500).json({
-            status: 'error',
-            message: err.message,
-            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
-        });
+        path.setAttribute("fill", color);
+        path.setAttribute("opacity", "0.5");
+
+        svg.appendChild(path);
+        board.appendChild(svg);
     }
-});
 
-// Изменим порт на переменную окружения
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
-// Функция для проверки, решал ли пользователь эту задачу
-async function isPuzzleSolved(username, fen) {
-    try {
-        const result = await pool.query(
-            'SELECT id FROM SolvedPuzzles WHERE username = $1 AND puzzle_fen = $2',
-            [username, fen]
-        );
-        return result.rows.length > 0;
-    } catch (err) {
-        console.error('Error checking solved puzzle:', err);
-        return false;
+    // Вспомогательная функция для получения координат клетки
+    function getSquareCoords(square) {
+        const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
+        const rank = 8 - parseInt(square[1]);
+        return { x: file, y: rank };
     }
-}
 
-// Обновляем функцию markPuzzleAsSolved, чтобы она возвращала Promise
-async function markPuzzleAsSolved(username, fen) {
-    try {
-        await pool.query(
-            `INSERT INTO SolvedPuzzles (username, puzzle_fen) 
-             VALUES ($1, $2) 
-             ON CONFLICT (username, puzzle_fen) DO NOTHING`,
-            [username, fen]
-        );
-        console.log(`Marked puzzle ${fen} as solved for user ${username}`);
-    } catch (err) {
-        console.error('Error marking puzzle as solved:', err);
-        throw err; // Пробрасываем ошибку дальше
-    }
-}
-
-// Функция для расчёта нового отклонения рейтинга (RD) по алгоритму Глико
-function calculateNewRD(RD0, t, c = 34.6) {
-    // Формула: RD = min(sqrt(RD0^2 + c^2*t), 350)
-    const newRD = Math.sqrt(Math.pow(RD0, 2) + Math.pow(c, 2) * t);
-    return Math.min(newRD, 350);
-}
-
-// Константа q для алгоритма Глико
-const q = Math.log(10) / 400; // = 0.00575646273
-
-// Функция g(RD) для алгоритма Глико
-function g(RD) {
-    return 1 / Math.sqrt(1 + 3 * q * q * RD * RD / (Math.PI * Math.PI));
-}
-
-// Функция E для алгоритма Глико
-function E(r0, ri, RDi) {
-    return 1 / (1 + Math.pow(10, (-g(RDi) * (r0 - ri)) / 400));
-}
-
-// Функция для расчёта d^2
-function calculateD2(opponents) {
-    let sum = 0;
-    for (const opp of opponents) {
-        const gRD = g(opp.RD);
-        const eValue = E(opp.r, opp.r0, opp.RD);
-        sum += Math.pow(gRD, 2) * eValue * (1 - eValue);
-    }
-    return 1 / (Math.pow(q, 2) * sum);
-}
-
-// Функция для расчёта нового рейтинга
-function calculateNewRating(r0, RD, opponents) {
-    // Рассчитываем d^2
-    const d2 = calculateD2(opponents);
-    
-    // Рассчитываем сумму в числителе
-    let sum = 0;
-    for (const opp of opponents) {
-        sum += g(opp.RD) * (opp.s - E(r0, opp.r, opp.RD));
-    }
-    
-    // Рассчитываем новый рейтинг по формуле
-    const newRating = r0 + (q / (1/Math.pow(RD, 2) + 1/d2)) * sum;
-    
-    return newRating;
-}
-
-// Функция для расчёта нового отклонения рейтинга по Глико-2
-function calculateNewRDPrime(RD, d2) {
-    // Формула: RD' = sqrt(1 / (1/RD² + 1/d²))
-    return Math.sqrt(1 / (1/Math.pow(RD, 2) + 1/d2));
-}
-
-// Функция g(φ) для Глико-2
-function gPhi(phi) {
-    return 1 / Math.sqrt(1 + 3 * Math.pow(phi, 2) / (Math.PI * Math.PI));
-}
-
-// Функция E(μ, μj, φj) для Глико-2
-function expectation(mu, muJ, phiJ) {
-    return 1 / (1 + Math.exp(-gPhi(phiJ) * (mu - muJ)));
-}
-
-// Функция для вычисления v (вспомогательная величина)
-function calculateV(opponents, mu) {
-    let sum = 0;
-    for (const opp of opponents) {
-        const gPhiJ = gPhi(opp.phi);
-        const E = expectation(mu, opp.mu, opp.phi);
-        sum += Math.pow(gPhiJ, 2) * E * (1 - E);
-    }
-    return Math.pow(sum, -1);
-}
-
-// Функция для вычисления Δ (вспомогательная величина)
-function calculateDelta(opponents, mu) {
-    let sum = 0;
-    for (const opp of opponents) {
-        const gPhiJ = gPhi(opp.phi);
-        const E = expectation(mu, opp.mu, opp.phi);
-        sum += gPhiJ * (opp.s - E);
-    }
-    return calculateV(opponents, mu) * sum;
-}
-
-// Функция для преобразования рейтинга в шкалу Глико-2
-function convertToGlicko2Scale(rating, rd) {
-    const mu = (rating - 1500) / 173.7178;
-    const phi = rd / 173.7178;
-    return { mu, phi };
-}
-
-// Функция для преобразования обратно в шкалу рейтинга
-function convertFromGlicko2Scale(mu, phi) {
-    const rating = 173.7178 * mu + 1500;
-    const rd = 173.7178 * phi;
-    return { rating, rd };
-}
-
-// Константа τ для алгоритма Глико-2
-const TAU = 0.2;
-const EPSILON = 0.000001;
-
-// Функция f(x) для итерационного процесса
-function f(x, delta, phi, v, sigma2, tau2) {
-    const ex = Math.exp(x);
-    return (ex * (delta*delta - phi*phi - v - ex)) / (2 * Math.pow(phi*phi + v + ex, 2)) - (x - Math.log(sigma2)) / tau2;
-}
-
-// Функция для поиска значения A методом половинного деления
-function findA(sigma, phi, v, delta) {
-    const tau2 = TAU * TAU;
-    const sigma2 = sigma * sigma;
-    
-    // Начальное значение a = ln(σ²)
-    const a = Math.log(sigma2);
-    
-    // Находим подходящее значение для b
-    let b;
-    if (delta*delta > phi*phi + v) {
-        b = Math.log(delta*delta - phi*phi - v);
-    } else {
-        k = 1;
-        while (f(a - k * TAU, delta, phi, v, sigma2, tau2) < 0) {
-            k = k + 1;
+    // Обработчик клика по доске для показа/скрытия стрелки
+    $('#board').on('click', function() {
+        const arrow = document.querySelector('.arrow');
+        if (arrow) {
+            arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
         }
-        b = a - k * TAU;
+    });
+
+    // Функция для отображения ошибок
+    function showError(message) {
+        // Показываем ошибку пользователю
+        alert(message);
     }
-    
-    // Метод половинного деления
-    let c;
-    let fa = f(a, delta, phi, v, sigma2, tau2);
-    let fb = f(b, delta, phi, v, sigma2, tau2);
-    
-    while (Math.abs(b - a) > EPSILON) {
-        c = (a + b) / 2;
-        let fc = f(c, delta, phi, v, sigma2, tau2);
-        if (fc * fa < 0) {
-            b = c;
-            fb = fc;
-        } else {
-            a = c;
-            fa = fc;
-        }
+
+    // Реализация системы рейтинга Glicko-2
+    // Константы для системы Glicko-2
+    const TAU = 0.5;  // Разумное значение для большинства применений
+    const EPS = 1e-6;  // Допуск для сходимости итераций
+
+    // Вспомогательная функция, зависящая от отклонения рейтинга
+    function g(phi) {
+        return 1 / Math.sqrt(1 + 3 * phi * phi / (Math.PI * Math.PI));
     }
-    
-    return (a + b) / 2;
-}
 
-// Функция для вычисления нового рейтинга μ'
-function calculateNewMu(mu, phi, opponents) {
-    let sum = 0;
-    for (const opp of opponents) {
-        sum += gPhi(opp.phi) * (opp.s - expectation(mu, opp.mu, opp.phi));
+    // Функция ожидаемой доли очков при игре против рейтинга mu_j и отклонения phi_j
+    function E(mu, mu_j, phi_j) {
+        return 1 / (1 + Math.exp(-g(phi_j) * (mu - mu_j)));
     }
-    return mu + Math.pow(phi, 2) * sum;
-}
 
-// Функция для вычисления нового φ'
-function calculateNewPhi(phi, sigma, v) {
-    return 1 / Math.sqrt(1 / (phi*phi + sigma*sigma) + 1/v);
-}
-
-// Обновляем функцию updateRating для использования правильного алгоритма Глико-2
-async function updateRating(username, puzzleId, success) {
-    try {
-        // Получаем текущий рейтинг пользователя
-        const userRating = await getUserRating(username);
-        
-        // Получаем рейтинг задачи
-        const puzzleRating = await getPuzzleRating(puzzleId);
-        
-        // Шаг 1: Преобразуем рейтинги в шкалу Глико-2
-        const { mu: userMu, phi: userPhi } = convertToGlicko2Scale(userRating.rating, userRating.rd);
-        const { mu: puzzleMu, phi: puzzlePhi } = convertToGlicko2Scale(puzzleRating.rating, puzzleRating.rd);
-        
-        // Формируем массив противников (в данном случае одна задача)
-        const opponents = [{
-            mu: puzzleMu,
-            phi: puzzlePhi,
-            s: success ? 1 : 0
-        }];
-        
-        // Шаг 1: Вычисляем вспомогательные величины v и Δ
-        const v = calculateV(opponents, userMu);
-        const delta = calculateDelta(opponents, userMu);
-        
-        // Шаг 2: Вычисляем новую волатильность
-        const sigma = userRating.volatility;
-        const A = findA(sigma, userPhi, v, delta);
-        const newVolatility = Math.exp(A/2);
-        
-        // Шаг 3: Вычисляем новое φ'
-        const newPhi = calculateNewPhi(userPhi, newVolatility, v);
-        
-        // Шаг 4: Вычисляем новый рейтинг μ'
-        const newMu = calculateNewMu(userMu, newPhi, opponents);
-        
-        // Преобразуем обратно в обычную шкалу
-        const { rating: finalRating, rd: finalRD } = convertFromGlicko2Scale(newMu, newPhi);
-        
-        // Обновляем рейтинг в базе данных
-        await pool.query(
-            `INSERT INTO Journal 
-            (username, puzzle_id, success, time, rating, rd, volatility)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-                username,
-                puzzleId,
-                success,
-                0, // время пока не используем
-                finalRating,
-                Math.min(finalRD, 350),
-                newVolatility
-            ]
-        );
-        
-        // Добавляем задачу в список решённых
-        await markPuzzleAsSolved(username, puzzleRating.fen);
-        
-        // Возвращаем обновленные значения
-        return {
-            rating: finalRating,
-            rd: Math.min(finalRD, 350),
-            volatility: newVolatility
-        };
-    } catch (err) {
-        console.error('Error updating rating:', err);
-        throw err;
+    // Вспомогательная функция для итеративной процедуры
+    function f(x, a, delta_sq, phi_sq, v) {
+        const ex = Math.exp(x);
+        return (ex * (delta_sq - phi_sq - v - ex)) / (2 * (phi_sq + v + ex) * (phi_sq + v + ex)) - (x - a) / (TAU * TAU);
     }
-}
 
-// Обновляем функцию calculateV для точного соответствия формуле
-function calculateV(opponents, mu) {
-    let sum = 0;
-    for (const opp of opponents) {
-        const gPhiJ = gPhi(opp.phi);
-        const E = expectation(mu, opp.mu, opp.phi);
-        sum += Math.pow(gPhiJ, 2) * E * (1 - E);
-    }
-    return Math.pow(sum, -1);
-}
-
-// Обновляем функцию calculateDelta для точного соответствия формуле
-function calculateDelta(opponents, mu) {
-    let sum = 0;
-    for (const opp of opponents) {
-        const gPhiJ = gPhi(opp.phi);
-        const E = expectation(mu, opp.mu, opp.phi);
-        sum += gPhiJ * (opp.s - E);
-    }
-    return calculateV(opponents, mu) * sum;
-}
-
-// Обновляем функцию calculateNewPhi для точного соответствия формуле
-function calculateNewPhi(phi, sigma, v) {
-    return 1 / Math.sqrt(1 / (phi*phi + sigma*sigma) + 1/v);
-}
-
-// Обновляем функцию calculateNewMu для точного соответствия формуле
-function calculateNewMu(mu, phi, opponents) {
-    let sum = 0;
-    for (const opp of opponents) {
-        sum += gPhi(opp.phi) * (opp.s - expectation(mu, opp.mu, opp.phi));
-    }
-    return mu + Math.pow(phi, 2) * sum;
-}
-
-// Обновляем функцию для инициализации пользователей
-async function initializeUsers() {
-    try {
-        // Очищаем существующих пользователей
-        await pool.query('DELETE FROM Users');
+    // Итеративная процедура для нахождения нового значения изменчивости
+    function convergeIterations(a, delta_sq, phi_sq, v) {
+        // Инициализация интервала
+        let A = a;
+        let B = a - TAU * Math.log(1 / delta_sq - phi_sq - v);
+        let fA = f(A, a, delta_sq, phi_sq, v);
+        let fB = f(B, a, delta_sq, phi_sq, v);
         
-        // Добавляем пользователей из таблицы
-        const users = [
-            {
-                id: 1,
-                username: 'goodwillchess',
-                telegram_id: 1931999392,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                status: true,
-                performance: 1450.202583
-            },
-            {
-                id: 2,
-                username: 'antiblunderchess',
-                telegram_id: 5395535292,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                status: true,
-                performance: 1325.891841
-            },
-            {
-                id: 3,
-                username: 'test_user',
-                telegram_id: null,
-                rating: 1500.00,
-                rd: 350.00,
-                volatility: 0.06000000,
-                status: true,
-                performance: 1500.00
+        // Итерации до сходимости
+        while (Math.abs(B - A) > EPS) {
+            const C = A + (A - B) * fA / (fB - fA);
+            const fC = f(C, a, delta_sq, phi_sq, v);
+            if (fC * fB <= 0) {
+                A = B;
+                fA = fB;
+            } else {
+                fA /= 2;
             }
-        ];
-
-        // Вставляем всех пользователей
-        for (const user of users) {
-            await pool.query(
-                `INSERT INTO Users (id, username, telegram_id, rating, rd, volatility, status) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [
-                    user.id,
-                    user.username,
-                    user.telegram_id,
-                    user.rating,
-                    user.rd,
-                    user.volatility,
-                    user.status
-                ]
-            );
+            B = C;
+            fB = fC;
         }
         
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'users_id_seq\', (SELECT MAX(id) FROM Users))');
-        
-        console.log('Users initialized successfully');
-    } catch (err) {
-        console.error('Error initializing users:', err);
-        throw err;
+        return Math.exp(A / 2);
     }
-}
 
-// Обновляем функцию для инициализации настроек
-async function initializeSettings() {
-    try {
-        // Очищаем существующие настройки
-        await pool.query('DELETE FROM Settings');
+    // Основная функция для расчета нового рейтинга по системе Glicko-2
+    function calculateGlicko2(mu, phi, mu_j_list, phi_j_list, s_list, sys_val) {
+        console.log('Starting Glicko-2 calculation with:', {
+            mu, phi, mu_j_list, phi_j_list, s_list, sys_val
+        });
         
-        // Добавляем новые настройки
-        const settings = [
-            { id: 1, setting: 'Period, days', meaning: 5 },
-            { id: 2, setting: 'Минимальное количество задач для расчета перформанса', meaning: 0 },
-            { id: 3, setting: 'Минимальный перформанс для сравнения', meaning: 100 },
-            { id: 4, setting: 'Коэффициент понижения базовой вероятности', meaning: 0.5 },
-            { id: 5, setting: 'Норма решения 1 задачи, секунд', meaning: 30 },
-            { id: 6, setting: 'Коэффициент, понижающий значение первого результата в сравнении с последним при расчете скользящего перформанса', meaning: 2 },
-            { id: 7, setting: 'Базовая вероятность критерия "лучший"', meaning: 0.150 },
-            { id: 8, setting: 'Базовая вероятность критерия "защита"', meaning: 0.350 },
-            { id: 9, setting: 'Базовая вероятность критерия "обычный"', meaning: 0.500 },
-            { id: 10, setting: 'Базовая вероятность критерия "пропуск"', meaning: 0.250 },
-            { id: 11, setting: 'Базовая вероятность критерия "фейк"', meaning: 0.250 },
-            { id: 12, setting: 'Базовая вероятность критерия "нет защиты"', meaning: 0.250 },
-            { id: 13, setting: 'Базовая вероятность критерия "подстава"', meaning: 0.250 },
-            { id: 14, setting: 'Базовая вероятность критерия "супер легкая"', meaning: 0.025 },
-            { id: 15, setting: 'Базовая вероятность критерия "очень легкая"', meaning: 0.100 },
-            { id: 16, setting: 'Базовая вероятность критерия "легкая"', meaning: 0.200 },
-            { id: 17, setting: 'Базовая вероятность критерия "средняя"', meaning: 0.350 },
-            { id: 18, setting: 'Базовая вероятность критерия "сложная"', meaning: 0.200 },
-            { id: 19, setting: 'Базовая вероятность критерия "очень сложная"', meaning: 0.100 },
-            { id: 20, setting: 'Базовая вероятность критерия "супер сложная"', meaning: 0.025 },
-            { id: 21, setting: 'Стандартное отклонение', meaning: 100 },
-            { id: 22, setting: 'Время до предварительного хода, секунд', meaning: 1 },
-            { id: 23, setting: 'Время анализа 1 линии, секунд', meaning: 1 },
-            { id: 24, setting: 'Количество задач в день, которое может решать активный пользователь', meaning: 100 },
-            { id: 25, setting: 'Количество задач в день, которое может решать неактивный пользователь', meaning: 3 }
-        ];
-
-        // Вставляем все настройки
-        for (const setting of settings) {
-            await pool.query(
-                'INSERT INTO Settings (id, setting, meaning) VALUES ($1, $2, $3)',
-                [setting.id, setting.setting, setting.meaning]
-            );
+        // 1. Конвертация в шкалу Glicko-2
+        mu = (mu - 1500) / 173.7178;
+        phi = phi / 173.7178;
+        
+        // Конвертируем рейтинги соперников в шкалу Glicko-2
+        const mu_j_list_converted = mu_j_list.map(r => (r - 1500) / 173.7178);
+        const phi_j_list_converted = phi_j_list.map(rd => rd / 173.7178);
+        
+        console.log('Converted to Glicko-2 scale:', {
+            mu, phi, mu_j_list_converted, phi_j_list_converted
+        });
+        
+        // 2. Вспомогательные вычисления
+        const phi_sq = phi * phi;
+        
+        // Вычисляем v (предварительная проверка на пустые списки)
+        if (mu_j_list.length === 0) {
+            console.log('No opponents, returning original values');
+            // Если нет игр, возвращаем исходные значения
+            return {
+                rating: 1500,
+                rd: phi * 173.7178,
+                volatility: sys_val
+            };
         }
         
-        console.log('Settings initialized successfully');
-    } catch (err) {
-        console.error('Error initializing settings:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию для инициализации журнала
-async function initializeJournal() {
-    try {
-        // Очищаем существующие записи
-        await pool.query('DELETE FROM Journal');
-        
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE journal_id_seq RESTART WITH 1');
-        
-        // Добавляем записи из таблицы
-        const journal = [
-            {
-                id: 1,
-                user_id: 2,
-                puzzle_id: 3,
-                success: true,
-                time_success: 15.2,
-                puzzle_rating_before: 1500.0000,
-                user_rating_after: null,
-                complexity_id: 2,
-                date: '2025-03-01 10:00:00'
-            },
-            {
-                id: 2,
-                user_id: 1,
-                puzzle_id: 2,
-                success: true,
-                time_success: 10.8,
-                puzzle_rating_before: 1400.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-02 10:00:00'
-            },
-            {
-                id: 3,
-                user_id: 3,
-                puzzle_id: 6,
-                success: false,
-                time_success: 16.8,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-02 11:00:00'
-            },
-            {
-                id: 4,
-                user_id: 2,
-                puzzle_id: 1,
-                success: true,
-                time_success: 70.4,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-01 10:00:00'
-            },
-            {
-                id: 5,
-                user_id: 1,
-                puzzle_id: 5,
-                success: true,
-                time_success: 1.2,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 1,
-                date: '2025-03-01 11:00:00'
-            },
-            {
-                id: 6,
-                user_id: 2,
-                puzzle_id: 15,
-                success: true,
-                time_success: 8.4,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-01 10:00:00'
-            },
-            {
-                id: 7,
-                user_id: 2,
-                puzzle_id: 13,
-                success: false,
-                time_success: 180.0,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-02 12:00:00'
-            },
-            {
-                id: 8,
-                user_id: 3,
-                puzzle_id: 12,
-                success: true,
-                time_success: 102.7,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-03 10:00:00'
-            },
-            {
-                id: 9,
-                user_id: 1,
-                puzzle_id: 8,
-                success: true,
-                time_success: 4.2,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 3,
-                date: '2025-03-03 11:00:00'
-            },
-            {
-                id: 10,
-                user_id: 3,
-                puzzle_id: 9,
-                success: false,
-                time_success: 17.8,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-05 10:00:00'
-            },
-            {
-                id: 11,
-                user_id: 1,
-                puzzle_id: 9,
-                success: false,
-                time_success: 67.9,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 3,
-                date: '2025-03-05 12:00:00'
-            },
-            {
-                id: 12,
-                user_id: 2,
-                puzzle_id: 6,
-                success: false,
-                time_success: 15.7,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-05 11:00:00'
-            },
-            {
-                id: 13,
-                user_id: 1,
-                puzzle_id: 7,
-                success: false,
-                time_success: 22.8,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-06 10:00:00'
-            },
-            {
-                id: 14,
-                user_id: 2,
-                puzzle_id: 4,
-                success: false,
-                time_success: 45.6,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 5,
-                date: '2025-03-06 12:00:00'
-            },
-            {
-                id: 15,
-                user_id: 1,
-                puzzle_id: 10,
-                success: false,
-                time_success: 30.2,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 6,
-                date: '2025-03-06 11:05:00'
-            },
-            {
-                id: 16,
-                user_id: 1,
-                puzzle_id: 15,
-                success: true,
-                time_success: 50.1,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-06 10:00:00'
-            },
-            {
-                id: 17,
-                user_id: 2,
-                puzzle_id: 2,
-                success: true,
-                time_success: 170.0,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-06 11:00:00'
-            },
-            {
-                id: 18,
-                user_id: 2,
-                puzzle_id: 9,
-                success: true,
-                time_success: 30.4,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-06 18:00:00'
-            },
-            {
-                id: 19,
-                user_id: 2,
-                puzzle_id: 12,
-                success: true,
-                time_success: 159.7,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 4,
-                date: '2025-03-07 11:00:00'
-            },
-            {
-                id: 20,
-                user_id: 2,
-                puzzle_id: 10,
-                success: true,
-                time_success: 18.1,
-                puzzle_rating_before: 1520.0000,
-                user_rating_after: null,
-                complexity_id: 3,
-                date: '2025-03-07 10:00:00'
-            }
-        ];
-
-        // Вставляем все записи
-        for (const record of journal) {
-            await pool.query(
-                `INSERT INTO Journal (
-                    id, user_id, puzzle_id, success, time_success,
-                    puzzle_rating_before, user_rating_after, complexity_id, date
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                [
-                    record.id,
-                    record.user_id,
-                    record.puzzle_id,
-                    record.success,
-                    record.time_success,
-                    record.puzzle_rating_before,
-                    record.user_rating_after,
-                    record.complexity_id,
-                    record.date
-                ]
-            );
+        // Вычисляем v
+        let v_sum = 0;
+        for (let i = 0; i < mu_j_list.length; i++) {
+            const g_phi_j = g(phi_j_list_converted[i]);
+            const e_mu_mu_j = E(mu, mu_j_list_converted[i], phi_j_list_converted[i]);
+            v_sum += g_phi_j * g_phi_j * e_mu_mu_j * (1 - e_mu_mu_j);
         }
+        const v = 1 / v_sum;
         
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'journal_id_seq\', (SELECT MAX(id) FROM Journal))');
+        console.log('Calculated v:', v);
         
-        console.log('Journal initialized successfully');
-    } catch (err) {
-        console.error('Error initializing journal:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию для инициализации тегов
-async function initializeTags() {
-    try {
-        // Очищаем существующие теги
-        await pool.query('DELETE FROM Tags');
-        
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE tags_id_seq RESTART WITH 1');
-        
-        // Добавляем теги из таблицы
-        const tags = [
-            { id: 1, tag: 'бесплатное взятие' },
-            { id: 2, tag: 'выгодный размен' },
-            { id: 3, tag: 'анализ' },
-            { id: 4, tag: 'связка' },
-            { id: 5, tag: 'вилка' },
-            { id: 6, tag: 'рентген' },
-            { id: 7, tag: 'вскрытое нападение' },
-            { id: 8, tag: 'капкан' },
-            { id: 9, tag: 'мат' },
-            { id: 10, tag: 'последняя горизонталь' },
-            { id: 11, tag: 'уничтожение защитника' },
-            { id: 12, tag: 'отвлечение' },
-            { id: 13, tag: 'перекрытие' },
-            { id: 14, tag: 'завлечение' },
-            { id: 15, tag: 'освобождение' },
-            { id: 16, tag: 'превращение пешки' },
-            { id: 17, tag: 'пат' },
-            { id: 18, tag: 'повторение' }
-        ];
-
-        // Вставляем все теги
-        for (const tag of tags) {
-            await pool.query(
-                'INSERT INTO Tags (id, tag) VALUES ($1, $2)',
-                [tag.id, tag.tag]
-            );
+        // Вычисляем delta
+        let delta_sum = 0;
+        for (let i = 0; i < mu_j_list.length; i++) {
+            const g_phi_j = g(phi_j_list_converted[i]);
+            const e_mu_mu_j = E(mu, mu_j_list_converted[i], phi_j_list_converted[i]);
+            delta_sum += g_phi_j * (s_list[i] - e_mu_mu_j);
         }
+        const delta = v * delta_sum;
+        const delta_sq = delta * delta;
         
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'tags_id_seq\', (SELECT MAX(id) FROM Tags))');
+        console.log('Calculated delta:', delta, 'delta_sq:', delta_sq);
         
-        console.log('Tags initialized successfully');
-    } catch (err) {
-        console.error('Error initializing tags:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию для инициализации типов
-async function initializeTypes() {
-    try {
-        // Очищаем существующие типы
-        await pool.query('DELETE FROM Types');
+        // 3. Итерации для нахождения новой изменчивости
+        const a = Math.log(sys_val * sys_val);
+        const new_sys_val = convergeIterations(a, delta_sq, phi_sq, v);
         
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE types_id_seq RESTART WITH 1');
+        console.log('New volatility:', new_sys_val);
         
-        // Добавляем типы из таблицы
-        const types = [
-            { id: 1, type: 'лучший' },
-            { id: 2, type: 'защита' },
-            { id: 3, type: 'обычный' },
-            { id: 4, type: 'пропуск' },
-            { id: 5, type: 'фейк' },
-            { id: 6, type: 'нет защиты' },
-            { id: 7, type: 'подстава' }
-        ];
-
-        // Вставляем все типы
-        for (const type of types) {
-            await pool.query(
-                'INSERT INTO Types (id, type) VALUES ($1, $2)',
-                [type.id, type.type]
-            );
+        // 4. Обновление отклонения рейтинга
+        const new_phi_star = Math.sqrt(phi_sq + new_sys_val * new_sys_val);
+        const new_phi = 1 / Math.sqrt(1 / (new_phi_star * new_phi_star) + 1 / v);
+        
+        console.log('New phi_star:', new_phi_star, 'new_phi:', new_phi);
+        
+        // 5. Обновление рейтинга
+        let new_mu_sum = 0;
+        for (let i = 0; i < mu_j_list.length; i++) {
+            const g_phi_j = g(phi_j_list_converted[i]);
+            const e_mu_mu_j = E(mu, mu_j_list_converted[i], phi_j_list_converted[i]);
+            new_mu_sum += g_phi_j * (s_list[i] - e_mu_mu_j);
         }
+        const new_mu = mu + new_phi * new_phi * new_mu_sum / v;
         
-        // Сбрасываем последовательность id после вставки
-        await pool.query('SELECT setval(\'types_id_seq\', (SELECT MAX(id) FROM Types))');
+        console.log('New mu:', new_mu);
         
-        console.log('Types initialized successfully');
-    } catch (err) {
-        console.error('Error initializing types:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию для инициализации типов сложности
-async function initializeComplexity() {
-    try {
-        // Очищаем существующие типы сложности
-        await pool.query('DELETE FROM Complexity');
+        // 6. Конвертация обратно в шкалу Glicko
+        const new_rating = 173.7178 * new_mu + 1500;
+        const new_rd = 173.7178 * new_phi;
         
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE complexity_id_seq RESTART WITH 1');
-        
-        // Добавляем типы сложности из таблицы
-        const complexityTypes = [
-            { id: 1, complexity_type: 'супер легкая' },
-            { id: 2, complexity_type: 'очень легкая' },
-            { id: 3, complexity_type: 'легкая' },
-            { id: 4, complexity_type: 'средняя' },
-            { id: 5, complexity_type: 'сложная' },
-            { id: 6, complexity_type: 'очень сложная' },
-            { id: 7, complexity_type: 'супер сложная' }
-        ];
-
-        // Вставляем все типы сложности
-        for (const complexity of complexityTypes) {
-            await pool.query(
-                'INSERT INTO Complexity (id, complexity_type) VALUES ($1, $2)',
-                [complexity.id, complexity.complexity_type]
-            );
-        }
-        
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'complexity_id_seq\', (SELECT MAX(id) FROM Complexity))');
-        
-        console.log('Complexity types initialized successfully');
-    } catch (err) {
-        console.error('Error initializing complexity types:', err);
-        throw err;
-    }
-}
-
-// Обновляем функцию для инициализации связей задач с тегами
-async function initializePuzzlesTags() {
-    try {
-        // Очищаем существующие связи
-        await pool.query('DELETE FROM Puzzles_Tags');
-        
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE puzzles_tags_id_seq RESTART WITH 1');
-        
-        // Добавляем связи из таблицы
-        const puzzlesTags = [
-            { id: 1, puzzle_id: 1, tag_id: 9 },
-            { id: 2, puzzle_id: 2, tag_id: 4 },
-            { id: 3, puzzle_id: 2, tag_id: 2 },
-            { id: 4, puzzle_id: 3, tag_id: 2 },
-            { id: 5, puzzle_id: 3, tag_id: 7 },
-            { id: 6, puzzle_id: 4, tag_id: 3 },
-            { id: 7, puzzle_id: 4, tag_id: 5 },
-            { id: 8, puzzle_id: 4, tag_id: 7 },
-            { id: 9, puzzle_id: 4, tag_id: 15 },
-            { id: 10, puzzle_id: 5, tag_id: 1 },
-            { id: 11, puzzle_id: 5, tag_id: 3 },
-            { id: 12, puzzle_id: 6, tag_id: 17 },
-            { id: 13, puzzle_id: 6, tag_id: 13 },
-            { id: 14, puzzle_id: 7, tag_id: 7 },
-            { id: 15, puzzle_id: 7, tag_id: 14 },
-            { id: 16, puzzle_id: 8, tag_id: 7 },
-            { id: 17, puzzle_id: 8, tag_id: 7 },
-            { id: 18, puzzle_id: 8, tag_id: 6 },
-            { id: 19, puzzle_id: 9, tag_id: 1 },
-            { id: 20, puzzle_id: 9, tag_id: 7 },
-            { id: 21, puzzle_id: 9, tag_id: 14 },
-            { id: 22, puzzle_id: 9, tag_id: 3 },
-            { id: 23, puzzle_id: 9, tag_id: 14 },
-            { id: 24, puzzle_id: 10, tag_id: 7 },
-            { id: 25, puzzle_id: 10, tag_id: 7 },
-            { id: 26, puzzle_id: 10, tag_id: 14 },
-            { id: 27, puzzle_id: 10, tag_id: 5 },
-            { id: 28, puzzle_id: 11, tag_id: 1 },
-            { id: 29, puzzle_id: 11, tag_id: 16 },
-            { id: 30, puzzle_id: 12, tag_id: 1 },
-            { id: 31, puzzle_id: 12, tag_id: 16 },
-            { id: 32, puzzle_id: 13, tag_id: 14 },
-            { id: 33, puzzle_id: 13, tag_id: 5 },
-            { id: 34, puzzle_id: 14, tag_id: 4 },
-            { id: 35, puzzle_id: 14, tag_id: 12 },
-            { id: 36, puzzle_id: 15, tag_id: 12 },
-            { id: 37, puzzle_id: 15, tag_id: 9 }
-        ];
-
-        // Вставляем все связи
-        for (const puzzleTag of puzzlesTags) {
-            await pool.query(
-                'INSERT INTO Puzzles_Tags (id, puzzle_id, tag_id) VALUES ($1, $2, $3)',
-                [puzzleTag.id, puzzleTag.puzzle_id, puzzleTag.tag_id]
-            );
-        }
-        
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'puzzles_tags_id_seq\', (SELECT MAX(id) FROM Puzzles_Tags))');
-        
-        console.log('Puzzles-Tags relations initialized successfully');
-    } catch (err) {
-        console.error('Error initializing puzzles-tags relations:', err);
-        throw err;
-    }
-}
-
-// Добавляем функцию для получения рейтинга пользователя
-async function getUserRating(username) {
-    try {
-        console.log('Getting rating for user:', username);
-        const result = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
-        
-        if (result.rows.length === 0) {
-            // Если пользователь не найден, создаем нового
-            console.log('User not found, creating new user:', username);
-            const newUser = await pool.query(
-                `INSERT INTO Users (username, rating, rd, volatility, status) 
-                 VALUES ($1, 1500, 350, 0.06, true) 
-                 RETURNING id, rating, rd, volatility`,
-                [username]
-            );
-            console.log('New user created with rating data:', newUser.rows[0]);
-            return newUser.rows[0];
-        }
-        
-        console.log('Found user rating data:', {
-            id: result.rows[0].id,
-            rating: parseFloat(result.rows[0].rating),
-            rd: parseFloat(result.rows[0].rd),
-            volatility: parseFloat(result.rows[0].volatility)
+        console.log('Final result:', {
+            rating: new_rating,
+            rd: new_rd,
+            volatility: new_sys_val
         });
         
         return {
-            rating: parseFloat(result.rows[0].rating),
-            rd: parseFloat(result.rows[0].rd),
-            volatility: parseFloat(result.rows[0].volatility)
-        };
-    } catch (err) {
-        console.error('Error getting user rating:', err);
-        console.error('Error stack:', err.stack);
-        // В случае ошибки возвращаем значения по умолчанию
-        console.log('Returning default rating values due to error');
-        return {
-            rating: 1500,
-            rd: 350,
-            volatility: 0.06
+            rating: new_rating,
+            rd: new_rd,
+            volatility: new_sys_val
         };
     }
-}
+
+    // Упрощенная функция для обновления рейтинга после одной игры
+    function updateRating(userRating, userRD, userVolatility, puzzleRating, puzzleRD, success) {
+        // Конвертируем успех в очки (1 - победа, 0 - поражение)
+        const score = success ? 1 : 0;
+        
+        console.log('Calculating new user rating with:', {
+            userRating, userRD, userVolatility, puzzleRating, puzzleRD, success, score
+        });
+        
+        // Вызываем основную функцию с одним соперником
+        const result = calculateGlicko2(
+            userRating,
+            userRD,
+            [puzzleRating],
+            [puzzleRD],
+            [score],
+            userVolatility
+        );
+        
+        console.log('New user rating calculated:', result);
+        return result;
+    }
+
+    // Функция для расчета нового рейтинга задачи
+    function updatePuzzleRating(puzzleRating, puzzleRD, puzzleVolatility, userRating, userRD, success) {
+        // Инвертируем результат для задачи (если пользователь выиграл, задача проиграла)
+        const puzzleScore = success ? 0 : 1;
+        
+        console.log('Calculating new puzzle rating with:', {
+            puzzleRating, puzzleRD, puzzleVolatility, userRating, userRD, success, puzzleScore
+        });
+        
+        // Вызываем основную функцию с одним соперником
+        const result = calculateGlicko2(
+            puzzleRating,
+            puzzleRD,
+            [userRating],
+            [userRD],
+            [puzzleScore],
+            puzzleVolatility
+        );
+        
+        console.log('New puzzle rating calculated:', result);
+        return result;
+    }
+}); 
