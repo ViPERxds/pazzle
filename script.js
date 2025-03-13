@@ -569,8 +569,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Рассчитываем новый рейтинг задачи
-            console.log('Calculating new puzzle rating...');
+            // Рассчитываем новый рейтинг задачи (только для логирования, не будет обновляться на сервере)
+            console.log('Calculating new puzzle rating (for logging only)...');
             const newPuzzleRatingData = updatePuzzleRating(
                 puzzleRating,
                 puzzleRD,
@@ -604,7 +604,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     newRD: newPuzzleRatingData.rd,
                     oldVolatility: puzzleVolatility,
                     newVolatility: newPuzzleRatingData.volatility,
-                    difference: newPuzzleRatingData.rating - puzzleRating
+                    difference: newPuzzleRatingData.rating - puzzleRating,
+                    note: 'Рейтинг задачи не обновляется на сервере'
                 },
                 success: success
             });
@@ -643,7 +644,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 status: result.status,
                 message: result.message,
                 userRating: result.userRating,
-                puzzleRating: result.puzzleRating
+                puzzleRating: result.puzzleRating,
+                note: 'Сервер возвращает оригинальный рейтинг задачи, а не обновленный'
             });
 
             // Принудительно обновляем рейтинг в элементах интерфейса
