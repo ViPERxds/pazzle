@@ -340,7 +340,7 @@ async function initializePuzzles() {
                 number: 0,
                 fen1: 'rn1qkbnr/p4ppp/2pp4/1p2p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6',
                 move1: 'c4f7',
-                fen2: 'r1bqk2r/ppp2ppp/2np1n2/4p1B1/1P2P3/2PP4/P4bPP/RN1QKBNR w KQkq - 0 7',
+                fen2: 'rn1qkbnr/p4Bpp/2pp4/1p2p3/4P1b1/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 6',
                 move2: 'e8f7',
                 solution: true,
                 type_id: 1,
