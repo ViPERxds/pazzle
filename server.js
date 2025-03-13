@@ -905,11 +905,33 @@ app.post('/api/record-solution', async (req, res) => {
             });
         }
         
-        // Записываем решение в журнал с обновленным рейтингом пользователя
+        // Определяем сложность задачи на основе времени решения
+        // По умолчанию используем среднюю сложность (id=4)
+        let complexityId = 4;
+        
+        if (time <= 5) {
+            complexityId = 1; // супер легкая
+        } else if (time <= 15) {
+            complexityId = 2; // очень легкая
+        } else if (time <= 30) {
+            complexityId = 3; // легкая
+        } else if (time <= 60) {
+            complexityId = 4; // средняя
+        } else if (time <= 90) {
+            complexityId = 5; // сложная
+        } else if (time <= 120) {
+            complexityId = 6; // очень сложная
+        } else {
+            complexityId = 7; // супер сложная
+        }
+        
+        console.log(`Determined complexity level ${complexityId} based on time ${time}`);
+        
+        // Записываем решение в журнал с обновленным рейтингом пользователя и сложностью
         const journalResult = await pool.query(
             `INSERT INTO Journal 
-            (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id`,
             [
                 userId, 
@@ -917,7 +939,8 @@ app.post('/api/record-solution', async (req, res) => {
                 success, 
                 time, 
                 puzzleResult.rows[0].rating,
-                updatedUserRatingValue || (userRating ? userRating.rating : null)
+                updatedUserRatingValue || (userRating ? userRating.rating : null),
+                complexityId
             ]
         );
         
@@ -1883,33 +1906,84 @@ async function initializeTypes() {
 // Обновляем функцию для инициализации типов сложности
 async function initializeComplexity() {
     try {
-        // Очищаем существующие типы сложности
-        await pool.query('DELETE FROM Complexity');
+        console.log('Initializing complexity types...');
         
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE complexity_id_seq RESTART WITH 1');
+        // Проверяем, есть ли записи в журнале, которые ссылаются на таблицу Complexity
+        const journalCount = await pool.query('SELECT COUNT(*) FROM Journal WHERE complexity_id IS NOT NULL');
+        const hasJournalReferences = parseInt(journalCount.rows[0].count) > 0;
         
-        // Добавляем типы сложности из таблицы
-        const complexityTypes = [
-            { id: 1, complexity_type: 'супер легкая' },
-            { id: 2, complexity_type: 'очень легкая' },
-            { id: 3, complexity_type: 'легкая' },
-            { id: 4, complexity_type: 'средняя' },
-            { id: 5, complexity_type: 'сложная' },
-            { id: 6, complexity_type: 'очень сложная' },
-            { id: 7, complexity_type: 'супер сложная' }
-        ];
+        if (hasJournalReferences) {
+            console.log(`Found ${journalCount.rows[0].count} journal records referencing complexity types, skipping deletion`);
+            
+            // Проверяем существующие типы сложности
+            const existingComplexity = await pool.query('SELECT id, complexity_type FROM Complexity');
+            console.log(`Found ${existingComplexity.rows.length} existing complexity types`);
+            
+            // Если типы сложности уже существуют, просто выходим
+            if (existingComplexity.rows.length >= 7) {
+                console.log('Complexity types already initialized, skipping');
+                return;
+            }
+            
+            // Если типов сложности недостаточно, добавляем недостающие
+            const complexityTypes = [
+                { id: 1, complexity_type: 'супер легкая' },
+                { id: 2, complexity_type: 'очень легкая' },
+                { id: 3, complexity_type: 'легкая' },
+                { id: 4, complexity_type: 'средняя' },
+                { id: 5, complexity_type: 'сложная' },
+                { id: 6, complexity_type: 'очень сложная' },
+                { id: 7, complexity_type: 'супер сложная' }
+            ];
+            
+            // Создаем карту существующих типов
+            const existingMap = {};
+            existingComplexity.rows.forEach(row => {
+                existingMap[row.id] = row.complexity_type;
+            });
+            
+            // Добавляем только недостающие типы
+            for (const complexity of complexityTypes) {
+                if (!existingMap[complexity.id]) {
+                    console.log(`Adding missing complexity type: ${complexity.id} - ${complexity.complexity_type}`);
+                    await pool.query(
+                        'INSERT INTO Complexity (id, complexity_type) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
+                        [complexity.id, complexity.complexity_type]
+                    );
+                }
+            }
+        } else {
+            // Если нет ссылок из журнала, можно безопасно очистить и пересоздать
+            console.log('No journal references to complexity types, safe to reinitialize');
+            
+            // Очищаем существующие типы сложности
+            await pool.query('DELETE FROM Complexity');
+            
+            // Сбрасываем последовательность
+            await pool.query('ALTER SEQUENCE complexity_id_seq RESTART WITH 1');
+            
+            // Добавляем типы сложности из таблицы
+            const complexityTypes = [
+                { id: 1, complexity_type: 'супер легкая' },
+                { id: 2, complexity_type: 'очень легкая' },
+                { id: 3, complexity_type: 'легкая' },
+                { id: 4, complexity_type: 'средняя' },
+                { id: 5, complexity_type: 'сложная' },
+                { id: 6, complexity_type: 'очень сложная' },
+                { id: 7, complexity_type: 'супер сложная' }
+            ];
 
-        // Вставляем все типы сложности
-        for (const complexity of complexityTypes) {
-            await pool.query(
-                'INSERT INTO Complexity (id, complexity_type) VALUES ($1, $2)',
-                [complexity.id, complexity.complexity_type]
-            );
+            // Вставляем все типы сложности
+            for (const complexity of complexityTypes) {
+                await pool.query(
+                    'INSERT INTO Complexity (id, complexity_type) VALUES ($1, $2)',
+                    [complexity.id, complexity.complexity_type]
+                );
+            }
+            
+            // Сбрасываем последовательность id
+            await pool.query('SELECT setval(\'complexity_id_seq\', (SELECT MAX(id) FROM Complexity))');
         }
-        
-        // Сбрасываем последовательность id
-        await pool.query('SELECT setval(\'complexity_id_seq\', (SELECT MAX(id) FROM Complexity))');
         
         console.log('Complexity types initialized successfully');
     } catch (err) {
