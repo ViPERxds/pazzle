@@ -563,21 +563,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Добавляем обработчик для кнопки анализа
     document.querySelector('.analyze-btn').addEventListener('click', () => {
-        // Используем FEN позиции после предварительного хода
-        const [from, to] = puzzleConfig.preMove.match(/.{2}/g);
-        game.load(puzzleConfig.initialFen); // Загружаем начальную позицию
-        game.move({ from, to, promotion: 'q' }); // Делаем предварительный ход
+        // Проверяем наличие необходимых данных
+        if (!puzzleConfig || !puzzleConfig.move1 || !puzzleConfig.initialFen) {
+            console.error('Missing required data for analysis:', puzzleConfig);
+            showError('Недостаточно данных для анализа');
+            return;
+        }
         
-        // Получаем FEN после предварительного хода и форматируем его для URL
-        const fen = game.fen().replace(/ /g, '_');
-        const color = puzzleConfig.orientation;
-        
-        // Открываем страницу анализа на lichess
-        window.open(`https://lichess.org/analysis/${fen}?color=${color}`, '_blank');
-        
-        // Возвращаем доску к текущей позиции
-        game.load(puzzleConfig.initialFen);
-        game.move({ from, to, promotion: 'q' });
+        try {
+            // Используем FEN позиции после предварительного хода
+            const [from, to] = puzzleConfig.move1.match(/.{2}/g);
+            game.load(puzzleConfig.initialFen); // Загружаем начальную позицию
+            game.move({ from, to, promotion: 'q' }); // Делаем предварительный ход
+            
+            // Получаем FEN после предварительного хода и форматируем его для URL
+            const fen = game.fen().replace(/ /g, '_');
+            const color = puzzleConfig.orientation;
+            
+            // Открываем страницу анализа на lichess
+            window.open(`https://lichess.org/analysis/${fen}?color=${color}`, '_blank');
+            
+            // Возвращаем доску к текущей позиции
+            game.load(puzzleConfig.initialFen);
+            game.move({ from, to, promotion: 'q' });
+        } catch (error) {
+            console.error('Error in analyze function:', error);
+            showError('Ошибка при анализе: ' + error.message);
+        }
     });
 
     // Функция для отрисовки стрелок
