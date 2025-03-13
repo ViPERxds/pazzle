@@ -30,6 +30,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация игры
     let game = new Chess();
     let board = null;
+
+    // Создаем начальную доску
+    const config = {
+        draggable: true,
+        position: 'start',
+        orientation: 'white',
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd,
+        pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
+    };
+    board = Chessboard('board', config);
     
     // Функция инициализации доски
     function initializeBoard(puzzleConfig) {
@@ -50,22 +62,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Инициализируем доску, если она еще не инициализирована
-        if (!board) {
-            const config = {
-                draggable: true,
-                position: puzzleConfig.initialFen,
-                orientation: puzzleConfig.orientation,
-                onDragStart: onDragStart,
-                onDrop: onDrop,
-                onSnapEnd: onSnapEnd,
-                pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
-            };
-            board = Chessboard('board', config);
-        } else {
-            board.orientation(puzzleConfig.orientation);
-            board.position(puzzleConfig.initialFen);
-        }
+        // Обновляем ориентацию и позицию доски
+        board.orientation(puzzleConfig.orientation);
+        board.position(puzzleConfig.initialFen, false);
         
         // Получаем координаты предварительного хода
         const [fromSquare, toSquare] = [
