@@ -287,13 +287,20 @@ document.addEventListener('DOMContentLoaded', function() {
         // Определяем правильность решения на основе соответствия хода и ожидаемого решения
         // Если puzzleConfig.solution === true (Good), то правильный ответ - сделать ход
         // Если puzzleConfig.solution === false (Blunder), то правильный ответ - НЕ делать ход
-        const expectedSolution = Boolean(puzzleConfig.solution);
-        const isCorrect = moveMatches === expectedSolution;
+        
+        // Проверяем, совпадает ли ход с ожидаемым
+        const moveIsCorrect = moveMatches;
+        
+        // Определяем правильность ответа в зависимости от значения solution
+        // Если solution === true (Good), то правильный ответ - сделать ход
+        // Если solution === false (Blunder), то правильный ответ - НЕ делать ход
+        const isCorrect = (puzzleConfig.solution === true && moveIsCorrect) || 
+                         (puzzleConfig.solution === false && !moveIsCorrect);
         
         console.log('Solution evaluation:', {
             moveMatches: moveMatches,
+            moveIsCorrect: moveIsCorrect,
             expectedSolution: puzzleConfig.solution,
-            expectedSolutionBool: expectedSolution,
             isCorrect: isCorrect
         });
         
@@ -483,21 +490,16 @@ document.addEventListener('DOMContentLoaded', function() {
             resultPage.classList.remove('hidden');
             
             // Отображаем результат в зависимости от того, совпадает ли ответ пользователя с ожидаемым решением
-            // Преобразуем оба значения в булевы для надежного сравнения
-            const userAnswer = Boolean(success);
-            const expectedAnswer = Boolean(puzzleConfig.solution);
-            const isCorrect = userAnswer === expectedAnswer;
+            // success - это результат проверки, который мы получили от функций onDrop, goodButton или blunderButton
+            // Он уже содержит информацию о том, правильный ответ или нет
+            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
+            resultText.className = success ? 'success' : 'failure';
             
-            console.log('Result comparison:', {
+            console.log('Result displayed:', {
                 userAnswer: success,
-                userAnswerBool: userAnswer,
                 expectedSolution: puzzleConfig.solution,
-                expectedSolutionBool: expectedAnswer,
-                isCorrect: isCorrect
+                isCorrect: success
             });
-            
-            resultText.textContent = isCorrect ? 'Правильно!' : 'Неправильно!';
-            resultText.className = isCorrect ? 'success' : 'failure';
 
         } catch (error) {
             console.error('Error submitting solution:', error);
@@ -688,7 +690,9 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (typeof puzzle.solution === 'string') {
             // Если это строка, проверяем различные варианты
             const solutionLower = puzzle.solution.toLowerCase();
-            isSolutionGood = solutionLower === 'true' || solutionLower === 'good' || solutionLower === '1';
+            // "Good" означает, что ход хороший (true)
+            // "Blunder" означает, что ход плохой (false)
+            isSolutionGood = solutionLower === 'true' || solutionLower === 'good';
         } else if (typeof puzzle.solution === 'number') {
             // Если это число, считаем 1 как true, 0 как false
             isSolutionGood = puzzle.solution === 1;
@@ -857,12 +861,21 @@ document.addEventListener('DOMContentLoaded', function() {
     goodButton.addEventListener('click', () => {
         // Если puzzleConfig.solution === true (Good), то нажатие на Good - правильный ответ
         // Если puzzleConfig.solution === false (Blunder), то нажатие на Good - неправильный ответ
-        const expectedSolution = Boolean(puzzleConfig.solution);
-        const isCorrect = expectedSolution === true;
+        
+        // Проверяем, что puzzleConfig существует
+        if (!puzzleConfig) {
+            console.error('Missing puzzleConfig in goodButton handler');
+            showError('Ошибка: отсутствуют данные задачи');
+            return;
+        }
+        
+        // Определяем правильность ответа
+        // Если solution === true, то нажатие на Good - правильный ответ
+        // Если solution === false, то нажатие на Good - неправильный ответ
+        const isCorrect = puzzleConfig.solution === true;
         
         console.log('Good button clicked:', {
             expectedSolution: puzzleConfig.solution,
-            expectedSolutionBool: expectedSolution,
             solutionType: typeof puzzleConfig.solution,
             isCorrect: isCorrect,
             currentPuzzle: currentPuzzle ? {
@@ -877,12 +890,21 @@ document.addEventListener('DOMContentLoaded', function() {
     blunderButton.addEventListener('click', () => {
         // Если puzzleConfig.solution === false (Blunder), то нажатие на Blunder - правильный ответ
         // Если puzzleConfig.solution === true (Good), то нажатие на Blunder - неправильный ответ
-        const expectedSolution = Boolean(puzzleConfig.solution);
-        const isCorrect = expectedSolution === false;
+        
+        // Проверяем, что puzzleConfig существует
+        if (!puzzleConfig) {
+            console.error('Missing puzzleConfig in blunderButton handler');
+            showError('Ошибка: отсутствуют данные задачи');
+            return;
+        }
+        
+        // Определяем правильность ответа
+        // Если solution === false, то нажатие на Blunder - правильный ответ
+        // Если solution === true, то нажатие на Blunder - неправильный ответ
+        const isCorrect = puzzleConfig.solution === false;
         
         console.log('Blunder button clicked:', {
             expectedSolution: puzzleConfig.solution,
-            expectedSolutionBool: expectedSolution,
             solutionType: typeof puzzleConfig.solution,
             isCorrect: isCorrect,
             currentPuzzle: currentPuzzle ? {
