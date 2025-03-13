@@ -378,16 +378,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления отображения рейтинга
     async function updateRatingDisplay(username) {
         try {
+            console.log('Updating rating display for user:', username);
             const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${username}`);
-            console.log('Received user rating:', userRating);
+            console.log('Received user rating from API:', userRating);
             
             if (!userRating || !userRating.rating) {
+                console.error('Invalid user rating data:', userRating);
                 throw new Error('getUserRating is not defined');
             }
             
             const rating = parseFloat(userRating.rating).toFixed(0);
             const rd = parseFloat(userRating.rd).toFixed(0);
             
+            console.log('Updating rating elements with new rating:', rating);
             ratingElements.forEach(el => {
                 el.textContent = rating;
                 el.style.color = 'black';
@@ -398,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             return userRating;
         } catch (err) {
-            console.error('Error updating rating:', err);
+            console.error('Error updating rating display:', err);
             ratingElements.forEach(el => {
                 el.textContent = '1500';
                 el.style.color = 'red';
@@ -541,10 +544,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             });
 
-            console.log('Solution recorded:', result);
+            console.log('Solution recorded, server response:', result);
+            console.log('Server response details:', {
+                status: result.status,
+                message: result.message,
+                userRating: result.userRating,
+                puzzleRating: result.puzzleRating
+            });
 
             // Обновляем отображение рейтинга
-            await updateRatingDisplay(currentUsername);
+            console.log('Updating rating display after solution submission');
+            const updatedRating = await updateRatingDisplay(currentUsername);
+            console.log('Rating display updated with new rating:', updatedRating);
 
             // Показываем результат
             puzzlePage.classList.add('hidden');
@@ -1246,8 +1257,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Конвертируем успех в очки (1 - победа, 0 - поражение)
         const score = success ? 1 : 0;
         
+        console.log('Calculating new user rating with:', {
+            userRating, userRD, userVolatility, puzzleRating, puzzleRD, success, score
+        });
+        
         // Вызываем основную функцию с одним соперником
-        return calculateGlicko2(
+        const result = calculateGlicko2(
             userRating,
             userRD,
             [puzzleRating],
@@ -1255,6 +1270,9 @@ document.addEventListener('DOMContentLoaded', function() {
             [score],
             userVolatility
         );
+        
+        console.log('New user rating calculated:', result);
+        return result;
     }
 
     // Функция для расчета нового рейтинга задачи
@@ -1262,8 +1280,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Инвертируем результат для задачи (если пользователь выиграл, задача проиграла)
         const puzzleScore = success ? 0 : 1;
         
+        console.log('Calculating new puzzle rating with:', {
+            puzzleRating, puzzleRD, puzzleVolatility, userRating, userRD, success, puzzleScore
+        });
+        
         // Вызываем основную функцию с одним соперником
-        return calculateGlicko2(
+        const result = calculateGlicko2(
             puzzleRating,
             puzzleRD,
             [userRating],
@@ -1271,5 +1293,8 @@ document.addEventListener('DOMContentLoaded', function() {
             [puzzleScore],
             puzzleVolatility
         );
+        
+        console.log('New puzzle rating calculated:', result);
+        return result;
     }
 }); 
