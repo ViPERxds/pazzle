@@ -97,22 +97,41 @@ pool.connect(async (err, client, release) => {
         `);
 
         // Инициализируем в правильном порядке
-        // Сначала удаляем данные из зависимых таблиц
-        await client.query('DELETE FROM Journal');
-        await client.query('DELETE FROM Puzzles_Tags');
-        await client.query('DELETE FROM Puzzles');
+        // Проверяем, есть ли данные в таблице Journal
+        const journalCount = await client.query('SELECT COUNT(*) FROM Journal');
+        const hasJournalData = parseInt(journalCount.rows[0].count) > 0;
+        
+        // Проверяем, есть ли данные в таблице Puzzles
+        const puzzlesCount = await client.query('SELECT COUNT(*) FROM Puzzles');
+        const hasPuzzlesData = parseInt(puzzlesCount.rows[0].count) > 0;
+        
+        console.log(`Database status: Journal records: ${journalCount.rows[0].count}, Puzzles: ${puzzlesCount.rows[0].count}`);
+        
+        // Удаляем данные из зависимых таблиц только если нет данных в Journal
+        if (!hasJournalData) {
+            console.log('No journal data found, initializing database from scratch');
+            await client.query('DELETE FROM Journal');
+            await client.query('DELETE FROM Puzzles_Tags');
+            await client.query('DELETE FROM Puzzles');
+        } else {
+            console.log('Existing journal data found, preserving database state');
+        }
         
         // Теперь инициализируем базовые таблицы
         await initializeComplexity();
         await initializeTypes();
-        await initializeUsers();
+        await initializeUsers(); // Эта функция уже модифицирована для сохранения рейтингов
         await initializeSettings();
         await initializeTags();
         
-        // Затем инициализируем таблицы с зависимостями
-        await initializePuzzles();
-        await initializePuzzlesTags();
-        await initializeJournal();
+        // Затем инициализируем таблицы с зависимостями только если нет данных
+        if (!hasPuzzlesData) {
+            await initializePuzzles();
+            await initializePuzzlesTags();
+        }
+        
+        // Инициализируем журнал только если нет данных
+        await initializeJournal(); // Эта функция уже модифицирована для проверки наличия данных
 
     } catch (err) {
         console.error('Error during initialization:', err);
@@ -1354,6 +1373,23 @@ function calculateNewMu(mu, phi, opponents) {
 // Обновляем функцию для инициализации пользователей
 async function initializeUsers() {
     try {
+        console.log('Initializing users...');
+        
+        // Получаем существующих пользователей и их рейтинги
+        const existingUsers = await pool.query('SELECT username, rating, rd, volatility FROM Users');
+        const existingUserMap = {};
+        
+        if (existingUsers.rows.length > 0) {
+            console.log(`Found ${existingUsers.rows.length} existing users with ratings`);
+            existingUsers.rows.forEach(user => {
+                existingUserMap[user.username] = {
+                    rating: user.rating,
+                    rd: user.rd,
+                    volatility: user.volatility
+                };
+            });
+        }
+        
         // Очищаем существующих пользователей
         await pool.query('DELETE FROM Users');
         
@@ -1391,8 +1427,18 @@ async function initializeUsers() {
             }
         ];
 
-        // Вставляем всех пользователей
+        // Вставляем всех пользователей, сохраняя их рейтинги если они существуют
         for (const user of users) {
+            // Проверяем, есть ли сохраненный рейтинг для этого пользователя
+            if (existingUserMap[user.username]) {
+                const savedRating = existingUserMap[user.username];
+                console.log(`Restoring rating for ${user.username}: ${savedRating.rating}`);
+                
+                user.rating = savedRating.rating;
+                user.rd = savedRating.rd;
+                user.volatility = savedRating.volatility;
+            }
+            
             await pool.query(
                 `INSERT INTO Users (id, username, telegram_id, rating, rd, volatility, status) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -1471,7 +1517,20 @@ async function initializeSettings() {
 // Обновляем функцию для инициализации журнала
 async function initializeJournal() {
     try {
-        // Очищаем существующие записи
+        console.log('Initializing journal...');
+        
+        // Проверяем, есть ли уже записи в журнале
+        const existingRecords = await pool.query('SELECT COUNT(*) FROM Journal');
+        const recordCount = parseInt(existingRecords.rows[0].count);
+        
+        if (recordCount > 0) {
+            console.log(`Found ${recordCount} existing journal records, skipping initialization`);
+            return;
+        }
+        
+        console.log('No existing journal records found, initializing with default data');
+        
+        // Очищаем существующие записи только если их нет
         await pool.query('DELETE FROM Journal');
         
         // Сбрасываем последовательность
