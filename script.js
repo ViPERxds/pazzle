@@ -516,13 +516,34 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             // Получаем текущий рейтинг пользователя
+            console.log('Fetching current user rating for:', currentUsername);
             const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${currentUsername}`);
-            console.log('Current user rating:', userRating);
+            console.log('Current user rating received:', userRating);
+            
+            // Проверяем, что получили корректные данные рейтинга
+            if (!userRating || !userRating.rating || isNaN(parseFloat(userRating.rating)) || 
+                !userRating.rd || isNaN(parseFloat(userRating.rd)) ||
+                !userRating.volatility || isNaN(parseFloat(userRating.volatility))) {
+                console.error('Invalid user rating data received:', userRating);
+                showError('Получены некорректные данные рейтинга пользователя');
+                return;
+            }
             
             // Получаем рейтинг задачи
             const puzzleRating = parseFloat(currentPuzzle.rating);
             const puzzleRD = parseFloat(currentPuzzle.rd);
             const puzzleVolatility = parseFloat(currentPuzzle.volatility);
+            
+            // Проверяем, что получили корректные данные рейтинга задачи
+            if (isNaN(puzzleRating) || isNaN(puzzleRD) || isNaN(puzzleVolatility)) {
+                console.error('Invalid puzzle rating data:', {
+                    rating: currentPuzzle.rating,
+                    rd: currentPuzzle.rd,
+                    volatility: currentPuzzle.volatility
+                });
+                showError('Некорректные данные рейтинга задачи');
+                return;
+            }
             
             console.log('Current puzzle rating:', {
                 rating: puzzleRating,
@@ -531,6 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Рассчитываем новый рейтинг пользователя по системе Glicko-2
+            console.log('Calculating new user rating...');
             const newUserRatingData = updateRating(
                 parseFloat(userRating.rating),
                 parseFloat(userRating.rd),
@@ -540,7 +562,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 success
             );
             
+            // Проверяем результат расчета рейтинга пользователя
+            if (!newUserRatingData || !newUserRatingData.rating || isNaN(newUserRatingData.rating)) {
+                console.error('Invalid new user rating calculation result:', newUserRatingData);
+                showError('Ошибка при расчете нового рейтинга пользователя');
+                return;
+            }
+            
             // Рассчитываем новый рейтинг задачи
+            console.log('Calculating new puzzle rating...');
             const newPuzzleRatingData = updatePuzzleRating(
                 puzzleRating,
                 puzzleRD,
@@ -550,7 +580,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 success
             );
             
-            console.log('Rating calculation:', {
+            // Проверяем результат расчета рейтинга задачи
+            if (!newPuzzleRatingData || !newPuzzleRatingData.rating || isNaN(newPuzzleRatingData.rating)) {
+                console.error('Invalid new puzzle rating calculation result:', newPuzzleRatingData);
+                showError('Ошибка при расчете нового рейтинга задачи');
+                return;
+            }
+            
+            console.log('Rating calculation results:', {
                 user: {
                     oldRating: userRating.rating,
                     newRating: newUserRatingData.rating,
@@ -572,28 +609,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 success: success
             });
 
+            // Подготавливаем данные для отправки на сервер
+            const requestData = {
+                username: currentUsername,
+                puzzleId: currentPuzzle.id,
+                success: success,
+                time: elapsedTime,
+                userRating: {
+                    rating: newUserRatingData.rating.toFixed(8),
+                    rd: newUserRatingData.rd.toFixed(8),
+                    volatility: newUserRatingData.volatility.toFixed(8)
+                },
+                puzzleRating: {
+                    rating: newPuzzleRatingData.rating.toFixed(8),
+                    rd: newPuzzleRatingData.rd.toFixed(8),
+                    volatility: newPuzzleRatingData.volatility.toFixed(8)
+                }
+            };
+            
+            console.log('Sending data to server:', requestData);
+
             // Отправляем результат на сервер
             const result = await fetchWithAuth(`${API_URL}/api/record-solution`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    username: currentUsername,
-                    puzzleId: currentPuzzle.id,
-                    success: success,
-                    time: elapsedTime,
-                    userRating: {
-                        rating: newUserRatingData.rating.toFixed(8),
-                        rd: newUserRatingData.rd.toFixed(8),
-                        volatility: newUserRatingData.volatility.toFixed(8)
-                    },
-                    puzzleRating: {
-                        rating: newPuzzleRatingData.rating.toFixed(8),
-                        rd: newPuzzleRatingData.rd.toFixed(8),
-                        volatility: newPuzzleRatingData.volatility.toFixed(8)
-                    }
-                })
+                body: JSON.stringify(requestData)
             });
 
             console.log('Solution recorded, server response:', result);
@@ -610,9 +652,22 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Updating rating elements directly with new rating:', newRating);
             ratingElements.forEach(el => {
+                // Сохраняем предыдущее значение для анимации
+                const oldRating = el.textContent;
+                
+                // Обновляем значение
                 el.textContent = newRating;
                 el.style.color = 'black';
                 el.title = `Рейтинг: ${newRating}\nОтклонение: ${newRD}\nВолатильность: ${parseFloat(newUserRatingData.volatility).toFixed(5)}`;
+                
+                // Добавляем анимацию изменения рейтинга
+                if (oldRating && oldRating !== newRating) {
+                    const isIncrease = parseInt(newRating) > parseInt(oldRating);
+                    el.classList.add(isIncrease ? 'rating-increase' : 'rating-decrease');
+                    setTimeout(() => {
+                        el.classList.remove('rating-increase', 'rating-decrease');
+                    }, 2000);
+                }
             });
             
             // Также обновляем через API для синхронизации
@@ -627,24 +682,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Отображаем результат в зависимости от того, совпадает ли ответ пользователя с ожидаемым решением
             resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
             resultText.className = success ? 'success' : 'failure';
-            
-            // Добавляем информацию об изменении рейтинга
-            const ratingChange = newUserRatingData.rating - parseFloat(userRating.rating);
-            const ratingChangeText = document.createElement('div');
-            ratingChangeText.className = 'rating-change';
-            ratingChangeText.textContent = `Изменение рейтинга: ${ratingChange > 0 ? '+' : ''}${ratingChange.toFixed(1)}`;
-            ratingChangeText.style.color = ratingChange > 0 ? 'green' : (ratingChange < 0 ? 'red' : 'gray');
-            ratingChangeText.style.marginTop = '10px';
-            ratingChangeText.style.fontWeight = 'bold';
-            
-            // Добавляем элемент с изменением рейтинга после текста результата
-            resultText.parentNode.insertBefore(ratingChangeText, resultText.nextSibling);
-            
+
+            // Удаляем существующий элемент с изменением рейтинга, если он есть
+            const existingRatingChange = document.querySelector('.rating-change');
+            if (existingRatingChange) {
+                existingRatingChange.remove();
+            }
+
             console.log('Result displayed:', {
                 userAnswer: success,
                 expectedSolution: puzzleConfig.solution,
                 isCorrect: success,
-                ratingChange: ratingChange
+                ratingChange: newUserRatingData.rating - parseFloat(userRating.rating)
             });
 
         } catch (error) {
@@ -1269,7 +1318,28 @@ document.addEventListener('DOMContentLoaded', function() {
             mu, phi, mu_j_list, phi_j_list, s_list, sys_val
         });
         
+        // Проверяем входные данные
+        if (isNaN(mu) || isNaN(phi) || !Array.isArray(mu_j_list) || !Array.isArray(phi_j_list) || !Array.isArray(s_list)) {
+            console.error('Invalid input data for Glicko-2 calculation:', {
+                mu: isNaN(mu) ? 'NaN' : mu,
+                phi: isNaN(phi) ? 'NaN' : phi,
+                mu_j_list: Array.isArray(mu_j_list) ? mu_j_list : typeof mu_j_list,
+                phi_j_list: Array.isArray(phi_j_list) ? phi_j_list : typeof phi_j_list,
+                s_list: Array.isArray(s_list) ? s_list : typeof s_list
+            });
+            
+            // Возвращаем исходные значения в случае ошибки
+            return {
+                rating: mu,
+                rd: phi,
+                volatility: sys_val
+            };
+        }
+        
         // 1. Конвертация в шкалу Glicko-2
+        const original_mu = mu;
+        const original_phi = phi;
+        
         mu = (mu - 1500) / 173.7178;
         phi = phi / 173.7178;
         
@@ -1278,7 +1348,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const phi_j_list_converted = phi_j_list.map(rd => rd / 173.7178);
         
         console.log('Converted to Glicko-2 scale:', {
-            mu, phi, mu_j_list_converted, phi_j_list_converted
+            original_mu,
+            original_phi,
+            mu, 
+            phi, 
+            mu_j_list_converted, 
+            phi_j_list_converted
         });
         
         // 2. Вспомогательные вычисления
@@ -1289,66 +1364,127 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('No opponents, returning original values');
             // Если нет игр, возвращаем исходные значения
             return {
-                rating: 1500,
-                rd: phi * 173.7178,
+                rating: original_mu,
+                rd: original_phi,
                 volatility: sys_val
             };
         }
         
         // Вычисляем v
         let v_sum = 0;
+        const g_values = [];
+        const e_values = [];
+        
         for (let i = 0; i < mu_j_list.length; i++) {
             const g_phi_j = g(phi_j_list_converted[i]);
             const e_mu_mu_j = E(mu, mu_j_list_converted[i], phi_j_list_converted[i]);
+            
+            g_values.push(g_phi_j);
+            e_values.push(e_mu_mu_j);
+            
+            console.log(`Opponent ${i}:`, {
+                mu_j: mu_j_list[i],
+                phi_j: phi_j_list[i],
+                mu_j_converted: mu_j_list_converted[i],
+                phi_j_converted: phi_j_list_converted[i],
+                g_phi_j,
+                e_mu_mu_j,
+                score: s_list[i]
+            });
+            
             v_sum += g_phi_j * g_phi_j * e_mu_mu_j * (1 - e_mu_mu_j);
         }
+        
         const v = 1 / v_sum;
         
-        console.log('Calculated v:', v);
+        console.log('Calculated v:', v, 'v_sum:', v_sum, 'g_values:', g_values, 'e_values:', e_values);
         
         // Вычисляем delta
         let delta_sum = 0;
         for (let i = 0; i < mu_j_list.length; i++) {
-            const g_phi_j = g(phi_j_list_converted[i]);
-            const e_mu_mu_j = E(mu, mu_j_list_converted[i], phi_j_list_converted[i]);
-            delta_sum += g_phi_j * (s_list[i] - e_mu_mu_j);
+            const g_phi_j = g_values[i];
+            const e_mu_mu_j = e_values[i];
+            const score = s_list[i];
+            const term = g_phi_j * (score - e_mu_mu_j);
+            
+            console.log(`Delta term ${i}:`, {
+                g_phi_j,
+                score,
+                e_mu_mu_j,
+                term
+            });
+            
+            delta_sum += term;
         }
+        
         const delta = v * delta_sum;
         const delta_sq = delta * delta;
         
-        console.log('Calculated delta:', delta, 'delta_sq:', delta_sq);
+        console.log('Calculated delta:', delta, 'delta_sq:', delta_sq, 'delta_sum:', delta_sum);
         
         // 3. Итерации для нахождения новой изменчивости
         const a = Math.log(sys_val * sys_val);
+        console.log('Starting volatility iteration with a:', a, 'sys_val:', sys_val);
+        
         const new_sys_val = convergeIterations(a, delta_sq, phi_sq, v);
         
         console.log('New volatility:', new_sys_val);
         
         // 4. Обновление отклонения рейтинга
         const new_phi_star = Math.sqrt(phi_sq + new_sys_val * new_sys_val);
+        
+        // Формула для нового отклонения рейтинга
         const new_phi = 1 / Math.sqrt(1 / (new_phi_star * new_phi_star) + 1 / v);
         
         console.log('New phi_star:', new_phi_star, 'new_phi:', new_phi);
         
         // 5. Обновление рейтинга
-        let new_mu_sum = 0;
-        for (let i = 0; i < mu_j_list.length; i++) {
-            const g_phi_j = g(phi_j_list_converted[i]);
-            const e_mu_mu_j = E(mu, mu_j_list_converted[i], phi_j_list_converted[i]);
-            new_mu_sum += g_phi_j * (s_list[i] - e_mu_mu_j);
-        }
-        const new_mu = mu + new_phi * new_phi * new_mu_sum / v;
+        let new_mu = mu;
         
-        console.log('New mu:', new_mu);
+        // Если есть результаты игр, обновляем рейтинг
+        if (s_list.length > 0) {
+            let sum_term = 0;
+            for (let i = 0; i < mu_j_list.length; i++) {
+                const g_phi_j = g_values[i];
+                const e_mu_mu_j = e_values[i];
+                const score = s_list[i];
+                const term = g_phi_j * (score - e_mu_mu_j);
+                
+                console.log(`Rating update term ${i}:`, {
+                    g_phi_j,
+                    score,
+                    e_mu_mu_j,
+                    term
+                });
+                
+                sum_term += term;
+            }
+            
+            const rating_change = new_phi * new_phi * sum_term;
+            new_mu = mu + rating_change;
+            
+            console.log('Rating update calculation:', {
+                sum_term,
+                new_phi_squared: new_phi * new_phi,
+                rating_change,
+                old_mu: mu,
+                new_mu
+            });
+        }
         
         // 6. Конвертация обратно в шкалу Glicko
         const new_rating = 173.7178 * new_mu + 1500;
         const new_rd = 173.7178 * new_phi;
         
         console.log('Final result:', {
-            rating: new_rating,
-            rd: new_rd,
-            volatility: new_sys_val
+            original_rating: original_mu,
+            new_rating,
+            rating_change: new_rating - original_mu,
+            original_rd: original_phi,
+            new_rd,
+            rd_change: new_rd - original_phi,
+            original_volatility: sys_val,
+            new_volatility: new_sys_val
         });
         
         return {
