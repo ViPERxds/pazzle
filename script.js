@@ -257,20 +257,21 @@ document.addEventListener('DOMContentLoaded', function() {
             userFrom: source,
             userTo: target,
             expectedFrom: expectedFrom,
-            expectedTo: expectedTo
+            expectedTo: expectedTo,
+            expectedSolution: puzzleConfig.solution
         });
         
         // Проверяем, совпадает ли ход с move2
+        let moveMatches = false;
+        
         // Сначала проверяем точное совпадение
         if (source + target === expectedMove) {
             console.log('Exact match with move2');
-            submitSolution(true);
-            return 'snapback';
-        }
-        
+            moveMatches = true;
+        } 
         // Если не совпадает точно, проверяем, совпадает ли целевая клетка
         // Это может быть случай, когда несколько фигур могут пойти на одну и ту же клетку
-        if (target === expectedTo) {
+        else if (target === expectedTo) {
             // Проверяем, является ли это ходом той же фигурой
             const userPiece = game.get(source);
             const expectedPiece = game.get(expectedFrom);
@@ -279,14 +280,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 userPiece.type === expectedPiece.type && 
                 userPiece.color === expectedPiece.color) {
                 console.log('Same piece type moving to the expected target square');
-                submitSolution(true);
-                return 'snapback';
+                moveMatches = true;
             }
         }
         
-        // Если ход не совпадает с ожидаемым, считаем его неверным
-        console.log('Move does not match expected move2');
-        submitSolution(false);
+        // Определяем правильность решения на основе соответствия хода и ожидаемого решения
+        // Если puzzleConfig.solution === true (Good), то правильный ответ - сделать ход
+        // Если puzzleConfig.solution === false (Blunder), то правильный ответ - НЕ делать ход
+        const isCorrect = moveMatches === puzzleConfig.solution;
+        
+        console.log('Solution evaluation:', {
+            moveMatches: moveMatches,
+            expectedSolution: puzzleConfig.solution,
+            isCorrect: isCorrect
+        });
+        
+        // Отправляем результат
+        submitSolution(isCorrect);
         
         return 'snapback';
     }
@@ -440,7 +450,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 username: currentUsername,
                 puzzleId: currentPuzzle.id,
                 success: success,
-                time: elapsedTime
+                time: elapsedTime,
+                expectedSolution: puzzleConfig.solution
             });
 
             const result = await fetchWithAuth(`${API_URL}/api/record-solution`, {
@@ -464,8 +475,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // Показываем результат
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
-            resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
-            resultText.className = success ? 'success' : 'failure';
+            
+            // Отображаем результат в зависимости от того, совпадает ли ответ пользователя с ожидаемым решением
+            const isCorrect = success === puzzleConfig.solution;
+            resultText.textContent = isCorrect ? 'Правильно!' : 'Неправильно!';
+            resultText.className = isCorrect ? 'success' : 'failure';
+            
+            console.log('Result displayed:', {
+                userAnswer: success,
+                expectedSolution: puzzleConfig.solution,
+                isCorrect: isCorrect
+            });
 
         } catch (error) {
             console.error('Error submitting solution:', error);
@@ -604,6 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         console.log('Showing puzzle:', puzzle);
+        console.log('Puzzle solution from database:', puzzle.solution);
 
         // Проверяем наличие всех необходимых данных
         if (!puzzle.fen1 || !puzzle.move1 || !puzzle.move2) {
@@ -642,6 +663,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Преобразуем строковое значение solution в булево
+        const isSolutionGood = puzzle.solution === 'Good';
+        
+        console.log('Parsed solution value:', {
+            rawSolution: puzzle.solution,
+            parsedSolution: isSolutionGood
+        });
+        
         // Обновляем конфигурацию
         puzzleConfig = {
             initialFen: puzzle.fen1,
@@ -649,7 +678,7 @@ document.addEventListener('DOMContentLoaded', function() {
             move1: puzzle.move1,
             move2: puzzle.move2,
             orientation: orientation,
-            solution: puzzle.solution === 'Good'
+            solution: isSolutionGood
         };
 
         console.log('Updated puzzle config:', puzzleConfig);
@@ -788,8 +817,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Добавляем обработчики событий
     startButton.addEventListener('click', () => loadPuzzle(currentUsername));
-    goodButton.addEventListener('click', () => submitSolution(true));
-    blunderButton.addEventListener('click', () => submitSolution(false));
+    goodButton.addEventListener('click', () => {
+        // Если puzzleConfig.solution === true (Good), то нажатие на Good - правильный ответ
+        // Если puzzleConfig.solution === false (Blunder), то нажатие на Good - неправильный ответ
+        const isCorrect = puzzleConfig.solution === true;
+        console.log('Good button clicked:', {
+            expectedSolution: puzzleConfig.solution,
+            isCorrect: isCorrect
+        });
+        submitSolution(isCorrect);
+    });
+    blunderButton.addEventListener('click', () => {
+        // Если puzzleConfig.solution === false (Blunder), то нажатие на Blunder - правильный ответ
+        // Если puzzleConfig.solution === true (Good), то нажатие на Blunder - неправильный ответ
+        const isCorrect = puzzleConfig.solution === false;
+        console.log('Blunder button clicked:', {
+            expectedSolution: puzzleConfig.solution,
+            isCorrect: isCorrect
+        });
+        submitSolution(isCorrect);
+    });
     
     // Добавляем обработчик для кнопки Next
     document.querySelector('.next-btn').addEventListener('click', () => {
@@ -806,6 +853,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.timerInterval) {
                 clearInterval(window.timerInterval);
             }
+            
+            // Проверяем, что puzzleConfig существует
+            if (!puzzleConfig) {
+                console.error('Missing puzzleConfig in handlePuzzleResult');
+                showError('Ошибка: отсутствуют данные задачи');
+                return;
+            }
+            
+            console.log('Handling puzzle result:', {
+                userAnswer: isCorrect,
+                expectedSolution: puzzleConfig.solution
+            });
             
             // Отправляем решение
             await submitSolution(isCorrect);
