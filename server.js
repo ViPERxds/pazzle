@@ -629,7 +629,13 @@ function calculateNewRatings(userRating, puzzleRating, R) {
 // API endpoints
 app.get('/api/user-rating/:username', async (req, res) => {
     try {
+        console.log('Received request for user rating:', req.params.username);
         const result = await getUserRating(req.params.username);
+        console.log('Sending user rating response:', {
+            rating: result.rating,
+            rd: result.rd,
+            volatility: result.volatility
+        });
         res.json({
             rating: result.rating,
             rd: result.rd,
@@ -637,7 +643,11 @@ app.get('/api/user-rating/:username', async (req, res) => {
         });
     } catch (err) {
         console.error('Error getting user rating:', err);
-        res.status(500).json({ error: err.message });
+        console.error('Error stack:', err.stack);
+        res.status(500).json({ 
+            error: err.message,
+            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
     }
 });
 
@@ -679,14 +689,14 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
             fen2: puzzle.fen2 || puzzle.fen1,
             move2: puzzle.move2 || '',
             solution: puzzle.solution ? 'Good' : 'Blunder',
-            color: puzzle.color ? 'w' : 'b',
+            color: puzzle.color,
             type_id: puzzle.type_id
         };
 
         console.log('Sending response:', response);
         
         // Проверяем, что все необходимые поля присутствуют
-        if (!response.fen1 || !response.move1 || !response.color) {
+        if (!response.fen1 || !response.move1 || response.color === undefined) {
             console.error('Invalid puzzle data:', response);
             return res.status(500).json({ error: 'Invalid puzzle data' });
         }
@@ -762,8 +772,23 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
 // Обновляем обработчик POST /api/record-solution
 app.post('/api/record-solution', async (req, res) => {
     try {
-        const { username, puzzleId, success, time } = req.body;
-        console.log('Received solution data:', { username, puzzleId, success, time });
+        const { username, puzzleId, success, time, userRating, puzzleRating } = req.body;
+        console.log('Received solution data:', { 
+            username, 
+            puzzleId, 
+            success, 
+            time, 
+            userRating: userRating ? {
+                rating: userRating.rating,
+                rd: userRating.rd,
+                volatility: userRating.volatility
+            } : null, 
+            puzzleRating: puzzleRating ? {
+                rating: puzzleRating.rating,
+                rd: puzzleRating.rd,
+                volatility: puzzleRating.volatility
+            } : null
+        });
         
         // Проверяем наличие всех необходимых параметров
         if (!username || puzzleId === undefined || success === undefined || time === undefined) {
@@ -774,13 +799,135 @@ app.post('/api/record-solution', async (req, res) => {
             });
         }
 
-        const result = await recordPuzzleSolution(username, puzzleId, success, time);
+        // Получаем ID пользователя
+        const userResult = await pool.query(
+            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
+            [username]
+        );
+        
+        console.log('Current user data from DB:', userResult.rows[0]);
+        
+        let userId;
+        if (userResult.rows.length === 0) {
+            // Если пользователь не найден, создаем нового
+            console.log('User not found, creating new user:', username);
+            const newUser = await pool.query(
+                `INSERT INTO Users (username, rating, rd, volatility, status) 
+                 VALUES ($1, $2, $3, $4, true) 
+                 RETURNING id`,
+                [
+                    username, 
+                    userRating ? userRating.rating : 1500, 
+                    userRating ? userRating.rd : 350, 
+                    userRating ? userRating.volatility : 0.06
+                ]
+            );
+            userId = newUser.rows[0].id;
+        } else {
+            userId = userResult.rows[0].id;
+        }
+        
+        // Обновляем рейтинг пользователя
+        if (userRating) {
+            console.log('Updating user rating in DB:', {
+                oldRating: userResult.rows.length > 0 ? userResult.rows[0].rating : 'N/A',
+                newRating: userRating.rating,
+                oldRD: userResult.rows.length > 0 ? userResult.rows[0].rd : 'N/A',
+                newRD: userRating.rd,
+                oldVolatility: userResult.rows.length > 0 ? userResult.rows[0].volatility : 'N/A',
+                newVolatility: userRating.volatility
+            });
+            
+            await pool.query(
+                `UPDATE Users 
+                 SET rating = $1, rd = $2, volatility = $3 
+                 WHERE username = $4`,
+                [
+                    userRating.rating,
+                    userRating.rd,
+                    userRating.volatility,
+                    username
+                ]
+            );
+            
+            // Проверяем, что рейтинг обновился
+            const updatedUserResult = await pool.query(
+                'SELECT rating, rd, volatility FROM Users WHERE username = $1',
+                [username]
+            );
+            
+            console.log('User rating after update:', updatedUserResult.rows[0]);
+        }
+        
+        // Обновляем рейтинг задачи
+        if (puzzleRating) {
+            // Получаем текущий рейтинг задачи
+            const currentPuzzleResult = await pool.query(
+                'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+                [puzzleId]
+            );
+            
+            console.log('Updating puzzle rating in DB:', {
+                puzzleId,
+                oldRating: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].rating : 'N/A',
+                newRating: puzzleRating.rating,
+                oldRD: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].rd : 'N/A',
+                newRD: puzzleRating.rd,
+                oldVolatility: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].volatility : 'N/A',
+                newVolatility: puzzleRating.volatility
+            });
+            
+            await pool.query(
+                `UPDATE Puzzles 
+                 SET rating = $1, rd = $2, volatility = $3 
+                 WHERE id = $4`,
+                [
+                    puzzleRating.rating,
+                    puzzleRating.rd,
+                    puzzleRating.volatility,
+                    puzzleId
+                ]
+            );
+            
+            // Проверяем, что рейтинг задачи обновился
+            const updatedPuzzleResult = await pool.query(
+                'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
+                [puzzleId]
+            );
+            
+            console.log('Puzzle rating after update:', updatedPuzzleResult.rows[0]);
+        }
+        
+        // Получаем рейтинг задачи для записи в журнал
+        const puzzleResult = await pool.query(
+            'SELECT rating FROM Puzzles WHERE id = $1',
+            [puzzleId]
+        );
+        
+        if (puzzleResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Puzzle not found' });
+        }
+        
+        // Записываем решение в журнал
+        await pool.query(
+            `INSERT INTO Journal 
+            (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after)
+            VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+                userId, 
+                puzzleId, 
+                success, 
+                time, 
+                puzzleResult.rows[0].rating,
+                userRating ? userRating.rating : null
+            ]
+        );
         
         res.json({
             status: 'success',
-            rating: result.rating,
-            rd: result.rd,
-            volatility: result.volatility
+            message: 'Solution recorded successfully',
+            userRating: userRating || null,
+            puzzleRating: puzzleRating || null
         });
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
