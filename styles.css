@@ -144,6 +144,16 @@ body {
 .timer {
     font-size: 24px;
     margin-top: 10px;
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 5px 0;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+    font-weight: bold;
+    color: #333;
+    position: relative;
+    z-index: 100;
 }
 
 /* Улучшенные стили для результата */
@@ -229,16 +239,20 @@ body {
     overflow: hidden;
     text-transform: uppercase;
     letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60px;
 }
 
 .good-btn {
-    background: linear-gradient(145deg, #a1f5a1, #4CAF50);
-    color: #1b5e20;
+    background: #4CAF50;
+    color: white;
 }
 
 .blunder-btn {
-    background: linear-gradient(145deg, #ffcdd2, #ef5350);
-    color: #b71c1c;
+    background: #F44336;
+    color: white;
 }
 
 .good-btn:hover, .blunder-btn:hover {
@@ -268,10 +282,15 @@ body {
 
 .button-container {
     display: flex;
-    gap: 10px;
+    gap: 15px;
     width: 100%;
     padding: 15px;
     justify-content: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    background-color: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .board-b72b1 {
@@ -314,4 +333,18 @@ body {
     --tg-theme-text-color: #000000;
     --tg-theme-button-color: #40a7e3;
     --tg-theme-button-text-color: #ffffff;
+}
+
+/* Стили для иконок в кнопках */
+.btn-icon {
+    margin-right: 10px;
+    font-size: 18px;
+}
+
+.good-btn .btn-icon {
+    color: white;
+}
+
+.blunder-btn .btn-icon {
+    color: white;
 } 
