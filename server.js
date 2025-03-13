@@ -848,6 +848,7 @@ app.post('/api/record-solution', async (req, res) => {
         }
         
         // Обновляем рейтинг пользователя
+        let updatedUserRatingValue = null;
         if (userRating) {
             console.log('Updating user rating in DB:', {
                 oldRating: userResult.rows.length > 0 ? userResult.rows[0].rating : 'N/A',
@@ -874,6 +875,7 @@ app.post('/api/record-solution', async (req, res) => {
             // Проверяем, что рейтинг обновился
             if (updateUserResult.rows.length > 0) {
                 console.log('User rating after update:', updateUserResult.rows[0]);
+                updatedUserRatingValue = parseFloat(updateUserResult.rows[0].rating);
             } else {
                 console.error('Failed to update user rating!');
             }
@@ -903,7 +905,7 @@ app.post('/api/record-solution', async (req, res) => {
             });
         }
         
-        // Записываем решение в журнал
+        // Записываем решение в журнал с обновленным рейтингом пользователя
         const journalResult = await pool.query(
             `INSERT INTO Journal 
             (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after)
@@ -915,7 +917,7 @@ app.post('/api/record-solution', async (req, res) => {
                 success, 
                 time, 
                 puzzleResult.rows[0].rating,
-                userRating ? userRating.rating : null
+                updatedUserRatingValue || (userRating ? userRating.rating : null)
             ]
         );
         
@@ -2030,3 +2032,61 @@ async function getUserRating(username) {
         };
     }
 }
+
+// Добавляем API-эндпоинт для получения истории решений пользователя
+app.get('/api/user-history/:username', async (req, res) => {
+    try {
+        const username = req.params.username;
+        console.log('Getting solution history for user:', username);
+        
+        // Получаем ID пользователя
+        const userResult = await pool.query(
+            'SELECT id FROM Users WHERE username = $1',
+            [username]
+        );
+        
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const userId = userResult.rows[0].id;
+        
+        // Получаем историю решений пользователя с информацией о задачах
+        const historyResult = await pool.query(`
+            SELECT 
+                j.id, 
+                j.puzzle_id, 
+                j.success, 
+                j.time_success, 
+                j.puzzle_rating_before, 
+                j.user_rating_after, 
+                j.date,
+                p.fen1,
+                p.solution,
+                t.type as puzzle_type,
+                c.complexity_type
+            FROM Journal j
+            LEFT JOIN Puzzles p ON j.puzzle_id = p.id
+            LEFT JOIN Types t ON p.type_id = t.id
+            LEFT JOIN Complexity c ON j.complexity_id = c.id
+            WHERE j.user_id = $1
+            ORDER BY j.date DESC
+            LIMIT 50
+        `, [userId]);
+        
+        console.log(`Found ${historyResult.rows.length} history records for user ${username}`);
+        
+        res.json({
+            username: username,
+            history: historyResult.rows
+        });
+    } catch (err) {
+        console.error('Error getting user history:', err);
+        console.error('Error stack:', err.stack);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: err.message,
+            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
+    }
+});
