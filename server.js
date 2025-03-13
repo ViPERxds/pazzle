@@ -927,24 +927,38 @@ app.post('/api/record-solution', async (req, res) => {
         
         console.log(`Determined complexity level ${complexityId} based on time ${time}`);
         
-        // Записываем решение в журнал с обновленным рейтингом пользователя и сложностью
-        const journalResult = await pool.query(
-            `INSERT INTO Journal 
-            (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id`,
-            [
+        try {
+            // Записываем решение в журнал с обновленным рейтингом пользователя и сложностью
+            const journalResult = await pool.query(
+                `INSERT INTO Journal 
+                (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id`,
+                [
+                    userId, 
+                    puzzleId, 
+                    success, 
+                    time, 
+                    puzzleResult.rows[0].rating,
+                    updatedUserRatingValue || (userRating ? userRating.rating : null),
+                    complexityId
+                ]
+            );
+            
+            console.log('Solution recorded in journal with ID:', journalResult.rows[0].id);
+        } catch (journalError) {
+            console.error('Error inserting into Journal:', journalError);
+            console.error('Journal insert parameters:', {
                 userId, 
                 puzzleId, 
                 success, 
                 time, 
-                puzzleResult.rows[0].rating,
-                updatedUserRatingValue || (userRating ? userRating.rating : null),
+                puzzleRating: puzzleResult.rows[0].rating,
+                userRating: updatedUserRatingValue || (userRating ? userRating.rating : null),
                 complexityId
-            ]
-        );
-        
-        console.log('Solution recorded in journal with ID:', journalResult.rows[0].id);
+            });
+            throw journalError;
+        }
         
         // Получаем обновленный рейтинг пользователя для ответа
         const updatedUserRating = await pool.query(
@@ -1868,33 +1882,84 @@ async function initializeTags() {
 // Обновляем функцию для инициализации типов
 async function initializeTypes() {
     try {
-        // Очищаем существующие типы
-        await pool.query('DELETE FROM Types');
+        console.log('Initializing types...');
         
-        // Сбрасываем последовательность
-        await pool.query('ALTER SEQUENCE types_id_seq RESTART WITH 1');
+        // Проверяем, есть ли записи в таблице Puzzles, которые ссылаются на таблицу Types
+        const puzzlesCount = await pool.query('SELECT COUNT(*) FROM Puzzles WHERE type_id IS NOT NULL');
+        const hasPuzzlesReferences = parseInt(puzzlesCount.rows[0].count) > 0;
         
-        // Добавляем типы из таблицы
-        const types = [
-            { id: 1, type: 'лучший' },
-            { id: 2, type: 'защита' },
-            { id: 3, type: 'обычный' },
-            { id: 4, type: 'пропуск' },
-            { id: 5, type: 'фейк' },
-            { id: 6, type: 'нет защиты' },
-            { id: 7, type: 'подстава' }
-        ];
+        if (hasPuzzlesReferences) {
+            console.log(`Found ${puzzlesCount.rows[0].count} puzzles referencing types, skipping deletion`);
+            
+            // Проверяем существующие типы
+            const existingTypes = await pool.query('SELECT id, type FROM Types');
+            console.log(`Found ${existingTypes.rows.length} existing types`);
+            
+            // Если типы уже существуют, просто выходим
+            if (existingTypes.rows.length >= 7) {
+                console.log('Types already initialized, skipping');
+                return;
+            }
+            
+            // Если типов недостаточно, добавляем недостающие
+            const types = [
+                { id: 1, type: 'лучший' },
+                { id: 2, type: 'защита' },
+                { id: 3, type: 'обычный' },
+                { id: 4, type: 'пропуск' },
+                { id: 5, type: 'фейк' },
+                { id: 6, type: 'нет защиты' },
+                { id: 7, type: 'подстава' }
+            ];
+            
+            // Создаем карту существующих типов
+            const existingMap = {};
+            existingTypes.rows.forEach(row => {
+                existingMap[row.id] = row.type;
+            });
+            
+            // Добавляем только недостающие типы
+            for (const type of types) {
+                if (!existingMap[type.id]) {
+                    console.log(`Adding missing type: ${type.id} - ${type.type}`);
+                    await pool.query(
+                        'INSERT INTO Types (id, type) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
+                        [type.id, type.type]
+                    );
+                }
+            }
+        } else {
+            // Если нет ссылок из таблицы Puzzles, можно безопасно очистить и пересоздать
+            console.log('No puzzles referencing types, safe to reinitialize');
+            
+            // Очищаем существующие типы
+            await pool.query('DELETE FROM Types');
+            
+            // Сбрасываем последовательность
+            await pool.query('ALTER SEQUENCE types_id_seq RESTART WITH 1');
+            
+            // Добавляем типы из таблицы
+            const types = [
+                { id: 1, type: 'лучший' },
+                { id: 2, type: 'защита' },
+                { id: 3, type: 'обычный' },
+                { id: 4, type: 'пропуск' },
+                { id: 5, type: 'фейк' },
+                { id: 6, type: 'нет защиты' },
+                { id: 7, type: 'подстава' }
+            ];
 
-        // Вставляем все типы
-        for (const type of types) {
-            await pool.query(
-                'INSERT INTO Types (id, type) VALUES ($1, $2)',
-                [type.id, type.type]
-            );
+            // Вставляем все типы
+            for (const type of types) {
+                await pool.query(
+                    'INSERT INTO Types (id, type) VALUES ($1, $2)',
+                    [type.id, type.type]
+                );
+            }
+            
+            // Сбрасываем последовательность id после вставки
+            await pool.query('SELECT setval(\'types_id_seq\', (SELECT MAX(id) FROM Types))');
         }
-        
-        // Сбрасываем последовательность id после вставки
-        await pool.query('SELECT setval(\'types_id_seq\', (SELECT MAX(id) FROM Types))');
         
         console.log('Types initialized successfully');
     } catch (err) {
