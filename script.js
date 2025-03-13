@@ -386,18 +386,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const rating = parseFloat(userRating.rating).toFixed(0);
+            const rd = parseFloat(userRating.rd).toFixed(0);
+            
             ratingElements.forEach(el => {
                 el.textContent = rating;
                 el.style.color = 'black';
+                
+                // Добавляем всплывающую подсказку с дополнительной информацией
+                el.title = `Рейтинг: ${rating}\nОтклонение: ${rd}\nВолатильность: ${parseFloat(userRating.volatility).toFixed(5)}`;
             });
-            return rating;
+            
+            return userRating;
         } catch (err) {
             console.error('Error updating rating:', err);
             ratingElements.forEach(el => {
                 el.textContent = '1500';
                 el.style.color = 'red';
+                el.title = 'Ошибка при получении рейтинга';
             });
-            return 1500;
+            
+            return {
+                rating: 1500,
+                rd: 350,
+                volatility: 0.06
+            };
         }
     }
 
@@ -467,6 +479,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentPuzzleSolutionType: typeof currentPuzzle.solution
             });
 
+            // Получаем текущий рейтинг пользователя
+            const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${currentUsername}`);
+            
+            // Получаем рейтинг задачи
+            const puzzleRating = parseFloat(currentPuzzle.rating);
+            const puzzleRD = parseFloat(currentPuzzle.rd);
+            const puzzleVolatility = parseFloat(currentPuzzle.volatility);
+            
+            // Рассчитываем новый рейтинг пользователя по системе Glicko-2
+            const newUserRatingData = updateRating(
+                parseFloat(userRating.rating),
+                parseFloat(userRating.rd),
+                parseFloat(userRating.volatility),
+                puzzleRating,
+                puzzleRD,
+                success
+            );
+            
+            // Рассчитываем новый рейтинг задачи
+            const newPuzzleRatingData = updatePuzzleRating(
+                puzzleRating,
+                puzzleRD,
+                puzzleVolatility,
+                parseFloat(userRating.rating),
+                parseFloat(userRating.rd),
+                success
+            );
+            
+            console.log('Rating calculation:', {
+                user: {
+                    oldRating: userRating.rating,
+                    newRating: newUserRatingData.rating,
+                    oldRD: userRating.rd,
+                    newRD: newUserRatingData.rd,
+                    oldVolatility: userRating.volatility,
+                    newVolatility: newUserRatingData.volatility
+                },
+                puzzle: {
+                    oldRating: puzzleRating,
+                    newRating: newPuzzleRatingData.rating,
+                    oldRD: puzzleRD,
+                    newRD: newPuzzleRatingData.rd,
+                    oldVolatility: puzzleVolatility,
+                    newVolatility: newPuzzleRatingData.volatility
+                },
+                success: success
+            });
+
+            // Отправляем результат на сервер
             const result = await fetchWithAuth(`${API_URL}/api/record-solution`, {
                 method: 'POST',
                 headers: {
@@ -476,7 +537,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     username: currentUsername,
                     puzzleId: currentPuzzle.id,
                     success: success,
-                    time: elapsedTime
+                    time: elapsedTime,
+                    userRating: {
+                        rating: newUserRatingData.rating.toFixed(8),
+                        rd: newUserRatingData.rd.toFixed(8),
+                        volatility: newUserRatingData.volatility.toFixed(8)
+                    },
+                    puzzleRating: {
+                        rating: newPuzzleRatingData.rating.toFixed(8),
+                        rd: newPuzzleRatingData.rd.toFixed(8),
+                        volatility: newPuzzleRatingData.volatility.toFixed(8)
+                    }
                 })
             });
 
@@ -630,98 +701,47 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
-    // Обновляем функцию showPuzzle
-    function showPuzzle(puzzle) {
-        if (!puzzle) {
-            console.error('No puzzle data provided');
-            return;
-        }
-
-        console.log('Showing puzzle:', puzzle);
-        console.log('Puzzle solution from database:', {
-            value: puzzle.solution,
-            type: typeof puzzle.solution
-        });
-
-        // Проверяем наличие всех необходимых данных
-        if (!puzzle.fen1 || !puzzle.move1 || !puzzle.move2) {
-            console.error('Missing required puzzle data:', puzzle);
-            return;
-        }
-
-        // Определяем ориентацию доски в зависимости от color
-        // false - черные снизу (ориентация 'black')
-        // true - белые снизу (ориентация 'white')
-        const orientation = puzzle.color ? 'white' : 'black';
-        
-        console.log('Board orientation:', {
-            color: puzzle.color,
-            orientation: orientation
-        });
-        
-        // Проверяем формат ходов
-        const move1Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1);
-        const move2Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move2);
-        
-        if (!move1Format || !move2Format) {
-            console.error('Invalid move format:', {
+    // Функция для отображения задачи
+    async function showPuzzle(puzzle) {
+        try {
+            console.log('Showing puzzle:', puzzle);
+            
+            // Сохраняем текущую задачу
+            currentPuzzle = puzzle;
+            
+            // Сохраняем конфигурацию задачи
+            puzzleConfig = {
+                fen1: puzzle.fen1,
                 move1: puzzle.move1,
+                fen2: puzzle.fen2,
                 move2: puzzle.move2,
-                move1Valid: move1Format,
-                move2Valid: move2Format
-            });
-            return;
+                solution: puzzle.solution === 'Good'
+            };
+            
+            // Определяем ориентацию доски
+            // Если color = true, то белые внизу (white)
+            // Если color = false, то черные внизу (black)
+            const orientation = puzzle.color ? 'white' : 'black';
+            console.log('Board orientation:', orientation);
+            
+            // Инициализируем доску
+            initializeBoard(puzzleConfig.fen1, puzzleConfig.move1, puzzleConfig.fen2, puzzleConfig.move2, orientation);
+            
+            // Отображаем страницу с задачей
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            resultPage.classList.add('hidden');
+            
+            // Запускаем таймер
+            startTime = Date.now();
+            updateTimer();
+            window.timerInterval = setInterval(updateTimer, 1000);
+            
+            console.log('Puzzle displayed successfully');
+        } catch (error) {
+            console.error('Error showing puzzle:', error);
+            showError('Ошибка при отображении задачи: ' + error.message);
         }
-        
-        // Проверяем и исправляем ходы
-        if (!validateAndFixMoves(puzzle)) {
-            console.error('Failed to validate moves');
-            showError('Ошибка в данных задачи. Пожалуйста, попробуйте другую задачу.');
-            return;
-        }
-        
-        // Преобразуем значение solution в булево
-        // Учитываем разные возможные форматы данных
-        let isSolutionGood;
-        
-        if (typeof puzzle.solution === 'boolean') {
-            // Если это уже булево значение, используем его напрямую
-            isSolutionGood = puzzle.solution;
-        } else if (typeof puzzle.solution === 'string') {
-            // Если это строка, проверяем различные варианты
-            const solutionLower = puzzle.solution.toLowerCase();
-            // "Good" означает, что ход хороший (true)
-            // "Blunder" означает, что ход плохой (false)
-            isSolutionGood = solutionLower === 'true' || solutionLower === 'good';
-        } else if (typeof puzzle.solution === 'number') {
-            // Если это число, считаем 1 как true, 0 как false
-            isSolutionGood = puzzle.solution === 1;
-        } else {
-            // В остальных случаях используем стандартное преобразование
-            isSolutionGood = Boolean(puzzle.solution);
-        }
-        
-        console.log('Parsed solution value:', {
-            rawSolution: puzzle.solution,
-            parsedSolution: isSolutionGood,
-            type: typeof puzzle.solution
-        });
-        
-        // Обновляем конфигурацию
-        puzzleConfig = {
-            initialFen: puzzle.fen1,
-            fen2: puzzle.fen2,
-            move1: puzzle.move1,
-            move2: puzzle.move2,
-            orientation: orientation,
-            solution: isSolutionGood
-        };
-
-        console.log('Updated puzzle config:', puzzleConfig);
-
-        // Сбрасываем состояние игры и инициализируем доску
-        game = new Chess();
-        initializeBoard(puzzleConfig);
     }
 
     // Функция для поиска правильного хода на основе FEN и целевого поля
@@ -1122,5 +1142,146 @@ document.addEventListener('DOMContentLoaded', function() {
     function showError(message) {
         // Показываем ошибку пользователю
         alert(message);
+    }
+
+    // Реализация системы рейтинга Glicko-2
+    // Константы для системы Glicko-2
+    const TAU = 0.5;  // Разумное значение для большинства применений
+    const EPS = 1e-6;  // Допуск для сходимости итераций
+
+    // Вспомогательная функция, зависящая от отклонения рейтинга
+    function g(phi) {
+        return 1 / Math.sqrt(1 + 3 * phi * phi / (Math.PI * Math.PI));
+    }
+
+    // Функция ожидаемой доли очков при игре против рейтинга mu_j и отклонения phi_j
+    function E(mu, mu_j, phi_j) {
+        return 1 / (1 + Math.exp(-g(phi_j) * (mu - mu_j)));
+    }
+
+    // Вспомогательная функция для итеративной процедуры
+    function f(x, a, delta_sq, phi_sq, v) {
+        const ex = Math.exp(x);
+        return (ex * (delta_sq - phi_sq - v - ex)) / (2 * (phi_sq + v + ex) * (phi_sq + v + ex)) - (x - a) / (TAU * TAU);
+    }
+
+    // Итеративная процедура для нахождения нового значения изменчивости
+    function convergeIterations(a, delta_sq, phi_sq, v) {
+        // Инициализация интервала
+        let A = a;
+        let B = a - TAU * Math.log(1 / delta_sq - phi_sq - v);
+        let fA = f(A, a, delta_sq, phi_sq, v);
+        let fB = f(B, a, delta_sq, phi_sq, v);
+        
+        // Итерации до сходимости
+        while (Math.abs(B - A) > EPS) {
+            const C = A + (A - B) * fA / (fB - fA);
+            const fC = f(C, a, delta_sq, phi_sq, v);
+            if (fC * fB <= 0) {
+                A = B;
+                fA = fB;
+            } else {
+                fA /= 2;
+            }
+            B = C;
+            fB = fC;
+        }
+        
+        return Math.exp(A / 2);
+    }
+
+    // Основная функция для расчета нового рейтинга по системе Glicko-2
+    function calculateGlicko2(mu, phi, mu_j_list, phi_j_list, s_list, sys_val) {
+        // 1. Конвертация в шкалу Glicko-2
+        mu = (mu - 1500) / 173.7178;
+        phi = phi / 173.7178;
+        
+        // 2. Вспомогательные вычисления
+        const phi_sq = phi * phi;
+        
+        // Вычисляем v (предварительная проверка на пустые списки)
+        if (mu_j_list.length === 0) {
+            // Если нет игр, возвращаем исходные значения
+            return {
+                rating: 1500,
+                rd: phi * 173.7178,
+                volatility: sys_val
+            };
+        }
+        
+        let v_sum = 0;
+        for (let i = 0; i < mu_j_list.length; i++) {
+            const g_phi_j = g(phi_j_list[i]);
+            const e_mu_mu_j = E(mu, mu_j_list[i], phi_j_list[i]);
+            v_sum += g_phi_j * g_phi_j * e_mu_mu_j * (1 - e_mu_mu_j);
+        }
+        const v = 1 / v_sum;
+        
+        // Вычисляем delta_sq
+        let delta_sum = 0;
+        for (let i = 0; i < mu_j_list.length; i++) {
+            const g_phi_j = g(phi_j_list[i]);
+            const e_mu_mu_j = E(mu, mu_j_list[i], phi_j_list[i]);
+            delta_sum += g_phi_j * (s_list[i] - e_mu_mu_j);
+        }
+        const delta_sq = v * delta_sum * delta_sum;
+        
+        // 3. Итерации для нахождения новой изменчивости
+        const a = Math.log(sys_val * sys_val);
+        const new_sys_val = convergeIterations(a, delta_sq, phi_sq, v);
+        
+        // 4. Обновление отклонения рейтинга
+        const new_phi = Math.sqrt(phi_sq + new_sys_val * new_sys_val);
+        
+        // 5. Обновление рейтинга
+        let new_mu_sum = 0;
+        for (let i = 0; i < mu_j_list.length; i++) {
+            const g_phi_j = g(phi_j_list[i]);
+            const e_mu_mu_j = E(mu, mu_j_list[i], phi_j_list[i]);
+            new_mu_sum += g_phi_j * (s_list[i] - e_mu_mu_j);
+        }
+        const new_mu = mu + new_phi * new_phi * new_mu_sum;
+        
+        // 6. Конвертация обратно в шкалу Glicko
+        const new_rating = 173.7178 * new_mu + 1500;
+        const new_rd = 173.7178 * new_phi;
+        
+        return {
+            rating: new_rating,
+            rd: new_rd,
+            volatility: new_sys_val
+        };
+    }
+
+    // Упрощенная функция для обновления рейтинга после одной игры
+    function updateRating(userRating, userRD, userVolatility, puzzleRating, puzzleRD, success) {
+        // Конвертируем успех в очки (1 - победа, 0 - поражение)
+        const score = success ? 1 : 0;
+        
+        // Вызываем основную функцию с одним соперником
+        return calculateGlicko2(
+            userRating,
+            userRD,
+            [puzzleRating],
+            [puzzleRD],
+            [score],
+            userVolatility
+        );
+    }
+
+    // Функция для расчета нового рейтинга задачи
+    function updatePuzzleRating(puzzleRating, puzzleRD, puzzleVolatility, userRating, userRD, success) {
+        // Инвертируем результат для задачи (если пользователь выиграл, задача проиграла)
+        const puzzleScore = success ? 0 : 1;
+        
+        // Вызываем основную функцию с одним соперником
+        return calculateGlicko2(
+            puzzleRating,
+            puzzleRD,
+            [userRating],
+            [userRD],
+            [puzzleScore],
+            puzzleVolatility
+        );
     }
 }); 
