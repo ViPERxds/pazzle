@@ -870,43 +870,18 @@ app.post('/api/record-solution', async (req, res) => {
             return res.status(404).json({ error: 'Puzzle not found' });
         }
         
-        // Обновляем рейтинг задачи
+        // Больше не обновляем рейтинг задачи, оставляем его неизменным
+        // Просто логируем информацию о рейтинге задачи
         if (puzzleRating) {
-            // Получаем текущий рейтинг задачи
-            const currentPuzzleResult = await pool.query(
-                'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-                [puzzleId]
-            );
-            
-            console.log('Updating puzzle rating in DB:', {
+            console.log('Puzzle rating calculation (not updating DB):', {
                 puzzleId,
-                oldRating: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].rating : 'N/A',
-                newRating: puzzleRating.rating,
-                oldRD: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].rd : 'N/A',
-                newRD: puzzleRating.rd,
-                oldVolatility: currentPuzzleResult.rows.length > 0 ? currentPuzzleResult.rows[0].volatility : 'N/A',
-                newVolatility: puzzleRating.volatility
+                currentRating: puzzleResult.rows[0].rating,
+                calculatedRating: puzzleRating.rating,
+                currentRD: puzzleResult.rows[0].rd,
+                calculatedRD: puzzleRating.rd,
+                currentVolatility: puzzleResult.rows[0].volatility,
+                calculatedVolatility: puzzleRating.volatility
             });
-            
-            const updatePuzzleResult = await pool.query(
-                `UPDATE Puzzles 
-                 SET rating = $1, rd = $2, volatility = $3 
-                 WHERE id = $4
-                 RETURNING id, rating, rd, volatility`,
-                [
-                    puzzleRating.rating,
-                    puzzleRating.rd,
-                    puzzleRating.volatility,
-                    puzzleId
-                ]
-            );
-            
-            // Проверяем, что рейтинг задачи обновился
-            if (updatePuzzleResult.rows.length > 0) {
-                console.log('Puzzle rating after update:', updatePuzzleResult.rows[0]);
-            } else {
-                console.error('Failed to update puzzle rating!');
-            }
         }
         
         // Записываем решение в журнал
@@ -937,7 +912,7 @@ app.post('/api/record-solution', async (req, res) => {
             status: 'success',
             message: 'Solution recorded successfully',
             userRating: updatedUserRating.rows.length > 0 ? updatedUserRating.rows[0] : userRating,
-            puzzleRating: puzzleRating || null
+            puzzleRating: puzzleResult.rows[0] // Возвращаем оригинальный рейтинг задачи, а не рассчитанный
         });
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
