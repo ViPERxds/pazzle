@@ -685,6 +685,13 @@ document.addEventListener('DOMContentLoaded', function() {
             resultText.textContent = success ? 'Правильно!' : 'Неправильно!';
             resultText.className = success ? 'result success' : 'result failure';
 
+            // Обновляем отображение рейтинга на странице результата
+            const resultPageRating = document.querySelector('#resultPage .rating');
+            if (resultPageRating) {
+                resultPageRating.textContent = newRating;
+                resultPageRating.style.color = success ? '#2E7D32' : '#C62828';
+            }
+
             // Удаляем существующий элемент с изменением рейтинга, если он есть
             const existingRatingChange = document.querySelector('.rating-change');
             if (existingRatingChange) {
