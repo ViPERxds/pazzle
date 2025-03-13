@@ -417,9 +417,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateRatingDisplay(currentUsername);
     
     function startStopwatch() {
-        let seconds = 0;
-        const maxTime = 180; // 3 минуты в секундах
-        
         // Очищаем предыдущий интервал если он был
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
@@ -428,26 +425,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // Устанавливаем начальное время
         startTime = Date.now();
 
-        // Обновляем отображение времени каждую секунду
-        window.timerInterval = setInterval(() => {
-            seconds++;
-            
-            // Форматируем время в MM:SS
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-            
-            timerElement.textContent = timeString;
-            
-            // Если прошло 3 минуты, останавливаем секундомер
-            if (seconds >= maxTime) {
-                clearInterval(window.timerInterval);
-                // Автоматически отправляем текущее решение как неверное
-                handlePuzzleResult(false);
-            }
-        }, 1000);
+        // Обновляем таймер сразу и затем каждую секунду
+        updateTimer();
+        window.timerInterval = setInterval(updateTimer, 1000);
 
-        return seconds;
+        // Устанавливаем максимальное время (3 минуты)
+        const maxTime = 180; // в секундах
+        
+        // Устанавливаем таймер для автоматического завершения через maxTime секунд
+        window.timeoutTimer = setTimeout(() => {
+            clearInterval(window.timerInterval);
+            // Автоматически отправляем текущее решение как неверное
+            handlePuzzleResult(false);
+        }, maxTime * 1000);
     }
 
     // Обновляем функцию submitSolution
@@ -711,21 +701,18 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Сохраняем конфигурацию задачи
             puzzleConfig = {
-                fen1: puzzle.fen1,
+                initialFen: puzzle.fen1,
                 move1: puzzle.move1,
                 fen2: puzzle.fen2,
                 move2: puzzle.move2,
-                solution: puzzle.solution === 'Good'
+                solution: puzzle.solution === 'Good',
+                orientation: puzzle.color ? 'white' : 'black'
             };
             
-            // Определяем ориентацию доски
-            // Если color = true, то белые внизу (white)
-            // Если color = false, то черные внизу (black)
-            const orientation = puzzle.color ? 'white' : 'black';
-            console.log('Board orientation:', orientation);
+            console.log('Board orientation:', puzzleConfig.orientation);
             
             // Инициализируем доску
-            initializeBoard(puzzleConfig.fen1, puzzleConfig.move1, puzzleConfig.fen2, puzzleConfig.move2, orientation);
+            initializeBoard(puzzleConfig);
             
             // Отображаем страницу с задачей
             startPage.classList.add('hidden');
@@ -733,15 +720,24 @@ document.addEventListener('DOMContentLoaded', function() {
             resultPage.classList.add('hidden');
             
             // Запускаем таймер
-            startTime = Date.now();
-            updateTimer();
-            window.timerInterval = setInterval(updateTimer, 1000);
+            startStopwatch();
             
             console.log('Puzzle displayed successfully');
         } catch (error) {
             console.error('Error showing puzzle:', error);
             showError('Ошибка при отображении задачи: ' + error.message);
         }
+    }
+
+    // Функция для обновления таймера
+    function updateTimer() {
+        if (!startTime) return;
+        
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
+        
+        timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
     // Функция для поиска правильного хода на основе FEN и целевого поля
@@ -859,16 +855,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Сохраняем текущую задачу
             currentPuzzle = puzzle;
             
-            // Показываем задачу
-            showPuzzle(puzzle);
-            
-            // Запускаем таймер
-            startStopwatch();
-            
-            // Показываем страницу с задачей
-            startPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
-            resultPage.classList.add('hidden');
+            // Показываем задачу (функция showPuzzle также запускает таймер и показывает страницу с задачей)
+            await showPuzzle(puzzle);
             
         } catch (err) {
             console.error('Error loading puzzle:', err);
