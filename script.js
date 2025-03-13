@@ -116,6 +116,40 @@ document.addEventListener('DOMContentLoaded', function() {
                         puzzleConfig.move2.substring(0, 2),
                         puzzleConfig.move2.substring(2, 4)
                     ];
+                    
+                    // Подробное логирование для отладки
+                    console.log('Move2 details:', {
+                        move2: puzzleConfig.move2,
+                        from: move2From,
+                        to: move2To,
+                        orientation: puzzleConfig.orientation,
+                        currentPosition: game.fen()
+                    });
+                    
+                    // Проверяем, есть ли фигура на начальной позиции для move2
+                    const pieceForMove2 = game.get(move2From);
+                    if (!pieceForMove2) {
+                        console.error('No piece at starting square for move2:', move2From);
+                        console.log('Current board state:', game.fen());
+                        console.log('All pieces:', game.board());
+                    } else {
+                        console.log('Piece for move2:', pieceForMove2);
+                    }
+                    
+                    // Проверяем, является ли ход move2 легальным
+                    const move2IsLegal = game.moves({ verbose: true }).some(m => 
+                        m.from === move2From && m.to === move2To
+                    );
+                    
+                    if (!move2IsLegal) {
+                        console.warn('Move2 may not be legal in current position:', {
+                            from: move2From,
+                            to: move2To,
+                            legalMoves: game.moves({ verbose: true })
+                        });
+                    }
+                    
+                    // Рисуем стрелку с учетом ориентации доски
                     console.log('Drawing arrow from', move2From, 'to', move2To);
                     drawArrow(move2From, move2To, 'black');
                 }
@@ -356,6 +390,129 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Функция для проверки и исправления ходов
+    function validateAndFixMoves(puzzle) {
+        console.log('Validating moves for puzzle:', puzzle);
+        
+        // Создаем временный экземпляр игры для проверки
+        const tempGame = new Chess();
+        
+        // Загружаем начальную позицию
+        if (!tempGame.load(puzzle.fen1)) {
+            console.error('Invalid FEN1:', puzzle.fen1);
+            return false;
+        }
+        
+        // Проверяем move1
+        const [move1From, move1To] = [
+            puzzle.move1.substring(0, 2),
+            puzzle.move1.substring(2, 4)
+        ];
+        
+        // Проверяем наличие фигуры на начальной позиции для move1
+        const pieceForMove1 = tempGame.get(move1From);
+        if (!pieceForMove1) {
+            console.error('No piece at starting square for move1:', move1From);
+            
+            // Пытаемся найти правильный ход
+            const legalMoves = tempGame.moves({ verbose: true });
+            const possibleMove = legalMoves.find(m => m.to === move1To);
+            
+            if (possibleMove) {
+                console.log('Found alternative move1:', possibleMove);
+                puzzle.move1 = possibleMove.from + possibleMove.to;
+            } else {
+                console.error('Could not find alternative move1');
+                return false;
+            }
+        }
+        
+        // Делаем ход move1
+        const move1Result = tempGame.move({
+            from: puzzle.move1.substring(0, 2),
+            to: puzzle.move1.substring(2, 4),
+            promotion: 'q'
+        });
+        
+        if (!move1Result) {
+            console.error('Move1 is not legal:', puzzle.move1);
+            return false;
+        }
+        
+        // Проверяем соответствие fen2
+        if (puzzle.fen2 !== tempGame.fen()) {
+            console.warn('FEN2 mismatch, updating:', {
+                original: puzzle.fen2,
+                corrected: tempGame.fen()
+            });
+            puzzle.fen2 = tempGame.fen();
+        }
+        
+        // Проверяем move2
+        const [move2From, move2To] = [
+            puzzle.move2.substring(0, 2),
+            puzzle.move2.substring(2, 4)
+        ];
+        
+        // Проверяем наличие фигуры на начальной позиции для move2
+        const pieceForMove2 = tempGame.get(move2From);
+        if (!pieceForMove2) {
+            console.error('No piece at starting square for move2:', move2From);
+            
+            // Пытаемся найти правильный ход
+            const legalMoves = tempGame.moves({ verbose: true });
+            console.log('Legal moves after move1:', legalMoves);
+            
+            // Ищем ход, который ведет на целевую клетку
+            const possibleMove = legalMoves.find(m => m.to === move2To);
+            
+            if (possibleMove) {
+                console.log('Found alternative move2:', possibleMove);
+                puzzle.move2 = possibleMove.from + possibleMove.to;
+            } else {
+                console.error('Could not find alternative move2');
+                return false;
+            }
+        }
+        
+        // Проверяем, является ли ход move2 легальным
+        const move2IsLegal = tempGame.moves({ verbose: true }).some(m => 
+            m.from === puzzle.move2.substring(0, 2) && m.to === puzzle.move2.substring(2, 4)
+        );
+        
+        if (!move2IsLegal) {
+            console.error('Move2 is not legal:', puzzle.move2);
+            
+            // Пытаемся найти правильный ход
+            const legalMoves = tempGame.moves({ verbose: true });
+            
+            // Ищем ход той же фигурой
+            const sameTypeMoves = legalMoves.filter(m => 
+                tempGame.get(m.from).type === tempGame.get(puzzle.move2.substring(0, 2)).type
+            );
+            
+            if (sameTypeMoves.length > 0) {
+                console.log('Found alternative move2 with same piece type:', sameTypeMoves[0]);
+                puzzle.move2 = sameTypeMoves[0].from + sameTypeMoves[0].to;
+            } else if (legalMoves.length > 0) {
+                console.log('Using first legal move as alternative move2:', legalMoves[0]);
+                puzzle.move2 = legalMoves[0].from + legalMoves[0].to;
+            } else {
+                console.error('No legal moves available for move2');
+                return false;
+            }
+        }
+        
+        console.log('Moves validated and fixed:', {
+            move1: puzzle.move1,
+            move2: puzzle.move2,
+            fen1: puzzle.fen1,
+            fen2: puzzle.fen2
+        });
+        
+        return true;
+    }
+
     // Обновляем функцию showPuzzle
     function showPuzzle(puzzle) {
         if (!puzzle) {
@@ -385,6 +542,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 move1Valid: move1Format,
                 move2Valid: move2Format
             });
+            return;
+        }
+        
+        // Проверяем и исправляем ходы
+        if (!validateAndFixMoves(puzzle)) {
+            console.error('Failed to validate moves');
+            showError('Ошибка в данных задачи. Пожалуйста, попробуйте другую задачу.');
             return;
         }
         
@@ -571,21 +735,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            // Используем FEN позиции после предварительного хода
-            const [from, to] = puzzleConfig.move1.match(/.{2}/g);
-            game.load(puzzleConfig.initialFen); // Загружаем начальную позицию
-            game.move({ from, to, promotion: 'q' }); // Делаем предварительный ход
+            // Создаем временный экземпляр игры для анализа
+            const tempGame = new Chess();
             
-            // Получаем FEN после предварительного хода и форматируем его для URL
-            const fen = game.fen().replace(/ /g, '_');
+            // Загружаем начальную позицию
+            if (!tempGame.load(puzzleConfig.initialFen)) {
+                console.error('Invalid initial FEN:', puzzleConfig.initialFen);
+                showError('Неверный формат позиции');
+                return;
+            }
+            
+            // Получаем координаты хода
+            const [fromSquare, toSquare] = [
+                puzzleConfig.move1.substring(0, 2),
+                puzzleConfig.move1.substring(2, 4)
+            ];
+            
+            // Проверяем наличие фигуры
+            const pieceOnSquare = tempGame.get(fromSquare);
+            if (!pieceOnSquare) {
+                console.error('No piece at starting square:', fromSquare);
+                
+                // Пытаемся найти правильный ход
+                const legalMoves = tempGame.moves({ verbose: true });
+                const possibleMove = legalMoves.find(m => m.to === toSquare);
+                
+                if (possibleMove) {
+                    console.log('Found alternative move for analysis:', possibleMove);
+                    // Делаем найденный ход
+                    tempGame.move({ from: possibleMove.from, to: possibleMove.to, promotion: 'q' });
+                } else {
+                    showError('Не удалось найти правильный ход для анализа');
+                    return;
+                }
+            } else {
+                // Делаем ход
+                const moveResult = tempGame.move({ from: fromSquare, to: toSquare, promotion: 'q' });
+                
+                if (!moveResult) {
+                    console.error('Move is not legal:', { from: fromSquare, to: toSquare });
+                    showError('Ход невозможен');
+                    return;
+                }
+            }
+            
+            // Получаем FEN после хода и форматируем его для URL
+            const fen = tempGame.fen().replace(/ /g, '_');
             const color = puzzleConfig.orientation;
+            
+            console.log('Opening analysis with FEN:', fen);
             
             // Открываем страницу анализа на lichess
             window.open(`https://lichess.org/analysis/${fen}?color=${color}`, '_blank');
-            
-            // Возвращаем доску к текущей позиции
-            game.load(puzzleConfig.initialFen);
-            game.move({ from, to, promotion: 'q' });
         } catch (error) {
             console.error('Error in analyze function:', error);
             showError('Ошибка при анализе: ' + error.message);
@@ -616,8 +817,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Получаем элементы клеток
         const fromSquare = document.querySelector(`[data-square="${from}"]`);
         const toSquare = document.querySelector(`[data-square="${to}"]`);
+        
+        if (!fromSquare || !toSquare) {
+            console.error('Square elements not found:', { from, to, fromElement: fromSquare, toElement: toSquare });
+            return;
+        }
+        
         const boardRect = board.getBoundingClientRect();
         const fromRect = fromSquare.getBoundingClientRect();
         const toRect = toSquare.getBoundingClientRect();
@@ -628,6 +836,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const y1 = fromRect.top - boardRect.top + fromRect.height/2;
         const x2 = toRect.left - boardRect.left + toRect.width/2;
         const y2 = toRect.top - boardRect.top + toRect.height/2;
+
+        console.log('Arrow coordinates:', { 
+            from: { x: x1, y: y1, square: from, rect: fromRect },
+            to: { x: x2, y: y2, square: to, rect: toRect },
+            board: boardRect
+        });
 
         // Вычисляем угол и размеры
         const angle = Math.atan2(y2 - y1, x2 - x1);
