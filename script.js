@@ -611,8 +611,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Определяем цвет из строкового значения 'w' или 'b'
-        const orientation = puzzle.color === 'w' ? 'white' : 'black';
+        // Определяем ориентацию доски в зависимости от color
+        // false - черные снизу (ориентация 'black')
+        // true - белые снизу (ориентация 'white')
+        const orientation = puzzle.color ? 'white' : 'black';
+        
+        console.log('Board orientation:', {
+            color: puzzle.color,
+            orientation: orientation
+        });
         
         // Проверяем формат ходов
         const move1Format = /^[a-h][1-8][a-h][1-8]$/.test(puzzle.move1);
@@ -864,12 +871,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Получаем FEN после хода и форматируем его для URL
             const fen = tempGame.fen().replace(/ /g, '_');
-            const color = puzzleConfig.orientation;
             
-            console.log('Opening analysis with FEN:', fen);
+            // Используем ориентацию доски из конфигурации
+            const orientation = puzzleConfig.orientation;
             
-            // Открываем страницу анализа на lichess
-            window.open(`https://lichess.org/analysis/${fen}?color=${color}`, '_blank');
+            console.log('Opening analysis with FEN:', fen, 'orientation:', orientation);
+            
+            // Открываем страницу анализа на lichess с правильной ориентацией
+            window.open(`https://lichess.org/analysis/${fen}?color=${orientation === 'white' ? 'white' : 'black'}`, '_blank');
         } catch (error) {
             console.error('Error in analyze function:', error);
             showError('Ошибка при анализе: ' + error.message);
@@ -884,10 +893,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const oldArrow = document.querySelector('.arrow');
         if (oldArrow) oldArrow.remove();
 
-        // Получаем ориентацию доски
-        const orientation = puzzleConfig.orientation || 'white';
-        
-        // Создаем SVG элемент
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("class", "arrow");
         svg.style.position = 'absolute';
@@ -898,112 +903,66 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        // Получаем элемент доски
-        const boardElement = document.querySelector('#board');
-        if (!boardElement) {
+        const board = document.querySelector('#board');
+        if (!board) {
             console.error('Board element not found');
             return;
         }
         
-        // Получаем размер доски
-        const boardSize = boardElement.offsetWidth;
-        const squareSize = boardSize / 8;
+        // Получаем элементы клеток
+        const fromSquare = document.querySelector(`[data-square="${from}"]`);
+        const toSquare = document.querySelector(`[data-square="${to}"]`);
         
-        // Функция для преобразования координат клетки в координаты на доске
-        function squareToCoords(square) {
-            const file = square.charCodeAt(0) - 'a'.charCodeAt(0); // 0-7 для a-h
-            const rank = 8 - parseInt(square[1]); // 0-7 для 8-1
-            
-            // Учитываем ориентацию доски
-            let x, y;
-            if (orientation === 'white') {
-                x = file * squareSize + squareSize / 2;
-                y = rank * squareSize + squareSize / 2;
-            } else {
-                x = (7 - file) * squareSize + squareSize / 2;
-                y = (7 - rank) * squareSize + squareSize / 2;
-            }
-            
-            return { x, y };
+        if (!fromSquare || !toSquare) {
+            console.error('Square elements not found:', { from, to, fromElement: fromSquare, toElement: toSquare });
+            return;
         }
         
-        // Получаем координаты начальной и конечной клеток
-        const fromCoords = squareToCoords(from);
-        const toCoords = squareToCoords(to);
-        
-        console.log('Arrow coordinates:', {
-            from: { square: from, coords: fromCoords },
-            to: { square: to, coords: toCoords },
-            orientation: orientation,
-            boardSize: boardSize,
-            squareSize: squareSize
+        const boardRect = board.getBoundingClientRect();
+        const fromRect = fromSquare.getBoundingClientRect();
+        const toRect = toSquare.getBoundingClientRect();
+        const squareSize = boardRect.width / 8;
+
+        // Координаты
+        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
+        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
+        const x2 = toRect.left - boardRect.left + toRect.width/2;
+        const y2 = toRect.top - boardRect.top + toRect.height/2;
+
+        console.log('Arrow coordinates:', { 
+            from: { x: x1, y: y1, square: from, rect: fromRect },
+            to: { x: x2, y: y2, square: to, rect: toRect },
+            board: boardRect
         });
-        
-        // Вычисляем параметры стрелки
-        const dx = toCoords.x - fromCoords.x;
-        const dy = toCoords.y - fromCoords.y;
-        const angle = Math.atan2(dy, dx);
-        const length = Math.sqrt(dx * dx + dy * dy);
-        
-        // Параметры стрелки
-        const headLength = squareSize * 0.3;
+
+        // Вычисляем угол и размеры
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const width = squareSize * 0.15;
         const headWidth = squareSize * 0.3;
-        const lineWidth = squareSize * 0.15;
-        
-        // Вычисляем точки для стрелки
-        const arrowLength = length - headLength;
-        
-        // Направляющие векторы
-        const ux = Math.cos(angle);
-        const uy = Math.sin(angle);
-        const vx = -uy; // перпендикулярный вектор
-        const vy = ux;
-        
+        const headLength = squareSize * 0.3;
+
         // Точки для стрелки
-        const points = [
-            // Начало стрелки (левая сторона линии)
-            fromCoords.x + vx * lineWidth/2,
-            fromCoords.y + vy * lineWidth/2,
-            
-            // Конец линии (левая сторона)
-            fromCoords.x + ux * arrowLength + vx * lineWidth/2,
-            fromCoords.y + uy * arrowLength + vy * lineWidth/2,
-            
-            // Начало наконечника (левая сторона)
-            fromCoords.x + ux * arrowLength + vx * headWidth/2,
-            fromCoords.y + uy * arrowLength + vy * headWidth/2,
-            
-            // Кончик стрелки
-            toCoords.x,
-            toCoords.y,
-            
-            // Начало наконечника (правая сторона)
-            fromCoords.x + ux * arrowLength - vx * headWidth/2,
-            fromCoords.y + uy * arrowLength - vy * headWidth/2,
-            
-            // Конец линии (правая сторона)
-            fromCoords.x + ux * arrowLength - vx * lineWidth/2,
-            fromCoords.y + uy * arrowLength - vy * lineWidth/2,
-            
-            // Начало стрелки (правая сторона линии)
-            fromCoords.x - vx * lineWidth/2,
-            fromCoords.y - vy * lineWidth/2
-        ];
-        
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
+
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        let pathData = `M ${points[0]} ${points[1]}`;
-        for (let i = 2; i < points.length; i += 2) {
-            pathData += ` L ${points[i]} ${points[i+1]}`;
-        }
-        pathData += ' Z'; // замыкаем путь
-        
-        path.setAttribute("d", pathData);
+        path.setAttribute("d", `
+            M ${x1 - width*dy} ${y1 + width*dx}
+            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
+            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
+            L ${x2} ${y2}
+            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
+            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
+            L ${x1 + width*dy} ${y1 - width*dx}
+            Z
+        `);
         path.setAttribute("fill", color);
         path.setAttribute("opacity", "0.5");
-        
+
         svg.appendChild(path);
-        boardElement.appendChild(svg);
+        board.appendChild(svg);
     }
 
     // Вспомогательная функция для получения координат клетки
