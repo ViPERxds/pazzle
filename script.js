@@ -132,26 +132,73 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('No piece at starting square for move2:', move2From);
                         console.log('Current board state:', game.fen());
                         console.log('All pieces:', game.board());
+                        
+                        // Пытаемся найти правильный ход
+                        const legalMoves = game.moves({ verbose: true });
+                        console.log('Legal moves after move1:', legalMoves);
+                        
+                        // Ищем ход, который ведет на целевую клетку
+                        const possibleMove = legalMoves.find(m => m.to === move2To);
+                        
+                        if (possibleMove) {
+                            console.log('Found alternative move2:', possibleMove);
+                            // Используем найденный ход для отображения стрелки
+                            drawArrow(possibleMove.from, possibleMove.to, 'black');
+                            return;
+                        }
+                        
+                        // Если не нашли подходящий ход, пробуем найти любой ход той же фигурой
+                        const currentTurn = game.turn();
+                        const figureType = move2From.charAt(0);
+                        const sameTypeMoves = legalMoves.filter(m => {
+                            const piece = game.get(m.from);
+                            return piece && piece.type === figureType && 
+                                  ((currentTurn === 'w' && piece.color === 'w') || 
+                                   (currentTurn === 'b' && piece.color === 'b'));
+                        });
+                        
+                        if (sameTypeMoves.length > 0) {
+                            console.log('Using move with same piece type:', sameTypeMoves[0]);
+                            drawArrow(sameTypeMoves[0].from, sameTypeMoves[0].to, 'black');
+                            return;
+                        }
+                        
+                        // Если не нашли ход той же фигурой, используем первый доступный ход
+                        if (legalMoves.length > 0) {
+                            console.log('Using first available move:', legalMoves[0]);
+                            drawArrow(legalMoves[0].from, legalMoves[0].to, 'black');
+                            return;
+                        }
                     } else {
                         console.log('Piece for move2:', pieceForMove2);
+                        
+                        // Проверяем, является ли ход move2 легальным
+                        const move2IsLegal = game.moves({ verbose: true }).some(m => 
+                            m.from === move2From && m.to === move2To
+                        );
+                        
+                        if (!move2IsLegal) {
+                            console.warn('Move2 is not legal in current position:', {
+                                from: move2From,
+                                to: move2To,
+                                legalMoves: game.moves({ verbose: true })
+                            });
+                            
+                            // Пытаемся найти легальный ход той же фигурой
+                            const legalMoves = game.moves({ verbose: true });
+                            const movesWithSamePiece = legalMoves.filter(m => m.from === move2From);
+                            
+                            if (movesWithSamePiece.length > 0) {
+                                console.log('Using alternative move with same piece:', movesWithSamePiece[0]);
+                                drawArrow(movesWithSamePiece[0].from, movesWithSamePiece[0].to, 'black');
+                                return;
+                            }
+                        }
+                        
+                        // Рисуем стрелку с учетом ориентации доски
+                        console.log('Drawing arrow from', move2From, 'to', move2To);
+                        drawArrow(move2From, move2To, 'black');
                     }
-                    
-                    // Проверяем, является ли ход move2 легальным
-                    const move2IsLegal = game.moves({ verbose: true }).some(m => 
-                        m.from === move2From && m.to === move2To
-                    );
-                    
-                    if (!move2IsLegal) {
-                        console.warn('Move2 may not be legal in current position:', {
-                            from: move2From,
-                            to: move2To,
-                            legalMoves: game.moves({ verbose: true })
-                        });
-                    }
-                    
-                    // Рисуем стрелку с учетом ориентации доски
-                    console.log('Drawing arrow from', move2From, 'to', move2To);
-                    drawArrow(move2From, move2To, 'black');
                 }
             } catch (error) {
                 console.error('Error making premove:', error);
@@ -197,13 +244,49 @@ document.addEventListener('DOMContentLoaded', function() {
         // Отменяем ход, так как мы только оцениваем ход move2
         game.undo();
         
+        // Получаем ожидаемый ход move2
+        const expectedMove = puzzleConfig.move2;
+        const [expectedFrom, expectedTo] = [
+            expectedMove.substring(0, 2),
+            expectedMove.substring(2, 4)
+        ];
+        
+        console.log('Comparing moves:', {
+            userMove: source + target,
+            expectedMove: expectedMove,
+            userFrom: source,
+            userTo: target,
+            expectedFrom: expectedFrom,
+            expectedTo: expectedTo
+        });
+        
         // Проверяем, совпадает ли ход с move2
-        const moveStr = source + target;
-        if (moveStr === puzzleConfig.move2) {
+        // Сначала проверяем точное совпадение
+        if (source + target === expectedMove) {
+            console.log('Exact match with move2');
             submitSolution(true);
-        } else {
-            submitSolution(false);
+            return 'snapback';
         }
+        
+        // Если не совпадает точно, проверяем, совпадает ли целевая клетка
+        // Это может быть случай, когда несколько фигур могут пойти на одну и ту же клетку
+        if (target === expectedTo) {
+            // Проверяем, является ли это ходом той же фигурой
+            const userPiece = game.get(source);
+            const expectedPiece = game.get(expectedFrom);
+            
+            if (expectedPiece && userPiece && 
+                userPiece.type === expectedPiece.type && 
+                userPiece.color === expectedPiece.color) {
+                console.log('Same piece type moving to the expected target square');
+                submitSolution(true);
+                return 'snapback';
+            }
+        }
+        
+        // Если ход не совпадает с ожидаемым, считаем его неверным
+        console.log('Move does not match expected move2');
+        submitSolution(false);
         
         return 'snapback';
     }
@@ -801,6 +884,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const oldArrow = document.querySelector('.arrow');
         if (oldArrow) oldArrow.remove();
 
+        // Получаем ориентацию доски
+        const orientation = puzzleConfig.orientation || 'white';
+        
+        // Создаем SVG элемент
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("class", "arrow");
         svg.style.position = 'absolute';
@@ -811,66 +898,112 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
         
-        const board = document.querySelector('#board');
-        if (!board) {
+        // Получаем элемент доски
+        const boardElement = document.querySelector('#board');
+        if (!boardElement) {
             console.error('Board element not found');
             return;
         }
         
-        // Получаем элементы клеток
-        const fromSquare = document.querySelector(`[data-square="${from}"]`);
-        const toSquare = document.querySelector(`[data-square="${to}"]`);
+        // Получаем размер доски
+        const boardSize = boardElement.offsetWidth;
+        const squareSize = boardSize / 8;
         
-        if (!fromSquare || !toSquare) {
-            console.error('Square elements not found:', { from, to, fromElement: fromSquare, toElement: toSquare });
-            return;
+        // Функция для преобразования координат клетки в координаты на доске
+        function squareToCoords(square) {
+            const file = square.charCodeAt(0) - 'a'.charCodeAt(0); // 0-7 для a-h
+            const rank = 8 - parseInt(square[1]); // 0-7 для 8-1
+            
+            // Учитываем ориентацию доски
+            let x, y;
+            if (orientation === 'white') {
+                x = file * squareSize + squareSize / 2;
+                y = rank * squareSize + squareSize / 2;
+            } else {
+                x = (7 - file) * squareSize + squareSize / 2;
+                y = (7 - rank) * squareSize + squareSize / 2;
+            }
+            
+            return { x, y };
         }
         
-        const boardRect = board.getBoundingClientRect();
-        const fromRect = fromSquare.getBoundingClientRect();
-        const toRect = toSquare.getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
-
-        // Координаты
-        const x1 = fromRect.left - boardRect.left + fromRect.width/2;
-        const y1 = fromRect.top - boardRect.top + fromRect.height/2;
-        const x2 = toRect.left - boardRect.left + toRect.width/2;
-        const y2 = toRect.top - boardRect.top + toRect.height/2;
-
-        console.log('Arrow coordinates:', { 
-            from: { x: x1, y: y1, square: from, rect: fromRect },
-            to: { x: x2, y: y2, square: to, rect: toRect },
-            board: boardRect
+        // Получаем координаты начальной и конечной клеток
+        const fromCoords = squareToCoords(from);
+        const toCoords = squareToCoords(to);
+        
+        console.log('Arrow coordinates:', {
+            from: { square: from, coords: fromCoords },
+            to: { square: to, coords: toCoords },
+            orientation: orientation,
+            boardSize: boardSize,
+            squareSize: squareSize
         });
-
-        // Вычисляем угол и размеры
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.15;
-        const headWidth = squareSize * 0.3;
+        
+        // Вычисляем параметры стрелки
+        const dx = toCoords.x - fromCoords.x;
+        const dy = toCoords.y - fromCoords.y;
+        const angle = Math.atan2(dy, dx);
+        const length = Math.sqrt(dx * dx + dy * dy);
+        
+        // Параметры стрелки
         const headLength = squareSize * 0.3;
-
+        const headWidth = squareSize * 0.3;
+        const lineWidth = squareSize * 0.15;
+        
+        // Вычисляем точки для стрелки
+        const arrowLength = length - headLength;
+        
+        // Направляющие векторы
+        const ux = Math.cos(angle);
+        const uy = Math.sin(angle);
+        const vx = -uy; // перпендикулярный вектор
+        const vy = ux;
+        
         // Точки для стрелки
-        const dx = Math.cos(angle);
-        const dy = Math.sin(angle);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
-
+        const points = [
+            // Начало стрелки (левая сторона линии)
+            fromCoords.x + vx * lineWidth/2,
+            fromCoords.y + vy * lineWidth/2,
+            
+            // Конец линии (левая сторона)
+            fromCoords.x + ux * arrowLength + vx * lineWidth/2,
+            fromCoords.y + uy * arrowLength + vy * lineWidth/2,
+            
+            // Начало наконечника (левая сторона)
+            fromCoords.x + ux * arrowLength + vx * headWidth/2,
+            fromCoords.y + uy * arrowLength + vy * headWidth/2,
+            
+            // Кончик стрелки
+            toCoords.x,
+            toCoords.y,
+            
+            // Начало наконечника (правая сторона)
+            fromCoords.x + ux * arrowLength - vx * headWidth/2,
+            fromCoords.y + uy * arrowLength - vy * headWidth/2,
+            
+            // Конец линии (правая сторона)
+            fromCoords.x + ux * arrowLength - vx * lineWidth/2,
+            fromCoords.y + uy * arrowLength - vy * lineWidth/2,
+            
+            // Начало стрелки (правая сторона линии)
+            fromCoords.x - vx * lineWidth/2,
+            fromCoords.y - vy * lineWidth/2
+        ];
+        
         // Создаем путь для стрелки
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `
-            M ${x1 - width*dy} ${y1 + width*dx}
-            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
-            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
-            L ${x2} ${y2}
-            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
-            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
-            L ${x1 + width*dy} ${y1 - width*dx}
-            Z
-        `);
+        let pathData = `M ${points[0]} ${points[1]}`;
+        for (let i = 2; i < points.length; i += 2) {
+            pathData += ` L ${points[i]} ${points[i+1]}`;
+        }
+        pathData += ' Z'; // замыкаем путь
+        
+        path.setAttribute("d", pathData);
         path.setAttribute("fill", color);
         path.setAttribute("opacity", "0.5");
-
+        
         svg.appendChild(path);
-        board.appendChild(svg);
+        boardElement.appendChild(svg);
     }
 
     // Вспомогательная функция для получения координат клетки
