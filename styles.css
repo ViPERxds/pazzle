@@ -40,12 +40,10 @@ body {
 }
 
 #board {
-    position: relative !important;
-    width: 400px !important;
-    height: 400px !important;
-    top: 0;
-    left: 0;
-    overflow: hidden !important;
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    border: none;
 }
 
 .container {
@@ -282,8 +280,7 @@ body {
 }
 
 .square-55d63 {
-    position: relative !important;
-    z-index: 1 !important;
+    border: none !important;
 }
 
 .piece-417db {
