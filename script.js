@@ -328,9 +328,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const tg = window.Telegram.WebApp;
     tg.expand(); // Раскрываем на весь экран
     
-    // Получаем имя пользователя из Telegram
-    let currentUsername = tg.initDataUnsafe?.user?.username || 'test_user';
+    // Получаем имя пользователя из Telegram или из localStorage
+    let currentUsername = tg.initDataUnsafe?.user?.username || localStorage.getItem('username') || 'test_user';
     
+    // Сохраняем имя пользователя в localStorage
+    if (tg.initDataUnsafe?.user?.username) {
+        localStorage.setItem('username', tg.initDataUnsafe.user.username);
+    } else if (!localStorage.getItem('username')) {
+        localStorage.setItem('username', currentUsername);
+    }
+    
+    console.log('Current username:', currentUsername);
+
     // Добавляем цвета из темы Telegram
     document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
     document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
@@ -384,64 +393,36 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!userRating || !userRating.rating) {
                 console.error('Invalid user rating data:', userRating);
+                
+                // Пробуем восстановить рейтинг из localStorage
+                const savedRating = getSavedRating(username);
+                if (savedRating) {
+                    console.log('Restored rating from localStorage:', savedRating);
+                    updateRatingElements(savedRating);
+                    return savedRating;
+                }
+                
                 throw new Error('Некорректные данные рейтинга');
             }
             
-            const rating = parseFloat(userRating.rating).toFixed(0);
-            const rd = parseFloat(userRating.rd).toFixed(0);
+            // Сохраняем рейтинг в localStorage
+            saveRatingToLocalStorage(username, userRating);
             
-            console.log('Updating rating elements with new rating:', rating);
-            ratingElements.forEach(el => {
-                // Сохраняем предыдущее значение для анимации
-                const oldRating = el.textContent;
-                
-                // Обновляем значение
-                el.textContent = rating;
-                el.style.color = 'black';
-                
-                // Добавляем всплывающую подсказку с дополнительной информацией
-                el.title = `Рейтинг: ${rating}\nОтклонение: ${rd}\nВолатильность: ${parseFloat(userRating.volatility).toFixed(5)}`;
-                
-                // Добавляем анимацию изменения рейтинга
-                if (oldRating && oldRating !== rating) {
-                    const isIncrease = parseInt(rating) > parseInt(oldRating);
-                    el.classList.add(isIncrease ? 'rating-increase' : 'rating-decrease');
-                    setTimeout(() => {
-                        el.classList.remove('rating-increase', 'rating-decrease');
-                    }, 2000);
-                }
-            });
-            
-            // Добавляем стили для анимации, если их еще нет
-            if (!document.getElementById('rating-animation-styles')) {
-                const styleEl = document.createElement('style');
-                styleEl.id = 'rating-animation-styles';
-                styleEl.textContent = `
-                    .rating-increase {
-                        animation: pulse-green 2s;
-                        color: green !important;
-                    }
-                    .rating-decrease {
-                        animation: pulse-red 2s;
-                        color: red !important;
-                    }
-                    @keyframes pulse-green {
-                        0% { transform: scale(1); }
-                        50% { transform: scale(1.2); }
-                        100% { transform: scale(1); }
-                    }
-                    @keyframes pulse-red {
-                        0% { transform: scale(1); }
-                        50% { transform: scale(1.2); }
-                        100% { transform: scale(1); }
-                    }
-                `;
-                document.head.appendChild(styleEl);
-            }
+            // Обновляем элементы рейтинга
+            updateRatingElements(userRating);
             
             return userRating;
         } catch (err) {
             console.error('Error updating rating display:', err);
+            
+            // Пробуем восстановить рейтинг из localStorage
+            const savedRating = getSavedRating(username);
+            if (savedRating) {
+                console.log('Restored rating from localStorage after error:', savedRating);
+                updateRatingElements(savedRating);
+                return savedRating;
+            }
+            
             ratingElements.forEach(el => {
                 el.textContent = '1500';
                 el.style.color = 'red';
@@ -453,6 +434,96 @@ document.addEventListener('DOMContentLoaded', function() {
                 rd: 350,
                 volatility: 0.06
             };
+        }
+    }
+    
+    // Функция для сохранения рейтинга в localStorage
+    function saveRatingToLocalStorage(username, ratingData) {
+        try {
+            const data = {
+                rating: parseFloat(ratingData.rating),
+                rd: parseFloat(ratingData.rd),
+                volatility: parseFloat(ratingData.volatility),
+                timestamp: Date.now()
+            };
+            localStorage.setItem(`rating_${username}`, JSON.stringify(data));
+            console.log('Rating saved to localStorage:', data);
+        } catch (err) {
+            console.error('Error saving rating to localStorage:', err);
+        }
+    }
+    
+    // Функция для получения сохраненного рейтинга из localStorage
+    function getSavedRating(username) {
+        try {
+            const savedData = localStorage.getItem(`rating_${username}`);
+            if (!savedData) return null;
+            
+            const data = JSON.parse(savedData);
+            console.log('Retrieved rating from localStorage:', data);
+            return {
+                rating: data.rating,
+                rd: data.rd,
+                volatility: data.volatility
+            };
+        } catch (err) {
+            console.error('Error getting rating from localStorage:', err);
+            return null;
+        }
+    }
+    
+    // Функция для обновления элементов рейтинга на странице
+    function updateRatingElements(ratingData) {
+        const rating = parseFloat(ratingData.rating).toFixed(0);
+        const rd = parseFloat(ratingData.rd).toFixed(0);
+        
+        console.log('Updating rating elements with rating:', rating);
+        ratingElements.forEach(el => {
+            // Сохраняем предыдущее значение для анимации
+            const oldRating = el.textContent;
+            
+            // Обновляем значение
+            el.textContent = rating;
+            el.style.color = 'black';
+            
+            // Добавляем всплывающую подсказку с дополнительной информацией
+            el.title = `Рейтинг: ${rating}\nОтклонение: ${rd}\nВолатильность: ${parseFloat(ratingData.volatility).toFixed(5)}`;
+            
+            // Добавляем анимацию изменения рейтинга
+            if (oldRating && oldRating !== rating) {
+                const isIncrease = parseInt(rating) > parseInt(oldRating);
+                el.classList.add(isIncrease ? 'rating-increase' : 'rating-decrease');
+                setTimeout(() => {
+                    el.classList.remove('rating-increase', 'rating-decrease');
+                }, 2000);
+            }
+        });
+        
+        // Добавляем стили для анимации, если их еще нет
+        if (!document.getElementById('rating-animation-styles')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'rating-animation-styles';
+            styleEl.textContent = `
+                .rating-increase {
+                    animation: pulse-green 2s;
+                    color: green !important;
+                }
+                .rating-decrease {
+                    animation: pulse-red 2s;
+                    color: red !important;
+                }
+                @keyframes pulse-green {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.2); }
+                    100% { transform: scale(1); }
+                }
+                @keyframes pulse-red {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.2); }
+                    100% { transform: scale(1); }
+                }
+            `;
+            document.head.appendChild(styleEl);
         }
     }
 
@@ -525,8 +596,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 !userRating.rd || isNaN(parseFloat(userRating.rd)) ||
                 !userRating.volatility || isNaN(parseFloat(userRating.volatility))) {
                 console.error('Invalid user rating data received:', userRating);
-                showError('Получены некорректные данные рейтинга пользователя');
-                return;
+                
+                // Пробуем использовать сохраненный рейтинг из localStorage
+                const savedRating = getSavedRating(currentUsername);
+                if (savedRating) {
+                    console.log('Using saved rating from localStorage:', savedRating);
+                    userRating = savedRating;
+                } else {
+                    showError('Получены некорректные данные рейтинга пользователя');
+                    return;
+                }
             }
             
             // Получаем рейтинг задачи
@@ -648,6 +727,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 note: 'Сервер возвращает оригинальный рейтинг задачи, а не обновленный'
             });
 
+            // После получения ответа от сервера
+            console.log('Server response:', result);
+            
+            // Обновляем рейтинг в localStorage
+            if (result.userRating) {
+                saveRatingToLocalStorage(currentUsername, result.userRating);
+            }
+            
+            // Обновляем отображение рейтинга
+            const updatedRating = await updateRatingDisplay(currentUsername);
+            
             // Принудительно обновляем рейтинг в элементах интерфейса
             const newRating = parseFloat(newUserRatingData.rating).toFixed(0);
             const newRD = parseFloat(newUserRatingData.rd).toFixed(0);
@@ -672,11 +762,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            // Также обновляем через API для синхронизации
-            console.log('Updating rating display after solution submission');
-            const updatedRating = await updateRatingDisplay(currentUsername);
-            console.log('Rating display updated with new rating:', updatedRating);
-
             // Показываем результат
             puzzlePage.classList.add('hidden');
             resultPage.classList.remove('hidden');
@@ -842,6 +927,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Сохраняем текущую задачу
             currentPuzzle = puzzle;
             
+            // Определяем, чей ход в позиции fen2
+            const tempGame = new Chess(puzzle.fen2);
+            const turnInFen2 = tempGame.turn();
+            console.log('Turn in FEN2:', turnInFen2, 'color value:', puzzle.color);
+            
             // Сохраняем конфигурацию задачи
             puzzleConfig = {
                 initialFen: puzzle.fen1,
@@ -849,10 +939,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 fen2: puzzle.fen2,
                 move2: puzzle.move2,
                 solution: puzzle.solution === 'Good',
-                orientation: puzzle.color ? 'white' : 'black'
+                // Устанавливаем ориентацию доски в соответствии с тем, чей ход в fen2
+                // Если ход белых (w), то ориентация white, если ход черных (b), то ориентация black
+                orientation: turnInFen2 === 'w' ? 'white' : 'black'
             };
             
-            console.log('Board orientation:', puzzleConfig.orientation);
+            console.log('Board orientation set to:', puzzleConfig.orientation, 'based on turn in FEN2');
             
             // Инициализируем доску
             initializeBoard(puzzleConfig);
