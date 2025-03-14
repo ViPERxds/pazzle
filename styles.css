@@ -275,6 +275,7 @@ body {
     position: relative !important;
     width: 400px !important;
     contain: layout size !important;
+    border: 2px solid #ffffff;
 }
 
 .square-55d63 {
