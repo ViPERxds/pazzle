@@ -301,9 +301,12 @@ body {
     margin: 0 !important;
 }
 
-/* Скрываем координаты доски */
+/* Возвращаем координаты доски */
 .notation-322f9 {
-    display: none !important;
+    display: block !important; /* Возвращаем отображение координат */
+    font-size: 12px !important;
+    color: #555 !important;
+    font-weight: bold !important;
 }
 
 /* Дополнительные стили для удаления границ */
@@ -320,10 +323,27 @@ body {
     position: absolute !important;
     z-index: 5 !important;
     pointer-events: none !important;
+    animation: piece-appear 0.3s ease-out !important; /* Добавляем анимацию появления */
+}
+
+/* Анимация появления фигуры */
+@keyframes piece-appear {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
 }
 
 .piece-417db:active {
     cursor: grabbing !important;
+}
+
+/* Анимация перемещения фигуры */
+.piece-moving {
+    animation: piece-move 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+
+@keyframes piece-move {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(var(--move-x), var(--move-y)); }
 }
 
 .highlight-square {
