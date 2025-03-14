@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
         animatedPiece.style.width = `${fromRect.width}px`;
         animatedPiece.style.height = `${fromRect.height}px`;
         animatedPiece.style.zIndex = '1000';
-        animatedPiece.style.transition = 'all 0.8s ease-in-out';
+        animatedPiece.style.transition = 'all 1s cubic-bezier(0.25, 0.1, 0.25, 1)'; // Более плавная анимация
         
         // Добавляем анимированную фигуру на доску
         boardElement.appendChild(animatedPiece);
@@ -292,7 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Вызываем callback после завершения анимации
                 if (onComplete) onComplete();
-            }, 800); // Длительность анимации
+            }, 1000); // Увеличиваем длительность анимации до 1 секунды
         }, 50);
     }
     
@@ -1424,13 +1424,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Вычисляем угол и размеры
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.12; // Уменьшаем ширину стрелки
-        const headWidth = squareSize * 0.25; // Уменьшаем ширину наконечника
-        const headLength = squareSize * 0.25; // Уменьшаем длину наконечника
+        const width = squareSize * 0.15; // Возвращаем прежний размер стрелки
+        const headWidth = squareSize * 0.3; // Возвращаем прежний размер наконечника
+        const headLength = squareSize * 0.3; // Возвращаем прежний размер наконечника
 
         // Вычисляем длину стрелки с учетом отступов от центров клеток
-        // Отступаем от центров клеток на 40% размера клетки
-        const offsetRatio = 0.4;
+        // Отступаем от центров клеток на 30% размера клетки (меньше, чем было)
+        const offsetRatio = 0.3;
         const fromOffsetX = offsetRatio * squareSize * Math.cos(angle);
         const fromOffsetY = offsetRatio * squareSize * Math.sin(angle);
         const toOffsetX = offsetRatio * squareSize * Math.cos(angle);
@@ -1465,10 +1465,10 @@ document.addEventListener('DOMContentLoaded', function() {
         `);
         
         path.setAttribute("fill", color);
-        path.setAttribute("opacity", "0.6"); // Увеличиваем непрозрачность для лучшей видимости
+        path.setAttribute("opacity", "0.7"); // Увеличиваем непрозрачность для лучшей видимости
         path.setAttribute("stroke", "black"); // Добавляем обводку для лучшей видимости
         path.setAttribute("stroke-width", "1");
-        path.setAttribute("stroke-opacity", "0.3");
+        path.setAttribute("stroke-opacity", "0.4");
 
         svg.appendChild(path);
         board.appendChild(svg);
