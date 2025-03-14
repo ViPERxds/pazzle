@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Создаем конфигурацию доски
         const config = {
-            draggable: true,
+            draggable: false, // Отключаем возможность перетаскивания фигур
             position: puzzleConfig.initialFen,
             orientation: puzzleConfig.orientation,
             onDragStart: onDragStart,
@@ -1516,6 +1516,7 @@ document.addEventListener('DOMContentLoaded', function() {
             boardElement.addEventListener('click', function(event) {
                 // Предотвращаем всплытие события, чтобы не срабатывали другие обработчики
                 event.stopPropagation();
+                event.preventDefault();
                 
                 // Находим стрелку
                 const arrow = document.querySelector('.arrow');
@@ -1523,15 +1524,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Если стрелка видима, скрываем её, иначе показываем
                     if (arrow.style.display === 'none') {
                         arrow.style.display = 'block';
+                        console.log('Arrow shown');
                     } else {
                         arrow.style.display = 'none';
+                        console.log('Arrow hidden');
                     }
+                } else {
+                    console.log('Arrow element not found');
                 }
             });
             
             console.log('Board click handler set up successfully');
         } else {
             console.error('Board element not found for click handler');
+            
+            // Пробуем найти доску через jQuery
+            setTimeout(() => {
+                const $board = $('#board');
+                if ($board.length) {
+                    $board.on('click', function() {
+                        const arrow = document.querySelector('.arrow');
+                        if (arrow) {
+                            arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
+                            console.log('Arrow visibility toggled via jQuery');
+                        }
+                    });
+                    console.log('Board click handler set up via jQuery');
+                }
+            }, 1000);
         }
     }
 
