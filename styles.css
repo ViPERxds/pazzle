@@ -44,6 +44,11 @@ body {
     max-width: 600px;
     margin: 0 auto;
     border: none;
+    user-select: none !important;
+    -webkit-user-drag: none !important;
+    -webkit-touch-callout: none !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
 }
 
 .container {
@@ -277,12 +282,19 @@ body {
     contain: layout size !important;
     border: none !important;
     user-select: none !important;
-    pointer-events: none !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
 }
 
 .square-55d63 {
     border: none !important;
     user-select: none !important;
+}
+
+.square-55d63 * {
+    pointer-events: none !important;
+    user-select: none !important;
+    -webkit-user-drag: none !important;
 }
 
 .piece-417db {
@@ -311,11 +323,10 @@ body {
     transition: box-shadow 0.3s ease !important;
 }
 
-/* Дополнительные стили для запрета взаимодействия с доской */
-#board, #board * {
-    user-select: none !important;
+/* Разрешаем клики по доске, но запрещаем перетаскивание */
+[draggable="true"] {
     -webkit-user-drag: none !important;
-    -webkit-touch-callout: none !important;
+    user-drag: none !important;
     pointer-events: none !important;
 }
 
