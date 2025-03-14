@@ -651,7 +651,7 @@ async function findPuzzleForUser(username) {
     }
 }
 
-// Обновляем функцию calculateNewRatings без жесткого ограничения
+// Обновляем функцию calculateNewRatings для учета результата игры с учетом времени
 function calculateNewRatings(userRating, puzzleRating, R) {
     try {
         console.log('Calculating new ratings with:', { userRating, puzzleRating, R });
@@ -659,45 +659,201 @@ function calculateNewRatings(userRating, puzzleRating, R) {
         // Преобразуем строковые значения в числовые
         const userRatingNum = parseFloat(userRating.rating);
         const userRDNum = parseFloat(userRating.rd);
+        const userVolatility = parseFloat(userRating.volatility);
+        
         const puzzleRatingNum = parseFloat(puzzleRating.rating);
         const puzzleRDNum = parseFloat(puzzleRating.rd);
+        const puzzleVolatility = parseFloat(puzzleRating.volatility);
         
         // Константы
-        const q = Math.log(10) / 400;
-        const c = 34.6;
+        const TAU = 0.5;  // Параметр системы, влияющий на изменение волатильности
         
-        // Шаг 1: Определение отклонения рейтинга (RD)
-        const RD = Math.min(Math.sqrt(userRDNum * userRDNum + c * c), 350);
+        // Преобразуем рейтинги в шкалу Glicko-2
+        const userMu = (userRatingNum - 1500) / 173.7178;
+        const userPhi = userRDNum / 173.7178;
+        const puzzleMu = (puzzleRatingNum - 1500) / 173.7178;
+        const puzzlePhi = puzzleRDNum / 173.7178;
         
-        // Шаг 2: Определение нового рейтинга
-        const g = 1 / Math.sqrt(1 + 3 * q * q * puzzleRDNum * puzzleRDNum / (Math.PI * Math.PI));
-        const E = 1 / (1 + Math.pow(10, g * (userRatingNum - puzzleRatingNum) / -400));
-        const d2 = 1 / (q * q * g * g * E * (1 - E));
+        console.log('Converted to Glicko-2 scale:', {
+            userMu, userPhi, puzzleMu, puzzlePhi
+        });
         
-        // Вычисляем изменение рейтинга
-        const ratingChange = (q / (1 / (RD * RD) + 1 / d2)) * g * (R - E);
+        // Создаем массивы оппонентов для пользователя и задачи
+        const userOpponents = [{
+            r: puzzleMu,
+            RD: puzzlePhi,
+            s: R  // Используем результат с учетом времени
+        }];
         
-        // Вычисляем новый рейтинг
-        const newRating = userRatingNum + ratingChange;
+        const puzzleOpponents = [{
+            r: userMu,
+            RD: userPhi,
+            s: 1 - R  // Инвертируем результат для задачи
+        }];
         
-        // Шаг 3: Определение нового отклонения рейтинга
-        const newRD = Math.sqrt(1 / (1 / (RD * RD) + 1 / d2));
+        console.log('Opponents arrays:', {
+            userOpponents, puzzleOpponents
+        });
         
-        // Формируем результат с фиксированным количеством знаков после запятой
-        const result = {
-            userRating: newRating.toFixed(8),
-            userRD: newRD,
-            userVolatility: userRating.volatility,
-            puzzleRating: (puzzleRatingNum - ratingChange).toFixed(8),
-            puzzleRD: puzzleRDNum,
-            puzzleVolatility: puzzleRating.volatility
+        // Вычисляем новые рейтинги
+        const newUserRating = calculateGlicko2(
+            userMu, userPhi, userVolatility, 
+            userOpponents.map(o => o.r), 
+            userOpponents.map(o => o.RD), 
+            userOpponents.map(o => o.s), 
+            TAU
+        );
+        
+        const newPuzzleRating = calculateGlicko2(
+            puzzleMu, puzzlePhi, puzzleVolatility, 
+            puzzleOpponents.map(o => o.r), 
+            puzzleOpponents.map(o => o.RD), 
+            puzzleOpponents.map(o => o.s), 
+            TAU
+        );
+        
+        console.log('New ratings in Glicko-2 scale:', {
+            user: newUserRating,
+            puzzle: newPuzzleRating
+        });
+        
+        // Преобразуем обратно в шкалу Glicko
+        const newUserRatingGlicko = 173.7178 * newUserRating.mu + 1500;
+        const newUserRDGlicko = 173.7178 * newUserRating.phi;
+        
+        const newPuzzleRatingGlicko = 173.7178 * newPuzzleRating.mu + 1500;
+        const newPuzzleRDGlicko = 173.7178 * newPuzzleRating.phi;
+        
+        console.log('Final ratings in Glicko scale:', {
+            user: {
+                rating: newUserRatingGlicko,
+                rd: newUserRDGlicko,
+                volatility: newUserRating.sigma
+            },
+            puzzle: {
+                rating: newPuzzleRatingGlicko,
+                rd: newPuzzleRDGlicko,
+                volatility: newPuzzleRating.sigma
+            }
+        });
+        
+        return {
+            user: {
+                rating: newUserRatingGlicko,
+                rd: newUserRDGlicko,
+                volatility: newUserRating.sigma
+            },
+            puzzle: {
+                rating: newPuzzleRatingGlicko,
+                rd: newPuzzleRDGlicko,
+                volatility: newPuzzleRating.sigma
+            }
         };
-        
-        console.log('Calculated new ratings:', result);
-        return result;
     } catch (err) {
         console.error('Error calculating new ratings:', err);
-        throw err;
+        // В случае ошибки возвращаем исходные рейтинги
+        return {
+            user: userRating,
+            puzzle: puzzleRating
+        };
+    }
+}
+
+// Функция для расчета рейтингов по алгоритму Glicko-2
+function calculateGlicko2(mu, phi, sigma, oppRatings, oppRDs, oppResults, tau) {
+    try {
+        console.log('Glicko-2 input:', { mu, phi, sigma, oppRatings, oppRDs, oppResults, tau });
+        
+        // Шаг 1: Определение g(RD) и E для каждого оппонента
+        const g = oppRDs.map(RD => 1 / Math.sqrt(1 + 3 * Math.pow(RD, 2) / Math.pow(Math.PI, 2)));
+        
+        const E = oppRatings.map((r, i) => 1 / (1 + Math.exp(-g[i] * (mu - r))));
+        
+        // Шаг 2: Вычисление вариации
+        let v = 0;
+        for (let i = 0; i < oppRatings.length; i++) {
+            v += Math.pow(g[i], 2) * E[i] * (1 - E[i]);
+        }
+        v = 1 / v;
+        
+        // Шаг 3: Вычисление дельты
+        let delta = 0;
+        for (let i = 0; i < oppRatings.length; i++) {
+            delta += g[i] * (oppResults[i] - E[i]);
+        }
+        delta = v * delta;
+        
+        // Шаг 4: Вычисление новой волатильности
+        const a = Math.log(Math.pow(sigma, 2));
+        
+        // Функция f(x)
+        const f = (x) => {
+            const ex = Math.exp(x);
+            const phiSq = Math.pow(phi, 2);
+            const deltaSq = Math.pow(delta, 2);
+            
+            const part1 = ex * (deltaSq - phiSq - v - ex) / (2 * Math.pow(phiSq + v + ex, 2));
+            const part2 = (x - a) / Math.pow(tau, 2);
+            
+            return part1 - part2;
+        };
+        
+        // Алгоритм поиска корня уравнения f(x) = 0
+        let A = a;
+        let B;
+        
+        if (Math.pow(delta, 2) > Math.pow(phi, 2) + v) {
+            B = Math.log(Math.pow(delta, 2) - Math.pow(phi, 2) - v);
+        } else {
+            let k = 1;
+            while (f(a - k * tau) < 0) {
+                k++;
+            }
+            B = a - k * tau;
+        }
+        
+        let fA = f(A);
+        let fB = f(B);
+        
+        while (Math.abs(B - A) > 0.000001) {
+            const C = A + (A - B) * fA / (fB - fA);
+            const fC = f(C);
+            
+            if (fC * fB <= 0) {
+                A = B;
+                fA = fB;
+            } else {
+                fA = fA / 2;
+            }
+            
+            B = C;
+            fB = fC;
+        }
+        
+        const newSigma = Math.exp(A / 2);
+        
+        // Шаг 5: Обновление phi
+        const phiStar = Math.sqrt(Math.pow(phi, 2) + Math.pow(newSigma, 2));
+        
+        // Шаг 6: Обновление phi и mu
+        const newPhi = 1 / Math.sqrt(1 / Math.pow(phiStar, 2) + 1 / v);
+        const newMu = mu + Math.pow(newPhi, 2) * (delta / v);
+        
+        console.log('Glicko-2 output:', { mu: newMu, phi: newPhi, sigma: newSigma });
+        
+        return {
+            mu: newMu,
+            phi: newPhi,
+            sigma: newSigma
+        };
+    } catch (err) {
+        console.error('Error in Glicko-2 calculation:', err);
+        // В случае ошибки возвращаем исходные значения
+        return {
+            mu: mu,
+            phi: phi,
+            sigma: sigma
+        };
     }
 }
 
@@ -789,7 +945,7 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
 // Добавляем функцию для записи решения задачи
 async function recordPuzzleSolution(username, puzzleId, success, time) {
     try {
-        console.log('Recording solution:', { username, puzzleId, success, time });
+        console.log(`Recording solution for user ${username}, puzzle ${puzzleId}, success: ${success}, time: ${time}`);
         
         // Получаем ID пользователя
         const userResult = await pool.query(
@@ -797,16 +953,33 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             [username]
         );
         
-        if (userResult.rows.length === 0) {
-            throw new Error('User not found');
-        }
+        let userId;
+        let userRating;
         
-        const userId = userResult.rows[0].id;
-        const userRating = {
-            rating: userResult.rows[0].rating,
-            rd: userResult.rows[0].rd,
-            volatility: userResult.rows[0].volatility
-        };
+        if (userResult.rows.length === 0) {
+            // Если пользователь не найден, создаем нового
+            console.log('User not found, creating new user:', username);
+            const newUser = await pool.query(
+                `INSERT INTO Users (username, rating, rd, volatility, status) 
+                 VALUES ($1, 1500, 350, 0.06, true) 
+                 RETURNING id, rating, rd, volatility`,
+                [username]
+            );
+            userId = newUser.rows[0].id;
+            userRating = {
+                rating: parseFloat(newUser.rows[0].rating),
+                rd: parseFloat(newUser.rows[0].rd),
+                volatility: parseFloat(newUser.rows[0].volatility)
+            };
+            console.log('Created new user with ID:', userId);
+        } else {
+            userId = userResult.rows[0].id;
+            userRating = {
+                rating: parseFloat(userResult.rows[0].rating),
+                rd: parseFloat(userResult.rows[0].rd),
+                volatility: parseFloat(userResult.rows[0].volatility)
+            };
+        }
         
         // Получаем рейтинг задачи
         const puzzleResult = await pool.query(
@@ -815,151 +988,27 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
         );
         
         if (puzzleResult.rows.length === 0) {
-            throw new Error('Puzzle not found');
+            throw new Error(`Puzzle ${puzzleId} not found`);
         }
         
         const puzzleRating = {
-            rating: puzzleResult.rows[0].rating,
-            rd: puzzleResult.rows[0].rd,
-            volatility: puzzleResult.rows[0].volatility
+            rating: parseFloat(puzzleResult.rows[0].rating),
+            rd: parseFloat(puzzleResult.rows[0].rd),
+            volatility: parseFloat(puzzleResult.rows[0].volatility)
         };
         
-        // Записываем решение в журнал
-        await pool.query(
-            `INSERT INTO Journal 
-            (user_id, puzzle_id, success, time_success, puzzle_rating_before)
-            VALUES ($1, $2, $3, $4, $5)`,
-            [userId, puzzleId, success, time, puzzleRating.rating]
-        );
+        // Вычисляем результат игры с учетом времени
+        // R = S * e^(-ln(2) * time / a), где a = 180 секунд (3 минуты)
+        const a = 180; // 3 минуты в секундах
+        const S = success ? 1 : 0; // Бинарный результат (успех/неудача)
+        const R = S * Math.exp(-Math.log(2) * time / a);
         
-        // Возвращаем текущий рейтинг пользователя
-        return {
-            rating: userRating.rating,
-            rd: userRating.rd,
-            volatility: userRating.volatility
-        };
-    } catch (err) {
-        console.error('Error recording solution:', err);
-        throw err;
-    }
-}
-
-// Обновляем обработчик POST /api/record-solution
-app.post('/api/record-solution', async (req, res) => {
-    try {
-        const { username, puzzleId, success, time, userRating, puzzleRating } = req.body;
-        console.log('Received solution data:', { 
-            username, 
-            puzzleId, 
-            success, 
-            time, 
-            userRating: userRating ? {
-                rating: userRating.rating,
-                rd: userRating.rd,
-                volatility: userRating.volatility
-            } : null, 
-            puzzleRating: puzzleRating ? {
-                rating: puzzleRating.rating,
-                rd: puzzleRating.rd,
-                volatility: puzzleRating.volatility
-            } : null
-        });
+        console.log(`Calculated game result R = ${R} (S=${S}, time=${time}s, a=${a}s)`);
         
-        // Проверяем наличие всех необходимых параметров
-        if (!username || puzzleId === undefined || success === undefined || time === undefined) {
-            console.log('Missing parameters:', { username, puzzleId, success, time });
-            return res.status(400).json({ 
-                error: 'Missing required parameters',
-                received: { username, puzzleId, success, time }
-            });
-        }
-
-        // Получаем ID пользователя
-        const userResult = await pool.query(
-            'SELECT id, rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
-        );
+        // Вычисляем новые рейтинги
+        const newRatings = calculateNewRatings(userRating, puzzleRating, R);
         
-        console.log('Current user data from DB:', userResult.rows[0]);
-        
-        let userId;
-        if (userResult.rows.length === 0) {
-            // Если пользователь не найден, создаем нового
-            console.log('User not found, creating new user:', username);
-            const newUser = await pool.query(
-                `INSERT INTO Users (username, rating, rd, volatility, status) 
-                 VALUES ($1, $2, $3, $4, true) 
-                 RETURNING id`,
-                [
-                    username, 
-                    userRating ? userRating.rating : 1500, 
-                    userRating ? userRating.rd : 350, 
-                    userRating ? userRating.volatility : 0.06
-                ]
-            );
-            userId = newUser.rows[0].id;
-            console.log('Created new user with ID:', userId);
-        } else {
-            userId = userResult.rows[0].id;
-        }
-        
-        // Обновляем рейтинг пользователя
-        let updatedUserRatingValue = null;
-        if (userRating) {
-            console.log('Updating user rating in DB:', {
-                oldRating: userResult.rows.length > 0 ? userResult.rows[0].rating : 'N/A',
-                newRating: userRating.rating,
-                oldRD: userResult.rows.length > 0 ? userResult.rows[0].rd : 'N/A',
-                newRD: userRating.rd,
-                oldVolatility: userResult.rows.length > 0 ? userResult.rows[0].volatility : 'N/A',
-                newVolatility: userRating.volatility
-            });
-            
-            const updateUserResult = await pool.query(
-                `UPDATE Users 
-                 SET rating = $1, rd = $2, volatility = $3 
-                 WHERE username = $4
-                 RETURNING id, rating, rd, volatility`,
-                [
-                    userRating.rating,
-                    userRating.rd,
-                    userRating.volatility,
-                    username
-                ]
-            );
-            
-            // Проверяем, что рейтинг обновился
-            if (updateUserResult.rows.length > 0) {
-                console.log('User rating after update:', updateUserResult.rows[0]);
-                updatedUserRatingValue = parseFloat(updateUserResult.rows[0].rating);
-            } else {
-                console.error('Failed to update user rating!');
-            }
-        }
-        
-        // Получаем текущий рейтинг задачи для журнала
-        const puzzleResult = await pool.query(
-            'SELECT rating, rd, volatility FROM Puzzles WHERE id = $1',
-            [puzzleId]
-        );
-        
-        if (puzzleResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Puzzle not found' });
-        }
-        
-        // Больше не обновляем рейтинг задачи, оставляем его неизменным
-        // Просто логируем информацию о рейтинге задачи
-        if (puzzleRating) {
-            console.log('Puzzle rating calculation (not updating DB):', {
-                puzzleId,
-                currentRating: puzzleResult.rows[0].rating,
-                calculatedRating: puzzleRating.rating,
-                currentRD: puzzleResult.rows[0].rd,
-                calculatedRD: puzzleRating.rd,
-                currentVolatility: puzzleResult.rows[0].volatility,
-                calculatedVolatility: puzzleRating.volatility
-            });
-        }
+        console.log('New ratings calculated:', newRatings);
         
         // Определяем сложность задачи на основе времени решения
         // По умолчанию используем среднюю сложность (id=4)
@@ -983,50 +1032,93 @@ app.post('/api/record-solution', async (req, res) => {
         
         console.log(`Determined complexity level ${complexityId} based on time ${time}`);
         
-        try {
-            // Записываем решение в журнал с обновленным рейтингом пользователя и сложностью
-            const journalResult = await pool.query(
-                `INSERT INTO Journal 
-                (user_id, puzzle_id, success, time_success, puzzle_rating_before, user_rating_after, complexity_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id`,
-                [
-                    userId, 
-                    puzzleId, 
-                    success, 
-                    time, 
-                    puzzleResult.rows[0].rating,
-                    updatedUserRatingValue || (userRating ? userRating.rating : null),
-                    complexityId
-                ]
-            );
-            
-            console.log('Solution recorded in journal with ID:', journalResult.rows[0].id);
-        } catch (journalError) {
-            console.error('Error inserting into Journal:', journalError);
-            console.error('Journal insert parameters:', {
+        // Обновляем рейтинг пользователя
+        await pool.query(
+            `UPDATE Users 
+             SET rating = $1, rd = $2, volatility = $3 
+             WHERE id = $4`,
+            [
+                newRatings.user.rating,
+                newRatings.user.rd,
+                newRatings.user.volatility,
+                userId
+            ]
+        );
+        
+        // Обновляем рейтинг задачи
+        await pool.query(
+            `UPDATE Puzzles 
+             SET rating = $1, rd = $2, volatility = $3 
+             WHERE id = $4`,
+            [
+                newRatings.puzzle.rating,
+                newRatings.puzzle.rd,
+                newRatings.puzzle.volatility,
+                puzzleId
+            ]
+        );
+        
+        // Записываем в журнал
+        await pool.query(
+            `INSERT INTO Journal (
+                user_id, puzzle_id, success, time_success, 
+                puzzle_rating_before, user_rating_after, complexity_id, date
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+            [
                 userId, 
                 puzzleId, 
                 success, 
-                time, 
-                puzzleRating: puzzleResult.rows[0].rating,
-                userRating: updatedUserRatingValue || (userRating ? userRating.rating : null),
+                time,
+                puzzleRating.rating,
+                newRatings.user.rating,
                 complexityId
-            });
-            throw journalError;
-        }
-        
-        // Получаем обновленный рейтинг пользователя для ответа
-        const updatedUserRating = await pool.query(
-            'SELECT rating, rd, volatility FROM Users WHERE username = $1',
-            [username]
+            ]
         );
+        
+        console.log('Solution recorded successfully');
+        
+        return {
+            success: true,
+            userRating: {
+                rating: newRatings.user.rating,
+                rd: newRatings.user.rd,
+                volatility: newRatings.user.volatility
+            },
+            puzzleRating: {
+                rating: newRatings.puzzle.rating,
+                rd: newRatings.puzzle.rd,
+                volatility: newRatings.puzzle.volatility
+            }
+        };
+    } catch (err) {
+        console.error('Error recording puzzle solution:', err);
+        throw err;
+    }
+}
+
+// Обновляем обработчик POST /api/record-solution
+app.post('/api/record-solution', async (req, res) => {
+    try {
+        const { username, puzzleId, success, time } = req.body;
+        console.log('Received solution data:', { username, puzzleId, success, time });
+        
+        // Проверяем наличие всех необходимых параметров
+        if (!username || puzzleId === undefined || success === undefined || time === undefined) {
+            console.log('Missing parameters:', { username, puzzleId, success, time });
+            return res.status(400).json({ 
+                error: 'Missing required parameters',
+                received: { username, puzzleId, success, time }
+            });
+        }
+
+        // Используем функцию recordPuzzleSolution для записи решения
+        const result = await recordPuzzleSolution(username, puzzleId, success, time);
         
         res.json({
             status: 'success',
             message: 'Solution recorded successfully',
-            userRating: updatedUserRating.rows.length > 0 ? updatedUserRating.rows[0] : userRating,
-            puzzleRating: puzzleResult.rows[0] // Возвращаем оригинальный рейтинг задачи, а не рассчитанный
+            userRating: result.userRating,
+            puzzleRating: result.puzzleRating
         });
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
