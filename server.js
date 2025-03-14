@@ -96,6 +96,61 @@ pool.connect(async (err, client, release) => {
             );
         `);
 
+        // Удаляем лишние таблицы, которые больше не нужны
+        try {
+            console.log('Attempting to drop unnecessary tables...');
+            
+            // Проверяем существование таблицы puzzleattempts и удаляем её
+            const puzzleAttemptsExists = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'puzzleattempts'
+                );
+            `);
+            
+            if (puzzleAttemptsExists.rows[0].exists) {
+                await client.query('DROP TABLE puzzleattempts');
+                console.log('Table puzzleattempts dropped successfully');
+            } else {
+                console.log('Table puzzleattempts does not exist');
+            }
+            
+            // Проверяем существование таблицы puzzlestags и удаляем её
+            const puzzlesTagsExists = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'puzzlestags'
+                );
+            `);
+            
+            if (puzzlesTagsExists.rows[0].exists) {
+                await client.query('DROP TABLE puzzlestags');
+                console.log('Table puzzlestags dropped successfully');
+            } else {
+                console.log('Table puzzlestags does not exist');
+            }
+            
+            // Проверяем существование таблицы solvedpuzzles и удаляем её
+            const solvedPuzzlesExists = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'solvedpuzzles'
+                );
+            `);
+            
+            if (solvedPuzzlesExists.rows[0].exists) {
+                await client.query('DROP TABLE solvedpuzzles');
+                console.log('Table solvedpuzzles dropped successfully');
+            } else {
+                console.log('Table solvedpuzzles does not exist');
+            }
+            
+            console.log('Cleanup of unnecessary tables completed');
+        } catch (dropErr) {
+            console.error('Error dropping unnecessary tables:', dropErr);
+            // Продолжаем выполнение даже при ошибке удаления таблиц
+        }
+
         // Инициализируем в правильном порядке
         // Проверяем, есть ли данные в таблице Journal
         const journalCount = await client.query('SELECT COUNT(*) FROM Journal');
@@ -186,39 +241,40 @@ async function generateRandomPuzzle() {
     throw new Error('Use findPuzzleForUser instead');
 }
 
-// Функция для проверки, пытался ли пользователь решить задачу
-async function hasPuzzleAttempt(username, fen) {
-    try {
-        const result = await pool.query(
-            'SELECT id FROM PuzzleAttempts WHERE username = $1 AND puzzle_fen = $2',
-            [username, fen]
-        );
-        return result.rows.length > 0;
-    } catch (err) {
-        console.error('Error checking puzzle attempt:', err);
-        return false;
-    }
-}
-
-// Функция для получения нерешенных задач (упрощенная версия)
+// Функция для получения нерешенных задач (обновленная версия)
 async function getUnsolvedPuzzles(username) {
     try {
         console.log(`Getting unsolved puzzles for user: ${username}`);
         
-        // Получаем все попытки пользователя
-        const attemptedResult = await pool.query(
-            'SELECT puzzle_fen FROM PuzzleAttempts WHERE username = $1',
+        // Получаем ID пользователя
+        const userResult = await pool.query(
+            'SELECT id FROM Users WHERE username = $1',
             [username]
         );
-        const attemptedFens = attemptedResult.rows.map(row => row.puzzle_fen);
-        console.log(`User has attempted ${attemptedFens.length} puzzles`);
+        
+        if (userResult.rows.length === 0) {
+            console.log(`User ${username} not found, returning all puzzles`);
+            // Если пользователь не найден, возвращаем все задачи
+            return await generatePuzzlesList();
+        }
+        
+        const userId = userResult.rows[0].id;
+        
+        // Получаем ID задач, которые пользователь уже решал
+        const solvedResult = await pool.query(
+            'SELECT DISTINCT puzzle_id FROM Journal WHERE user_id = $1',
+            [userId]
+        );
+        
+        const solvedPuzzleIds = solvedResult.rows.map(row => row.puzzle_id);
+        console.log(`User has attempted ${solvedPuzzleIds.length} puzzles`);
         
         // Получаем все доступные задачи
         const puzzles = await generatePuzzlesList();
         console.log(`Total available puzzles: ${puzzles.length}`);
         
-        // Возвращаем только те задачи, которые пользователь еще не пытался решить
-        const unsolvedPuzzles = puzzles.filter(puzzle => !attemptedFens.includes(puzzle.fen));
+        // Возвращаем только те задачи, которые пользователь еще не решал
+        const unsolvedPuzzles = puzzles.filter(puzzle => !solvedPuzzleIds.includes(puzzle.id));
         console.log(`Unsolved puzzles: ${unsolvedPuzzles.length}`);
         
         return unsolvedPuzzles;
@@ -1109,36 +1165,6 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
-
-// Функция для проверки, решал ли пользователь эту задачу
-async function isPuzzleSolved(username, fen) {
-    try {
-        const result = await pool.query(
-            'SELECT id FROM SolvedPuzzles WHERE username = $1 AND puzzle_fen = $2',
-            [username, fen]
-        );
-        return result.rows.length > 0;
-    } catch (err) {
-        console.error('Error checking solved puzzle:', err);
-        return false;
-    }
-}
-
-// Обновляем функцию markPuzzleAsSolved, чтобы она возвращала Promise
-async function markPuzzleAsSolved(username, fen) {
-    try {
-        await pool.query(
-            `INSERT INTO SolvedPuzzles (username, puzzle_fen) 
-             VALUES ($1, $2) 
-             ON CONFLICT (username, puzzle_fen) DO NOTHING`,
-            [username, fen]
-        );
-        console.log(`Marked puzzle ${fen} as solved for user ${username}`);
-    } catch (err) {
-        console.error('Error marking puzzle as solved:', err);
-        throw err; // Пробрасываем ошибку дальше
-    }
-}
 
 // Функция для расчёта нового отклонения рейтинга (RD) по алгоритму Глико
 function calculateNewRD(RD0, t, c = 34.6) {
