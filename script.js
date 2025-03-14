@@ -268,7 +268,6 @@ document.addEventListener('DOMContentLoaded', function() {
         animatedPiece.style.width = `${fromRect.width}px`;
         animatedPiece.style.height = `${fromRect.height}px`;
         animatedPiece.style.zIndex = '1000';
-        animatedPiece.style.transition = 'all 1s cubic-bezier(0.25, 0.1, 0.25, 1)'; // Более плавная анимация
         
         // Добавляем анимированную фигуру на доску
         boardElement.appendChild(animatedPiece);
@@ -276,24 +275,53 @@ document.addEventListener('DOMContentLoaded', function() {
         // Скрываем оригинальную фигуру
         pieceElement.style.opacity = '0';
         
-        // Запускаем анимацию после небольшой задержки
-        setTimeout(() => {
-            animatedPiece.style.left = `${toX}px`;
-            animatedPiece.style.top = `${toY}px`;
+        // Устанавливаем начальное положение для анимации
+        requestAnimationFrame(() => {
+            // Добавляем CSS transition для плавного перемещения
+            animatedPiece.style.transition = 'all 1s cubic-bezier(0.25, 0.1, 0.25, 1)';
             
-            // Удаляем анимированную фигуру после завершения анимации
+            // Запускаем анимацию после небольшой задержки
             setTimeout(() => {
-                animatedPiece.remove();
+                // Перемещаем фигуру на новую позицию
+                animatedPiece.style.left = `${toX}px`;
+                animatedPiece.style.top = `${toY}px`;
                 
-                // Восстанавливаем оригинальную фигуру (хотя она будет заменена при обновлении доски)
-                if (pieceElement.parentNode) {
-                    pieceElement.style.opacity = '1';
-                }
+                // Добавляем обработчик события окончания анимации
+                animatedPiece.addEventListener('transitionend', function handler() {
+                    // Удаляем обработчик события
+                    animatedPiece.removeEventListener('transitionend', handler);
+                    
+                    // Удаляем анимированную фигуру
+                    animatedPiece.remove();
+                    
+                    // Восстанавливаем оригинальную фигуру (хотя она будет заменена при обновлении доски)
+                    if (pieceElement.parentNode) {
+                        pieceElement.style.opacity = '1';
+                    }
+                    
+                    // Вызываем callback после завершения анимации
+                    if (onComplete) onComplete();
+                });
                 
-                // Вызываем callback после завершения анимации
-                if (onComplete) onComplete();
-            }, 1000); // Увеличиваем длительность анимации до 1 секунды
-        }, 50);
+                // Резервный таймер на случай, если событие transitionend не сработает
+                setTimeout(() => {
+                    if (animatedPiece.parentNode) {
+                        animatedPiece.remove();
+                        
+                        // Восстанавливаем оригинальную фигуру
+                        if (pieceElement.parentNode) {
+                            pieceElement.style.opacity = '1';
+                        }
+                        
+                        // Вызываем callback, если он еще не был вызван
+                        if (onComplete && typeof onComplete.__called === 'undefined') {
+                            onComplete.__called = true;
+                            onComplete();
+                        }
+                    }
+                }, 1100); // Немного больше, чем длительность анимации
+            }, 50);
+        });
     }
     
     // Функции для обработки ходов
