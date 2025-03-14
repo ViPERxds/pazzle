@@ -82,13 +82,19 @@ document.addEventListener('DOMContentLoaded', function() {
             onDragStart: onDragStart,
             onDrop: onDrop,
             onSnapEnd: onSnapEnd,
-            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
+            pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg',
+            // Добавляем анимацию для всех ходов
+            moveSpeed: 'slow',
+            snapSpeed: 500,
+            snapbackSpeed: 500,
+            appearSpeed: 1000
         };
 
         // Создаем доску
         board = Chessboard('board', config);
         
-        // Ждем немного, чтобы доска успела инициализироваться
+        // Добавляем задержку перед выполнением предварительного хода
+        // Увеличиваем задержку до 1500 мс (1.5 секунды), чтобы пользователь успел увидеть начальную позицию
         setTimeout(() => {
             try {
                 // Проверяем возможность хода
@@ -104,102 +110,109 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                // Делаем ход
-                const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
-                if (premove) {
-                    console.log('Premove successful:', premove);
-                    // Обновляем позицию на доске
-                    board.position(game.fen(), false);
-                    
-                    // Показываем стрелку для следующего хода
-                    const [move2From, move2To] = [
-                        puzzleConfig.move2.substring(0, 2),
-                        puzzleConfig.move2.substring(2, 4)
-                    ];
-                    
-                    // Подробное логирование для отладки
-                    console.log('Move2 details:', {
-                        move2: puzzleConfig.move2,
-                        from: move2From,
-                        to: move2To,
-                        orientation: puzzleConfig.orientation,
-                        currentPosition: game.fen()
-                    });
-                    
-                    // Проверяем, есть ли фигура на начальной позиции для move2
-                    const pieceForMove2 = game.get(move2From);
-                    if (!pieceForMove2) {
-                        console.error('No piece at starting square for move2:', move2From);
-                        console.log('Current board state:', game.fen());
-                        console.log('All pieces:', game.board());
+                // Делаем ход с анимацией
+                console.log('Making premove with animation:', fromSquare, 'to', toSquare);
+                
+                // Сначала показываем анимацию хода на доске
+                board.move(`${fromSquare}-${toSquare}`);
+                
+                // Затем обновляем внутреннее состояние игры после завершения анимации
+                setTimeout(() => {
+                    // Делаем ход в объекте игры
+                    const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
+                    if (premove) {
+                        console.log('Premove successful:', premove);
                         
-                        // Пытаемся найти правильный ход
-                        const legalMoves = game.moves({ verbose: true });
-                        console.log('Legal moves after move1:', legalMoves);
+                        // Показываем стрелку для следующего хода
+                        const [move2From, move2To] = [
+                            puzzleConfig.move2.substring(0, 2),
+                            puzzleConfig.move2.substring(2, 4)
+                        ];
                         
-                        // Ищем ход, который ведет на целевую клетку
-                        const possibleMove = legalMoves.find(m => m.to === move2To);
-                        
-                        if (possibleMove) {
-                            console.log('Found alternative move2:', possibleMove);
-                            // Используем найденный ход для отображения стрелки
-                            drawArrow(possibleMove.from, possibleMove.to, 'black');
-                            return;
-                        }
-                        
-                        // Если не нашли подходящий ход, пробуем найти любой ход той же фигурой
-                        const currentTurn = game.turn();
-                        const figureType = move2From.charAt(0);
-                        const sameTypeMoves = legalMoves.filter(m => {
-                            const piece = game.get(m.from);
-                            return piece && piece.type === figureType && 
-                                  ((currentTurn === 'w' && piece.color === 'w') || 
-                                   (currentTurn === 'b' && piece.color === 'b'));
+                        // Подробное логирование для отладки
+                        console.log('Move2 details:', {
+                            move2: puzzleConfig.move2,
+                            from: move2From,
+                            to: move2To,
+                            orientation: puzzleConfig.orientation,
+                            currentPosition: game.fen()
                         });
                         
-                        if (sameTypeMoves.length > 0) {
-                            console.log('Using move with same piece type:', sameTypeMoves[0]);
-                            drawArrow(sameTypeMoves[0].from, sameTypeMoves[0].to, 'black');
-                            return;
-                        }
-                        
-                        // Если не нашли ход той же фигурой, используем первый доступный ход
-                        if (legalMoves.length > 0) {
-                            console.log('Using first available move:', legalMoves[0]);
-                            drawArrow(legalMoves[0].from, legalMoves[0].to, 'black');
-                            return;
-                        }
-                    } else {
-                        console.log('Piece for move2:', pieceForMove2);
-                        
-                        // Проверяем, является ли ход move2 легальным
-                        const move2IsLegal = game.moves({ verbose: true }).some(m => 
-                            m.from === move2From && m.to === move2To
-                        );
-                        
-                        if (!move2IsLegal) {
-                            console.warn('Move2 is not legal in current position:', {
-                                from: move2From,
-                                to: move2To,
-                                legalMoves: game.moves({ verbose: true })
-                            });
+                        // Проверяем, есть ли фигура на начальной позиции для move2
+                        const pieceForMove2 = game.get(move2From);
+                        if (!pieceForMove2) {
+                            console.error('No piece at starting square for move2:', move2From);
+                            console.log('Current board state:', game.fen());
+                            console.log('All pieces:', game.board());
                             
-                            // Пытаемся найти легальный ход той же фигурой
+                            // Пытаемся найти правильный ход
                             const legalMoves = game.moves({ verbose: true });
-                            const movesWithSamePiece = legalMoves.filter(m => m.from === move2From);
+                            console.log('Legal moves after move1:', legalMoves);
                             
-                            if (movesWithSamePiece.length > 0) {
-                                console.log('Using alternative move with same piece:', movesWithSamePiece[0]);
-                                drawArrow(movesWithSamePiece[0].from, movesWithSamePiece[0].to, 'black');
+                            // Ищем ход, который ведет на целевую клетку
+                            const possibleMove = legalMoves.find(m => m.to === move2To);
+                            
+                            if (possibleMove) {
+                                console.log('Found alternative move2:', possibleMove);
+                                // Используем найденный ход для отображения стрелки
+                                drawArrow(possibleMove.from, possibleMove.to, 'black');
                                 return;
                             }
+                            
+                            // Если не нашли подходящий ход, пробуем найти любой ход той же фигурой
+                            const currentTurn = game.turn();
+                            const figureType = move2From.charAt(0);
+                            const sameTypeMoves = legalMoves.filter(m => {
+                                const piece = game.get(m.from);
+                                return piece && piece.type === figureType && 
+                                      ((currentTurn === 'w' && piece.color === 'w') || 
+                                       (currentTurn === 'b' && piece.color === 'b'));
+                            });
+                            
+                            if (sameTypeMoves.length > 0) {
+                                console.log('Using move with same piece type:', sameTypeMoves[0]);
+                                drawArrow(sameTypeMoves[0].from, sameTypeMoves[0].to, 'black');
+                                return;
+                            }
+                            
+                            // Если не нашли ход той же фигурой, используем первый доступный ход
+                            if (legalMoves.length > 0) {
+                                console.log('Using first available move:', legalMoves[0]);
+                                drawArrow(legalMoves[0].from, legalMoves[0].to, 'black');
+                                return;
+                            }
+                        } else {
+                            console.log('Piece for move2:', pieceForMove2);
+                            
+                            // Проверяем, является ли ход move2 легальным
+                            const move2IsLegal = game.moves({ verbose: true }).some(m => 
+                                m.from === move2From && m.to === move2To
+                            );
+                            
+                            if (!move2IsLegal) {
+                                console.warn('Move2 is not legal in current position:', {
+                                    from: move2From,
+                                    to: move2To,
+                                    legalMoves: game.moves({ verbose: true })
+                                });
+                                
+                                // Пытаемся найти легальный ход той же фигурой
+                                const legalMoves = game.moves({ verbose: true });
+                                const movesWithSamePiece = legalMoves.filter(m => m.from === move2From);
+                                
+                                if (movesWithSamePiece.length > 0) {
+                                    console.log('Using alternative move with same piece:', movesWithSamePiece[0]);
+                                    drawArrow(movesWithSamePiece[0].from, movesWithSamePiece[0].to, 'black');
+                                    return;
+                                }
+                            }
+                            
+                            // Рисуем стрелку с учетом ориентации доски
+                            console.log('Drawing arrow from', move2From, 'to', move2To);
+                            drawArrow(move2From, move2To, 'black');
                         }
-                        
-                        // Рисуем стрелку с учетом ориентации доски
-                        console.log('Drawing arrow from', move2From, 'to', move2To);
-                        drawArrow(move2From, move2To, 'black');
                     }
-                }
+                }, 500); // Задержка после анимации хода для обновления внутреннего состояния
             } catch (error) {
                 console.error('Error making premove:', error);
                 console.log('Game state:', {
@@ -209,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     moves: game.moves()
                 });
             }
-        }, 100);
+        }, 1500); // Увеличенная задержка перед выполнением предварительного хода
     }
     
     // Функции для обработки ходов
