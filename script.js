@@ -261,6 +261,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const toX = toRect.left - boardRect.left;
         const toY = toRect.top - boardRect.top;
         
+        // Скрываем оригинальную фигуру
+        pieceElement.style.opacity = '0';
+        
         // Настраиваем стили для анимированной фигуры
         animatedPiece.style.position = 'absolute';
         animatedPiece.style.left = `${fromX}px`;
@@ -272,56 +275,50 @@ document.addEventListener('DOMContentLoaded', function() {
         // Добавляем анимированную фигуру на доску
         boardElement.appendChild(animatedPiece);
         
-        // Скрываем оригинальную фигуру
-        pieceElement.style.opacity = '0';
+        // Используем requestAnimationFrame для плавной анимации
+        const duration = 1000; // Длительность анимации в миллисекундах
+        const startTime = performance.now();
         
-        // Устанавливаем начальное положение для анимации
-        requestAnimationFrame(() => {
-            // Добавляем CSS transition для плавного перемещения
-            animatedPiece.style.transition = 'all 1s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        function animate(currentTime) {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
             
-            // Запускаем анимацию после небольшой задержки
-            setTimeout(() => {
-                // Перемещаем фигуру на новую позицию
-                animatedPiece.style.left = `${toX}px`;
-                animatedPiece.style.top = `${toY}px`;
+            // Используем функцию плавности для более естественного движения
+            // easeInOutCubic: замедление в начале и конце
+            const easing = progress < 0.5 
+                ? 4 * progress * progress * progress 
+                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+            
+            // Вычисляем текущую позицию
+            const currentX = fromX + (toX - fromX) * easing;
+            const currentY = fromY + (toY - fromY) * easing;
+            
+            // Обновляем позицию фигуры
+            animatedPiece.style.left = `${currentX}px`;
+            animatedPiece.style.top = `${currentY}px`;
+            
+            // Продолжаем анимацию, если она не завершена
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Анимация завершена
+                // Удаляем анимированную фигуру
+                animatedPiece.remove();
                 
-                // Добавляем обработчик события окончания анимации
-                animatedPiece.addEventListener('transitionend', function handler() {
-                    // Удаляем обработчик события
-                    animatedPiece.removeEventListener('transitionend', handler);
-                    
-                    // Удаляем анимированную фигуру
-                    animatedPiece.remove();
-                    
-                    // Восстанавливаем оригинальную фигуру (хотя она будет заменена при обновлении доски)
-                    if (pieceElement.parentNode) {
-                        pieceElement.style.opacity = '1';
-                    }
-                    
-                    // Вызываем callback после завершения анимации
-                    if (onComplete) onComplete();
-                });
+                // Восстанавливаем оригинальную фигуру
+                if (pieceElement.parentNode) {
+                    pieceElement.style.opacity = '1';
+                }
                 
-                // Резервный таймер на случай, если событие transitionend не сработает
-                setTimeout(() => {
-                    if (animatedPiece.parentNode) {
-                        animatedPiece.remove();
-                        
-                        // Восстанавливаем оригинальную фигуру
-                        if (pieceElement.parentNode) {
-                            pieceElement.style.opacity = '1';
-                        }
-                        
-                        // Вызываем callback, если он еще не был вызван
-                        if (onComplete && typeof onComplete.__called === 'undefined') {
-                            onComplete.__called = true;
-                            onComplete();
-                        }
-                    }
-                }, 1100); // Немного больше, чем длительность анимации
-            }, 50);
-        });
+                // Вызываем callback после завершения анимации
+                if (onComplete) onComplete();
+            }
+        }
+        
+        // Запускаем анимацию с небольшой задержкой
+        setTimeout(() => {
+            requestAnimationFrame(animate);
+        }, 100);
     }
     
     // Функции для обработки ходов
