@@ -37,21 +37,13 @@ body {
     overflow: hidden;
     perspective: 1000px;
     transform-style: preserve-3d;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
 }
 
 #board {
     width: 100%;
     max-width: 600px;
     margin: 0 auto;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
+    border: none;
 }
 
 .container {
@@ -283,37 +275,11 @@ body {
 .board-b72b1 {
     position: relative !important;
     width: 400px !important;
-    height: 400px !important;
+    contain: layout size !important;
+}
+
+.square-55d63 {
     border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    overflow: hidden !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* Стили для удаления всех границ с доски */
-.board-b72b1 *, .square-55d63, .white-1e1d7, .black-3c85d {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* Возвращаем координаты доски */
-.notation-322f9 {
-    display: block !important; /* Возвращаем отображение координат */
-    font-size: 12px !important;
-    color: #555 !important;
-    font-weight: bold !important;
-}
-
-/* Дополнительные стили для удаления границ */
-.white-1e1d7, .black-3c85d {
-    background-clip: content-box !important;
-    padding: 0 !important;
-    border-width: 0 !important;
 }
 
 .piece-417db {
@@ -323,27 +289,10 @@ body {
     position: absolute !important;
     z-index: 5 !important;
     pointer-events: none !important;
-    animation: piece-appear 0.3s ease-out !important; /* Добавляем анимацию появления */
-}
-
-/* Анимация появления фигуры */
-@keyframes piece-appear {
-    from { opacity: 0; transform: scale(0.8); }
-    to { opacity: 1; transform: scale(1); }
 }
 
 .piece-417db:active {
     cursor: grabbing !important;
-}
-
-/* Анимация перемещения фигуры */
-.piece-moving {
-    animation: piece-move 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
-}
-
-@keyframes piece-move {
-    0% { transform: translate(0, 0); }
-    100% { transform: translate(var(--move-x), var(--move-y)); }
 }
 
 .highlight-square {
@@ -354,35 +303,6 @@ body {
 .highlight-move {
     box-shadow: inset 0 0 3px 3px rgba(0, 255, 0, 0.5) !important;
     transition: box-shadow 0.3s ease !important;
-}
-
-/* Добавляем стили для удаления всех возможных границ */
-.chessboard-63f37, .row-5277c, .clearfix-7da63 {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* Глобальное правило для удаления границ */
-#board, .board-b72b1, .square-55d63, .white-1e1d7, .black-3c85d, 
-.board-container, .chessboard-63f37, .row-5277c, .clearfix-7da63 {
-    box-sizing: border-box !important;
-    border-collapse: collapse !important;
-    border: 0 !important;
-    border-width: 0 !important;
-    border-style: none !important;
-    border-color: transparent !important;
-    outline: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* Принудительно удаляем все границы */
-#puzzlePage * {
-    border-width: 0 !important;
 }
 
 :root {
