@@ -275,11 +275,14 @@ body {
     position: relative !important;
     width: 400px !important;
     contain: layout size !important;
-    border: 2px solid #ffffff;
+    border: none !important;
+    user-select: none !important;
+    pointer-events: none !important;
 }
 
 .square-55d63 {
     border: none !important;
+    user-select: none !important;
 }
 
 .piece-417db {
@@ -289,6 +292,9 @@ body {
     position: absolute !important;
     z-index: 5 !important;
     pointer-events: none !important;
+    user-select: none !important;
+    -webkit-user-drag: none !important;
+    -webkit-touch-callout: none !important;
 }
 
 .piece-417db:active {
@@ -303,6 +309,19 @@ body {
 .highlight-move {
     box-shadow: inset 0 0 3px 3px rgba(0, 255, 0, 0.5) !important;
     transition: box-shadow 0.3s ease !important;
+}
+
+/* Дополнительные стили для запрета взаимодействия с доской */
+#board, #board * {
+    user-select: none !important;
+    -webkit-user-drag: none !important;
+    -webkit-touch-callout: none !important;
+    pointer-events: none !important;
+}
+
+/* Разрешаем взаимодействие только с кнопками */
+.good-btn, .blunder-btn, .analyze-btn, .next-btn, .start-btn {
+    pointer-events: auto !important;
 }
 
 :root {
