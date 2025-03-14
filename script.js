@@ -113,16 +113,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Делаем ход с анимацией
                 console.log('Making premove with animation:', fromSquare, 'to', toSquare);
                 
-                // Сначала показываем анимацию хода на доске
-                board.move(`${fromSquare}-${toSquare}`);
-                
-                // Затем обновляем внутреннее состояние игры после завершения анимации
-                setTimeout(() => {
-                    // Делаем ход в объекте игры
-                    const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
-                    if (premove) {
-                        console.log('Premove successful:', premove);
-                        
+                // Сначала делаем ход в объекте игры
+                const premove = game.move({ from: fromSquare, to: toSquare, promotion: 'q' });
+                if (premove) {
+                    console.log('Premove successful:', premove);
+                    
+                    // Затем обновляем позицию на доске с анимацией
+                    board.position(game.fen(), true);
+                    
+                    // Добавляем задержку перед отображением стрелки для следующего хода
+                    setTimeout(() => {
                         // Показываем стрелку для следующего хода
                         const [move2From, move2To] = [
                             puzzleConfig.move2.substring(0, 2),
@@ -211,8 +211,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             console.log('Drawing arrow from', move2From, 'to', move2To);
                             drawArrow(move2From, move2To, 'black');
                         }
-                    }
-                }, 500); // Задержка после анимации хода для обновления внутреннего состояния
+                    }, 800); // Задержка перед отображением стрелки
+                }
             } catch (error) {
                 console.error('Error making premove:', error);
                 console.log('Game state:', {
@@ -1339,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const toRect = toSquare.getBoundingClientRect();
         const squareSize = boardRect.width / 8;
 
-        // Координаты
+        // Координаты центров клеток
         const x1 = fromRect.left - boardRect.left + fromRect.width/2;
         const y1 = fromRect.top - boardRect.top + fromRect.height/2;
         const x2 = toRect.left - boardRect.left + toRect.width/2;
@@ -1353,29 +1353,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Вычисляем угол и размеры
         const angle = Math.atan2(y2 - y1, x2 - x1);
-        const width = squareSize * 0.15;
-        const headWidth = squareSize * 0.3;
-        const headLength = squareSize * 0.3;
+        const width = squareSize * 0.12; // Уменьшаем ширину стрелки
+        const headWidth = squareSize * 0.25; // Уменьшаем ширину наконечника
+        const headLength = squareSize * 0.25; // Уменьшаем длину наконечника
 
-        // Точки для стрелки
+        // Вычисляем длину стрелки с учетом отступов от центров клеток
+        // Отступаем от центров клеток на 40% размера клетки
+        const offsetRatio = 0.4;
+        const fromOffsetX = offsetRatio * squareSize * Math.cos(angle);
+        const fromOffsetY = offsetRatio * squareSize * Math.sin(angle);
+        const toOffsetX = offsetRatio * squareSize * Math.cos(angle);
+        const toOffsetY = offsetRatio * squareSize * Math.sin(angle);
+        
+        // Новые координаты с отступами
+        const adjustedX1 = x1 + fromOffsetX;
+        const adjustedY1 = y1 + fromOffsetY;
+        const adjustedX2 = x2 - toOffsetX;
+        const adjustedY2 = y2 - toOffsetY;
+        
+        // Вычисляем длину стрелки
+        const length = Math.sqrt((adjustedX2-adjustedX1)**2 + (adjustedY2-adjustedY1)**2) - headLength;
+
+        // Создаем путь для стрелки с учетом отступов
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        
+        // Вычисляем компоненты направления
         const dx = Math.cos(angle);
         const dy = Math.sin(angle);
-        const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2) - headLength;
-
+        
         // Создаем путь для стрелки
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("d", `
-            M ${x1 - width*dy} ${y1 + width*dx}
-            L ${x1 + length*dx - width*dy} ${y1 + length*dy + width*dx}
-            L ${x1 + length*dx - headWidth*dy} ${y1 + length*dy + headWidth*dx}
-            L ${x2} ${y2}
-            L ${x1 + length*dx + headWidth*dy} ${y1 + length*dy - headWidth*dx}
-            L ${x1 + length*dx + width*dy} ${y1 + length*dy - width*dx}
-            L ${x1 + width*dy} ${y1 - width*dx}
+            M ${adjustedX1 - width*dy} ${adjustedY1 + width*dx}
+            L ${adjustedX1 + length*dx - width*dy} ${adjustedY1 + length*dy + width*dx}
+            L ${adjustedX1 + length*dx - headWidth*dy} ${adjustedY1 + length*dy + headWidth*dx}
+            L ${adjustedX2} ${adjustedY2}
+            L ${adjustedX1 + length*dx + headWidth*dy} ${adjustedY1 + length*dy - headWidth*dx}
+            L ${adjustedX1 + length*dx + width*dy} ${adjustedY1 + length*dy - width*dx}
+            L ${adjustedX1 + width*dy} ${adjustedY1 - width*dx}
             Z
         `);
+        
         path.setAttribute("fill", color);
-        path.setAttribute("opacity", "0.5");
+        path.setAttribute("opacity", "0.6"); // Увеличиваем непрозрачность для лучшей видимости
+        path.setAttribute("stroke", "black"); // Добавляем обводку для лучшей видимости
+        path.setAttribute("stroke-width", "1");
+        path.setAttribute("stroke-opacity", "0.3");
 
         svg.appendChild(path);
         board.appendChild(svg);
