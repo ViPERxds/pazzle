@@ -88,6 +88,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Создаем доску
         board = Chessboard('board', config);
         
+        // Устанавливаем обработчик клика для показа/скрытия стрелки
+        setTimeout(setupBoardClickHandler, 500); // Небольшая задержка для уверенности, что доска уже создана
+        
         // Добавляем задержку перед выполнением предварительного хода
         // Увеличиваем задержку до 1500 мс (1.5 секунды), чтобы пользователь успел увидеть начальную позицию
         setTimeout(() => {
@@ -1507,12 +1510,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Обработчик клика по доске для показа/скрытия стрелки
-    $('#board').on('click', function() {
-        const arrow = document.querySelector('.arrow');
-        if (arrow) {
-            arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
+    function setupBoardClickHandler() {
+        const boardElement = document.getElementById('board');
+        if (boardElement) {
+            boardElement.addEventListener('click', function(event) {
+                // Предотвращаем всплытие события, чтобы не срабатывали другие обработчики
+                event.stopPropagation();
+                
+                // Находим стрелку
+                const arrow = document.querySelector('.arrow');
+                if (arrow) {
+                    // Если стрелка видима, скрываем её, иначе показываем
+                    if (arrow.style.display === 'none') {
+                        arrow.style.display = 'block';
+                    } else {
+                        arrow.style.display = 'none';
+                    }
+                }
+            });
+            
+            console.log('Board click handler set up successfully');
+        } else {
+            console.error('Board element not found for click handler');
         }
-    });
+    }
 
     // Функция для отображения ошибок
     function showError(message) {
