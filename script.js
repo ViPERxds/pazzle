@@ -419,6 +419,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Отправляем результат
         submitSolution(isCorrect);
         
+        // Сохраняем состояние после каждого хода
+        saveCurrentPuzzleState();
+        
         return 'snapback';
     }
     
@@ -642,75 +645,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Вызываем обновление рейтинга при загрузке страницы
     updateRatingDisplay(currentUsername);
     
-    // Функции для сохранения и восстановления состояния задачи
-    function savePuzzleState() {
-        if (currentPuzzle && startTime) {
-            const state = {
-                puzzle: currentPuzzle,
-                elapsedTime: Math.floor((Date.now() - startTime) / 1000),
-                boardFen: game.fen(),
-                puzzleConfig: puzzleConfig,
-                timestamp: Date.now(),
-                history: game.history(),
-                orientation: board.orientation()
-            };
-            localStorage.setItem('puzzleState_' + currentUsername, JSON.stringify(state));
-            console.log('Puzzle state saved:', state);
-        }
-    }
-
-    function loadPuzzleState() {
-        const savedState = localStorage.getItem('puzzleState_' + currentUsername);
-        if (savedState) {
-            try {
-                const state = JSON.parse(savedState);
-                
-                // Проверяем, не устарело ли состояние (24 часа)
-                if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
-                    localStorage.removeItem('puzzleState_' + currentUsername);
-                    return null;
-                }
-                
-                return state;
-            } catch (err) {
-                console.error('Error parsing saved puzzle state:', err);
-                localStorage.removeItem('puzzleState_' + currentUsername);
-            }
-        }
-        return null;
-    }
-
-    function clearPuzzleState() {
-        localStorage.removeItem('puzzleState_' + currentUsername);
-    }
-
-    // Модифицируем функцию startStopwatch
-    function startStopwatch(initialSeconds = 0) {
+    function startStopwatch() {
         // Очищаем предыдущий интервал если он был
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
         }
 
-        // Устанавливаем начальное время с учетом прошедших секунд
-        startTime = Date.now() - (initialSeconds * 1000);
+        // Устанавливаем начальное время
+        startTime = Date.now();
 
         // Обновляем таймер сразу и затем каждую секунду
         updateTimer();
-        window.timerInterval = setInterval(() => {
-            updateTimer();
-            savePuzzleState(); // Сохраняем состояние при каждом обновлении таймера
-        }, 1000);
+        window.timerInterval = setInterval(updateTimer, 1000);
 
         // Устанавливаем максимальное время (3 минуты)
         const maxTime = 180; // в секундах
-        const remainingTime = maxTime - initialSeconds;
         
-        if (remainingTime > 0) {
-            window.timeoutTimer = setTimeout(() => {
-                clearInterval(window.timerInterval);
-                handlePuzzleResult(false);
-            }, remainingTime * 1000);
-        }
+        // Устанавливаем таймер для автоматического завершения через maxTime секунд
+        window.timeoutTimer = setTimeout(() => {
+            clearInterval(window.timerInterval);
+            // Автоматически отправляем текущее решение как неверное
+            handlePuzzleResult(false);
+        }, maxTime * 1000);
     }
 
     // Обновляем функцию submitSolution
@@ -949,9 +905,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 ratingChange: newUserRatingData.rating - parseFloat(userRating.rating)
             });
 
-            // После успешной отправки решения очищаем сохраненное состояние
-            clearPuzzleState();
-            
         } catch (error) {
             console.error('Error submitting solution:', error);
             showError('Ошибка при отправке решения: ' + error.message);
@@ -1101,6 +1054,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 fen2: puzzle.fen2,
                 move2: puzzle.move2,
                 solution: puzzle.solution === 'Good',
+                // Устанавливаем ориентацию доски в соответствии с тем, чей ход в fen2
+                // Если ход белых (w), то ориентация white, если ход черных (b), то ориентация black
                 orientation: turnInFen2 === 'w' ? 'white' : 'black'
             };
             
@@ -1117,8 +1072,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Запускаем таймер
             startStopwatch();
             
-            // Сохраняем начальное состояние
-            savePuzzleState();
+            // Сохраняем состояние после каждого хода
+            saveCurrentPuzzleState();
             
             console.log('Puzzle displayed successfully');
         } catch (error) {
@@ -1269,16 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Добавляем обработчики событий
-    startButton.addEventListener('click', () => {
-        // Если есть сохраненное состояние, восстанавливаем его
-        if (savedState) {
-            console.log('Restoring saved puzzle state');
-            restorePuzzleState(savedState);
-        } else {
-            // Если нет сохраненного состояния, загружаем новую задачу
-            loadPuzzle(currentUsername);
-        }
-    });
+    startButton.addEventListener('click', () => loadPuzzle(currentUsername));
     goodButton.addEventListener('click', () => {
         // Если puzzleConfig.solution === true (Good), то нажатие на Good - правильный ответ
         // Если puzzleConfig.solution === false (Blunder), то нажатие на Good - неправильный ответ
@@ -1348,6 +1294,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обработчик результата задачи
     async function handlePuzzleResult(isCorrect) {
+        clearSavedPuzzleState(); // Очищаем сохраненное состояние при завершении задачи
+        
         try {
             // Останавливаем таймер
             if (window.timerInterval) {
@@ -1908,73 +1856,72 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Добавляем проверку сохраненного состояния при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        // ... existing code ...
+    // Функция для сохранения состояния текущей задачи
+    function saveCurrentPuzzleState() {
+        if (!currentPuzzle) return;
         
-        // Проверяем наличие сохраненного состояния
-        const savedState = loadPuzzleState();
-        if (savedState) {
-            console.log('Found saved puzzle state:', savedState);
-            
-            // Восстанавливаем состояние
-            currentPuzzle = savedState.puzzle;
-            puzzleConfig = savedState.puzzleConfig;
-            
-            // Показываем задачу с сохраненным состоянием
-            initializeBoard(puzzleConfig);
-            game.load(savedState.boardFen);
-            board.position(savedState.boardFen);
-            
-            // Отображаем страницу с задачей
-            startPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
-            resultPage.classList.add('hidden');
-            
-            // Запускаем таймер с сохраненным временем
-            startStopwatch(savedState.elapsedTime);
+        const puzzleState = {
+            puzzle: currentPuzzle,
+            position: board.position(),
+            orientation: board.orientation(),
+            elapsedTime: elapsedTime,
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem('currentPuzzleState', JSON.stringify(puzzleState));
+    }
+
+    // Функция для загрузки сохраненного состояния
+    async function loadSavedPuzzleState() {
+        const savedState = localStorage.getItem('currentPuzzleState');
+        if (!savedState) return false;
+        
+        const state = JSON.parse(savedState);
+        
+        // Проверяем, не прошло ли слишком много времени (например, 24 часа)
+        if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
+            localStorage.removeItem('currentPuzzleState');
+            return false;
         }
         
-        // ... rest of existing code ...
+        currentPuzzle = state.puzzle;
+        elapsedTime = state.elapsedTime;
+        
+        // Восстанавливаем позицию на доске
+        await showPuzzle(currentPuzzle);
+        board.position(state.position);
+        board.orientation(state.orientation);
+        
+        // Обновляем таймер
+        updateTimer();
+        startStopwatch();
+        
+        return true;
+    }
+
+    // Функция для очистки сохраненного состояния
+    function clearSavedPuzzleState() {
+        localStorage.removeItem('currentPuzzleState');
+    }
+
+    // Модифицируем обработчик кнопки старта
+    document.getElementById('startButton').addEventListener('click', async function() {
+        const hasSavedState = await loadSavedPuzzleState();
+        
+        if (!hasSavedState) {
+            // Если нет сохраненного состояния, загружаем новую задачу
+            const username = window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'anonymous';
+            await loadPuzzle(username);
+        }
+        
+        document.getElementById('startPage').classList.add('hidden');
+        document.getElementById('puzzlePage').classList.remove('hidden');
     });
 
-    // Добавляем функцию восстановления состояния
-    function restorePuzzleState(savedState) {
-        try {
-            console.log('Restoring puzzle state:', savedState);
-            
-            // Восстанавливаем состояние
-            currentPuzzle = savedState.puzzle;
-            puzzleConfig = savedState.puzzleConfig;
-            
-            // Показываем задачу с сохраненным состоянием
-            initializeBoard(puzzleConfig);
-            
-            // Восстанавливаем позицию на доске
-            game = new Chess();
-            game.load(savedState.boardFen);
-            board.position(savedState.boardFen);
-            
-            // Отображаем страницу с задачей
-            startPage.classList.add('hidden');
-            puzzlePage.classList.remove('hidden');
-            resultPage.classList.add('hidden');
-            
-            // Запускаем таймер с сохраненным временем
-            startStopwatch(savedState.elapsedTime);
-            
-            // Обновляем обработчик клика для доски
-            setTimeout(() => {
-                setupBoardClickHandler();
-                console.log('Board click handler updated for restored puzzle');
-            }, 100);
-            
-        } catch (error) {
-            console.error('Error restoring puzzle state:', error);
-            showError('Ошибка при восстановлении состояния задачи: ' + error.message);
-            // В случае ошибки восстановления загружаем новую задачу
-            clearPuzzleState();
-            loadPuzzle(currentUsername);
+    // Добавляем обработчик для сохранения состояния при закрытии страницы
+    window.addEventListener('beforeunload', () => {
+        if (currentPuzzle) {
+            saveCurrentPuzzleState();
         }
-    }
+    });
 }); 
