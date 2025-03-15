@@ -645,28 +645,60 @@ document.addEventListener('DOMContentLoaded', function() {
     // Вызываем обновление рейтинга при загрузке страницы
     updateRatingDisplay(currentUsername);
     
+    // Глобальные переменные для таймера и состояния
+    let elapsedTime = 0;
+    let timerInterval = null;
+    
+    // Функция запуска секундомера
     function startStopwatch() {
-        // Очищаем предыдущий интервал если он был
-        if (window.timerInterval) {
-            clearInterval(window.timerInterval);
+        // Если уже есть сохраненное время, используем его
+        if (elapsedTime > 0) {
+            startTime = Date.now() - elapsedTime;
+        } else {
+            startTime = Date.now();
+            elapsedTime = 0;
         }
-
-        // Устанавливаем начальное время
-        startTime = Date.now();
-
-        // Обновляем таймер сразу и затем каждую секунду
-        updateTimer();
-        window.timerInterval = setInterval(updateTimer, 1000);
-
-        // Устанавливаем максимальное время (3 минуты)
-        const maxTime = 180; // в секундах
         
-        // Устанавливаем таймер для автоматического завершения через maxTime секунд
-        window.timeoutTimer = setTimeout(() => {
-            clearInterval(window.timerInterval);
-            // Автоматически отправляем текущее решение как неверное
-            handlePuzzleResult(false);
-        }, maxTime * 1000);
+        // Очищаем предыдущий интервал, если он существует
+        if (timerInterval) {
+            clearInterval(timerInterval);
+        }
+        
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+    
+    // Функция обновления таймера
+    function updateTimer() {
+        if (!startTime) return;
+        
+        elapsedTime = Date.now() - startTime;
+        const seconds = Math.floor(elapsedTime / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        
+        const timerDisplay = document.querySelector('.timer');
+        if (timerDisplay) {
+            timerDisplay.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+    }
+    
+    // Функция остановки секундомера
+    function stopStopwatch() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+    
+    // Функция сброса секундомера
+    function resetStopwatch() {
+        stopStopwatch();
+        startTime = 0;
+        elapsedTime = 0;
+        const timerDisplay = document.querySelector('.timer');
+        if (timerDisplay) {
+            timerDisplay.textContent = '0:00';
+        }
     }
 
     // Обновляем функцию submitSolution
@@ -1082,17 +1114,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Функция для обновления таймера
-    function updateTimer() {
-        if (!startTime) return;
-        
-        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-        const minutes = Math.floor(elapsedSeconds / 60);
-        const seconds = elapsedSeconds % 60;
-        
-        timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-
     // Функция для поиска правильного хода на основе FEN и целевого поля
     function findCorrectMove(fen, targetSquare, pieces) {
         const game = new Chess(fen);
@@ -1294,7 +1315,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обработчик результата задачи
     async function handlePuzzleResult(isCorrect) {
-        clearSavedPuzzleState(); // Очищаем сохраненное состояние при завершении задачи
+        stopStopwatch(); // Останавливаем таймер
+        clearSavedPuzzleState(); // Очищаем сохраненное состояние
+        resetStopwatch(); // Сбрасываем таймер
         
         try {
             // Останавливаем таймер
@@ -1865,6 +1888,7 @@ document.addEventListener('DOMContentLoaded', function() {
             position: board.position(),
             orientation: board.orientation(),
             elapsedTime: elapsedTime,
+            startTime: startTime,
             timestamp: Date.now()
         };
         
@@ -1886,6 +1910,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         currentPuzzle = state.puzzle;
         elapsedTime = state.elapsedTime;
+        startTime = Date.now() - elapsedTime; // Восстанавливаем startTime
         
         // Восстанавливаем позицию на доске
         await showPuzzle(currentPuzzle);
