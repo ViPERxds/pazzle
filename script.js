@@ -1253,6 +1253,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Сохраняем текущую задачу
             currentPuzzle = puzzle;
             
+            // Сбрасываем время перед показом новой задачи
+            startTime = null;
+            
             // Показываем задачу (функция showPuzzle также запускает таймер и показывает страницу с задачей)
             await showPuzzle(puzzle);
             
@@ -1331,8 +1334,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Добавляем обработчик для кнопки Next
     document.querySelector('.next-btn').addEventListener('click', () => {
+        // Очищаем таймеры
+        if (window.timerInterval) {
+            clearInterval(window.timerInterval);
+        }
+        if (window.timeoutTimer) {
+            clearTimeout(window.timeoutTimer);
+        }
+        startTime = null;
+        
         // Скрываем страницу результата
         resultPage.classList.add('hidden');
+        
         // Загружаем новую задачу
         loadPuzzle(currentUsername);
     });
