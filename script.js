@@ -642,28 +642,73 @@ document.addEventListener('DOMContentLoaded', function() {
     // Вызываем обновление рейтинга при загрузке страницы
     updateRatingDisplay(currentUsername);
     
-    function startStopwatch() {
+    // Функции для сохранения и восстановления состояния задачи
+    function savePuzzleState() {
+        if (currentPuzzle && startTime) {
+            const state = {
+                puzzle: currentPuzzle,
+                elapsedTime: Math.floor((Date.now() - startTime) / 1000),
+                boardFen: game.fen(),
+                puzzleConfig: puzzleConfig,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('puzzleState', JSON.stringify(state));
+            console.log('Puzzle state saved:', state);
+        }
+    }
+
+    function loadPuzzleState() {
+        const savedState = localStorage.getItem('puzzleState');
+        if (savedState) {
+            try {
+                const state = JSON.parse(savedState);
+                
+                // Проверяем, не устарело ли состояние (24 часа)
+                if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
+                    localStorage.removeItem('puzzleState');
+                    return null;
+                }
+                
+                return state;
+            } catch (err) {
+                console.error('Error parsing saved puzzle state:', err);
+                localStorage.removeItem('puzzleState');
+            }
+        }
+        return null;
+    }
+
+    function clearPuzzleState() {
+        localStorage.removeItem('puzzleState');
+    }
+
+    // Модифицируем функцию startStopwatch
+    function startStopwatch(initialSeconds = 0) {
         // Очищаем предыдущий интервал если он был
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
         }
 
-        // Устанавливаем начальное время
-        startTime = Date.now();
+        // Устанавливаем начальное время с учетом прошедших секунд
+        startTime = Date.now() - (initialSeconds * 1000);
 
         // Обновляем таймер сразу и затем каждую секунду
         updateTimer();
-        window.timerInterval = setInterval(updateTimer, 1000);
+        window.timerInterval = setInterval(() => {
+            updateTimer();
+            savePuzzleState(); // Сохраняем состояние при каждом обновлении таймера
+        }, 1000);
 
         // Устанавливаем максимальное время (3 минуты)
         const maxTime = 180; // в секундах
+        const remainingTime = maxTime - initialSeconds;
         
-        // Устанавливаем таймер для автоматического завершения через maxTime секунд
-        window.timeoutTimer = setTimeout(() => {
-            clearInterval(window.timerInterval);
-            // Автоматически отправляем текущее решение как неверное
-            handlePuzzleResult(false);
-        }, maxTime * 1000);
+        if (remainingTime > 0) {
+            window.timeoutTimer = setTimeout(() => {
+                clearInterval(window.timerInterval);
+                handlePuzzleResult(false);
+            }, remainingTime * 1000);
+        }
     }
 
     // Обновляем функцию submitSolution
@@ -902,6 +947,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 ratingChange: newUserRatingData.rating - parseFloat(userRating.rating)
             });
 
+            // После успешной отправки решения очищаем сохраненное состояние
+            clearPuzzleState();
+            
         } catch (error) {
             console.error('Error submitting solution:', error);
             showError('Ошибка при отправке решения: ' + error.message);
@@ -1051,8 +1099,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 fen2: puzzle.fen2,
                 move2: puzzle.move2,
                 solution: puzzle.solution === 'Good',
-                // Устанавливаем ориентацию доски в соответствии с тем, чей ход в fen2
-                // Если ход белых (w), то ориентация white, если ход черных (b), то ориентация black
                 orientation: turnInFen2 === 'w' ? 'white' : 'black'
             };
             
@@ -1068,6 +1114,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Запускаем таймер
             startStopwatch();
+            
+            // Сохраняем начальное состояние
+            savePuzzleState();
             
             console.log('Puzzle displayed successfully');
         } catch (error) {
@@ -1847,4 +1896,34 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Arrow element not found');
         }
     }
+
+    // Добавляем проверку сохраненного состояния при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        // ... existing code ...
+        
+        // Проверяем наличие сохраненного состояния
+        const savedState = loadPuzzleState();
+        if (savedState) {
+            console.log('Found saved puzzle state:', savedState);
+            
+            // Восстанавливаем состояние
+            currentPuzzle = savedState.puzzle;
+            puzzleConfig = savedState.puzzleConfig;
+            
+            // Показываем задачу с сохраненным состоянием
+            initializeBoard(puzzleConfig);
+            game.load(savedState.boardFen);
+            board.position(savedState.boardFen);
+            
+            // Отображаем страницу с задачей
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            resultPage.classList.add('hidden');
+            
+            // Запускаем таймер с сохраненным временем
+            startStopwatch(savedState.elapsedTime);
+        }
+        
+        // ... rest of existing code ...
+    });
 }); 
