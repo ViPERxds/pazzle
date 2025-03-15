@@ -1205,6 +1205,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Показываем задачу (функция showPuzzle также запускает таймер и показывает страницу с задачей)
             await showPuzzle(puzzle);
             
+            // Обновляем обработчик клика для новой доски
+            setTimeout(() => {
+                setupBoardClickHandler();
+                console.log('Board click handler updated for new puzzle');
+            }, 1000); // Добавляем задержку, чтобы убедиться, что доска уже создана
+            
         } catch (err) {
             console.error('Error loading puzzle:', err);
             showError('Ошибка при загрузке задачи: ' + err.message);
@@ -1417,6 +1423,7 @@ document.addEventListener('DOMContentLoaded', function() {
         svg.style.height = '100%';
         svg.style.pointerEvents = 'none';
         svg.style.zIndex = '1000';
+        svg.style.display = 'block'; // Устанавливаем видимость по умолчанию
         
         const board = document.querySelector('#board');
         if (!board) {
@@ -1500,6 +1507,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         svg.appendChild(path);
         board.appendChild(svg);
+        
+        console.log('Arrow created and set to visible by default');
     }
 
     // Вспомогательная функция для получения координат клетки
@@ -1513,43 +1522,23 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupBoardClickHandler() {
         const boardElement = document.getElementById('board');
         if (boardElement) {
-            boardElement.addEventListener('click', function(event) {
-                // Предотвращаем всплытие события, чтобы не срабатывали другие обработчики
-                event.stopPropagation();
-                event.preventDefault();
-                
-                // Находим стрелку
-                const arrow = document.querySelector('.arrow');
-                if (arrow) {
-                    // Если стрелка видима, скрываем её, иначе показываем
-                    if (arrow.style.display === 'none') {
-                        arrow.style.display = 'block';
-                        console.log('Arrow shown');
-                    } else {
-                        arrow.style.display = 'none';
-                        console.log('Arrow hidden');
-                    }
-                } else {
-                    console.log('Arrow element not found');
-                }
-            });
+            // Удаляем существующие обработчики, чтобы избежать дублирования
+            boardElement.removeEventListener('click', toggleArrowVisibility);
             
+            // Добавляем новый обработчик
+            boardElement.addEventListener('click', toggleArrowVisibility);
             console.log('Board click handler set up successfully');
         } else {
             console.error('Board element not found for click handler');
             
-            // Пробуем найти доску через jQuery
+            // Пробуем найти доску через jQuery с задержкой
             setTimeout(() => {
                 const $board = $('#board');
                 if ($board.length) {
-                    $board.on('click', function() {
-                        const arrow = document.querySelector('.arrow');
-                        if (arrow) {
-                            arrow.style.display = arrow.style.display === 'none' ? 'block' : 'none';
-                            console.log('Arrow visibility toggled via jQuery');
-                        }
-                    });
+                    $board.off('click').on('click', toggleArrowVisibility);
                     console.log('Board click handler set up via jQuery');
+                } else {
+                    console.error('Board element still not found after delay');
                 }
             }, 1000);
         }
@@ -1833,5 +1822,29 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('New puzzle rating calculated:', result);
         return result;
+    }
+
+    // Выносим функцию переключения видимости стрелки в отдельную функцию
+    function toggleArrowVisibility(event) {
+        // Предотвращаем всплытие события
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        
+        // Находим стрелку
+        const arrow = document.querySelector('.arrow');
+        if (arrow) {
+            // Если стрелка видима, скрываем её, иначе показываем
+            if (arrow.style.display === 'none') {
+                arrow.style.display = 'block';
+                console.log('Arrow shown');
+            } else {
+                arrow.style.display = 'none';
+                console.log('Arrow hidden');
+            }
+        } else {
+            console.log('Arrow element not found');
+        }
     }
 }); 
