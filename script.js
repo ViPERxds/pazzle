@@ -647,16 +647,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.timerInterval) {
             clearInterval(window.timerInterval);
         }
-        
-        // Очищаем предыдущий таймаут если он был
-        if (window.timeoutTimer) {
-            clearTimeout(window.timeoutTimer);
-        }
 
-        // Устанавливаем начальное время, если оно не было установлено ранее
-        if (!startTime) {
-            startTime = Date.now();
-        }
+        // Устанавливаем начальное время
+        startTime = Date.now();
 
         // Обновляем таймер сразу и затем каждую секунду
         updateTimer();
@@ -665,27 +658,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Устанавливаем максимальное время (3 минуты)
         const maxTime = 180; // в секундах
         
-        // Вычисляем, сколько времени уже прошло
-        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-        
-        // Вычисляем оставшееся время
-        const remainingTime = Math.max(0, maxTime - elapsedSeconds);
-        
-        console.log('Starting stopwatch with elapsed time:', elapsedSeconds, 'seconds, remaining time:', remainingTime, 'seconds');
-        
-        // Устанавливаем таймер для автоматического завершения через remainingTime секунд
-        if (remainingTime > 0) {
-            window.timeoutTimer = setTimeout(() => {
-                clearInterval(window.timerInterval);
-                // Автоматически отправляем текущее решение как неверное
-                handlePuzzleResult(false);
-            }, remainingTime * 1000);
-        } else {
-            // Если время уже истекло, сразу отправляем неверное решение
-            console.log('Time already expired, submitting failed solution');
+        // Устанавливаем таймер для автоматического завершения через maxTime секунд
+        window.timeoutTimer = setTimeout(() => {
             clearInterval(window.timerInterval);
+            // Автоматически отправляем текущее решение как неверное
             handlePuzzleResult(false);
-        }
+        }, maxTime * 1000);
     }
 
     // Обновляем функцию submitSolution
@@ -924,9 +902,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 ratingChange: newUserRatingData.rating - parseFloat(userRating.rating)
             });
 
-            // Очищаем сохраненное состояние задачи
-            clearPuzzleState();
-
         } catch (error) {
             console.error('Error submitting solution:', error);
             showError('Ошибка при отправке решения: ' + error.message);
@@ -1057,34 +1032,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Функция для отображения задачи
-    async function showPuzzle(puzzle, isRestored = false) {
+    async function showPuzzle(puzzle) {
         try {
-            console.log('Showing puzzle:', puzzle, 'isRestored:', isRestored);
+            console.log('Showing puzzle:', puzzle);
             
             // Сохраняем текущую задачу
             currentPuzzle = puzzle;
             
-            // Если это не восстановленная задача, обновляем конфигурацию
-            if (!isRestored) {
-                // Определяем, чей ход в позиции fen2
-                const tempGame = new Chess(puzzle.fen2);
-                const turnInFen2 = tempGame.turn();
-                console.log('Turn in FEN2:', turnInFen2, 'color value:', puzzle.color);
-                
-                // Сохраняем конфигурацию задачи
-                puzzleConfig = {
-                    initialFen: puzzle.fen1,
-                    move1: puzzle.move1,
-                    fen2: puzzle.fen2,
-                    move2: puzzle.move2,
-                    solution: puzzle.solution === 'Good',
-                    // Устанавливаем ориентацию доски в соответствии с тем, чей ход в fen2
-                    // Если ход белых (w), то ориентация white, если ход черных (b), то ориентация black
-                    orientation: turnInFen2 === 'w' ? 'white' : 'black'
-                };
-                
-                console.log('Board orientation set to:', puzzleConfig.orientation, 'based on turn in FEN2');
-            }
+            // Определяем, чей ход в позиции fen2
+            const tempGame = new Chess(puzzle.fen2);
+            const turnInFen2 = tempGame.turn();
+            console.log('Turn in FEN2:', turnInFen2, 'color value:', puzzle.color);
+            
+            // Сохраняем конфигурацию задачи
+            puzzleConfig = {
+                initialFen: puzzle.fen1,
+                move1: puzzle.move1,
+                fen2: puzzle.fen2,
+                move2: puzzle.move2,
+                solution: puzzle.solution === 'Good',
+                // Устанавливаем ориентацию доски в соответствии с тем, чей ход в fen2
+                // Если ход белых (w), то ориентация white, если ход черных (b), то ориентация black
+                orientation: turnInFen2 === 'w' ? 'white' : 'black'
+            };
+            
+            console.log('Board orientation set to:', puzzleConfig.orientation, 'based on turn in FEN2');
             
             // Инициализируем доску
             initializeBoard(puzzleConfig);
@@ -1094,14 +1066,8 @@ document.addEventListener('DOMContentLoaded', function() {
             puzzlePage.classList.remove('hidden');
             resultPage.classList.add('hidden');
             
-            // Запускаем таймер только если это не восстановленная задача
-            // (для восстановленных задач таймер запускается в restorePuzzleState)
-            if (!isRestored) {
-                startStopwatch();
-            }
-            
-            // Сохраняем состояние задачи
-            setTimeout(savePuzzleState, 1000);
+            // Запускаем таймер
+            startStopwatch();
             
             console.log('Puzzle displayed successfully');
         } catch (error) {
@@ -1138,23 +1104,6 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadPuzzle(username) {
         try {
             console.log('Loading puzzle for user:', username);
-            
-            // Проверяем, есть ли сохраненное состояние
-            const hasRestoredState = await restorePuzzleState();
-            if (hasRestoredState) {
-                console.log('Restored saved puzzle state');
-                
-                // Обновляем обработчик клика для восстановленной доски
-                setTimeout(() => {
-                    setupBoardClickHandler();
-                    console.log('Board click handler updated for restored puzzle');
-                }, 1000);
-                
-                return;
-            }
-            
-            // Если нет сохраненного состояния, загружаем новую задачу
-            console.log('No saved state, loading new puzzle');
             
             // Получаем задачу через API
             const puzzle = await fetchWithAuth(`${API_URL}/api/random-puzzle/${username}`);
@@ -1898,112 +1847,4 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Arrow element not found');
         }
     }
-
-    // Функция для сохранения состояния текущей задачи
-    function savePuzzleState() {
-        if (!currentPuzzle) return;
-        
-        try {
-            const puzzleState = {
-                puzzle: currentPuzzle,
-                puzzleConfig: puzzleConfig,
-                startTime: startTime,
-                elapsedSeconds: Math.floor((Date.now() - startTime) / 1000),
-                timestamp: Date.now()
-            };
-            
-            localStorage.setItem(`puzzle_state_${currentUsername}`, JSON.stringify(puzzleState));
-            console.log('Puzzle state saved:', puzzleState);
-        } catch (err) {
-            console.error('Error saving puzzle state:', err);
-        }
-    }
-
-    // Функция для восстановления состояния задачи
-    async function restorePuzzleState() {
-        try {
-            const savedStateJson = localStorage.getItem(`puzzle_state_${currentUsername}`);
-            if (!savedStateJson) {
-                console.log('No saved puzzle state found');
-                return false;
-            }
-            
-            const savedState = JSON.parse(savedStateJson);
-            console.log('Found saved puzzle state:', savedState);
-            
-            // Проверяем, не устарело ли сохраненное состояние (например, более 24 часов)
-            const MAX_AGE = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
-            if (Date.now() - savedState.timestamp > MAX_AGE) {
-                console.log('Saved puzzle state is too old, discarding');
-                localStorage.removeItem(`puzzle_state_${currentUsername}`);
-                return false;
-            }
-            
-            // Восстанавливаем данные задачи
-            currentPuzzle = savedState.puzzle;
-            puzzleConfig = savedState.puzzleConfig;
-            
-            // Восстанавливаем время
-            const elapsedSeconds = savedState.elapsedSeconds || 0;
-            startTime = Date.now() - (elapsedSeconds * 1000);
-            
-            console.log('Restoring puzzle with elapsed time:', elapsedSeconds, 'seconds');
-            
-            // Показываем задачу
-            await showPuzzle(currentPuzzle, true); // Передаем флаг, что это восстановленная задача
-            
-            // Обновляем таймер с учетом прошедшего времени
-            updateTimer();
-            
-            // Запускаем таймер
-            if (window.timerInterval) {
-                clearInterval(window.timerInterval);
-            }
-            window.timerInterval = setInterval(updateTimer, 1000);
-            
-            // Устанавливаем таймер для автоматического завершения
-            const maxTime = 180; // в секундах
-            const remainingTime = Math.max(0, maxTime - elapsedSeconds);
-            
-            console.log('Setting timeout for remaining time:', remainingTime, 'seconds');
-            
-            if (remainingTime > 0) {
-                window.timeoutTimer = setTimeout(() => {
-                    clearInterval(window.timerInterval);
-                    handlePuzzleResult(false);
-                }, remainingTime * 1000);
-            } else {
-                // Если время уже истекло, сразу отправляем неверное решение
-                console.log('Time already expired, submitting failed solution');
-                handlePuzzleResult(false);
-            }
-            
-            return true;
-        } catch (err) {
-            console.error('Error restoring puzzle state:', err);
-            return false;
-        }
-    }
-
-    // Функция для очистки сохраненного состояния
-    function clearPuzzleState() {
-        localStorage.removeItem(`puzzle_state_${currentUsername}`);
-        console.log('Puzzle state cleared');
-    }
-    
-    // Добавляем обработчик события visibilitychange для сохранения состояния при скрытии страницы
-    document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'hidden' && currentPuzzle) {
-            console.log('Page hidden, saving puzzle state');
-            savePuzzleState();
-        }
-    });
-    
-    // Добавляем обработчик события beforeunload для сохранения состояния перед закрытием страницы
-    window.addEventListener('beforeunload', function() {
-        if (currentPuzzle) {
-            console.log('Page unloading, saving puzzle state');
-            savePuzzleState();
-        }
-    });
 }); 
