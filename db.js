@@ -72,6 +72,14 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             throw new Error('Invalid time value');
         }
 
+        // Получаем текущее значение number
+        const currentPuzzle = await pool.query(
+            'SELECT number FROM Puzzles WHERE id = $1',
+            [puzzleId]
+        );
+        
+        console.log('Current puzzle number:', currentPuzzle.rows[0]?.number);
+
         // Получаем настройки
         const settings = await getSettings();
         const normalTime = settings.normal_time || 60; // время в секундах для нормы решения
@@ -102,11 +110,12 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             ]
         );
 
-        // Обновляем рейтинг задачи
-        await pool.query(
+        // Обновляем рейтинг задачи и увеличиваем number
+        const updateResult = await pool.query(
             `UPDATE Puzzles 
             SET rating = $1, rd = $2, volatility = $3, number = number + 1 
-            WHERE id = $4`,
+            WHERE id = $4
+            RETURNING number`,
             [
                 newRatings.puzzleRating,
                 newRatings.puzzleRD,
@@ -115,7 +124,13 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
             ]
         );
 
-        return newRatings;
+        console.log('Updated puzzle number:', updateResult.rows[0]?.number);
+
+        return {
+            ...newRatings,
+            oldNumber: currentPuzzle.rows[0]?.number,
+            newNumber: updateResult.rows[0]?.number
+        };
     } catch (err) {
         console.error('Error recording solution:', err);
         throw err;
