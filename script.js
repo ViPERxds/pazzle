@@ -830,14 +830,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 success: success,
                 time: elapsedTime,
                 userRating: {
-                    rating: newUserRatingData.rating.toFixed(8),
-                    rd: newUserRatingData.rd.toFixed(8),
-                    volatility: newUserRatingData.volatility.toFixed(8)
+                    rating: parseFloat(newUserRatingData.rating).toFixed(8),
+                    rd: parseFloat(newUserRatingData.rd).toFixed(8),
+                    volatility: parseFloat(newUserRatingData.volatility).toFixed(8)
                 },
                 puzzleRating: {
-                    rating: newPuzzleRatingData.rating.toFixed(8),
-                    rd: newPuzzleRatingData.rd.toFixed(8),
-                    volatility: newPuzzleRatingData.volatility.toFixed(8)
+                    rating: parseFloat(newPuzzleRatingData.rating).toFixed(8),
+                    rd: parseFloat(newPuzzleRatingData.rd).toFixed(8),
+                    volatility: parseFloat(newPuzzleRatingData.volatility).toFixed(8)
                 }
             };
             
