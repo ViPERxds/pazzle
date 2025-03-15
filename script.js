@@ -650,36 +650,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 elapsedTime: Math.floor((Date.now() - startTime) / 1000),
                 boardFen: game.fen(),
                 puzzleConfig: puzzleConfig,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                history: game.history(),
+                orientation: board.orientation()
             };
-            localStorage.setItem('puzzleState', JSON.stringify(state));
+            localStorage.setItem('puzzleState_' + currentUsername, JSON.stringify(state));
             console.log('Puzzle state saved:', state);
         }
     }
 
     function loadPuzzleState() {
-        const savedState = localStorage.getItem('puzzleState');
+        const savedState = localStorage.getItem('puzzleState_' + currentUsername);
         if (savedState) {
             try {
                 const state = JSON.parse(savedState);
                 
                 // Проверяем, не устарело ли состояние (24 часа)
                 if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
-                    localStorage.removeItem('puzzleState');
+                    localStorage.removeItem('puzzleState_' + currentUsername);
                     return null;
                 }
                 
                 return state;
             } catch (err) {
                 console.error('Error parsing saved puzzle state:', err);
-                localStorage.removeItem('puzzleState');
+                localStorage.removeItem('puzzleState_' + currentUsername);
             }
         }
         return null;
     }
 
     function clearPuzzleState() {
-        localStorage.removeItem('puzzleState');
+        localStorage.removeItem('puzzleState_' + currentUsername);
     }
 
     // Модифицируем функцию startStopwatch
@@ -1267,7 +1269,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Добавляем обработчики событий
-    startButton.addEventListener('click', () => loadPuzzle(currentUsername));
+    startButton.addEventListener('click', () => {
+        // Если есть сохраненное состояние, восстанавливаем его
+        if (savedState) {
+            console.log('Restoring saved puzzle state');
+            restorePuzzleState(savedState);
+        } else {
+            // Если нет сохраненного состояния, загружаем новую задачу
+            loadPuzzle(currentUsername);
+        }
+    });
     goodButton.addEventListener('click', () => {
         // Если puzzleConfig.solution === true (Good), то нажатие на Good - правильный ответ
         // Если puzzleConfig.solution === false (Blunder), то нажатие на Good - неправильный ответ
@@ -1926,4 +1937,44 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // ... rest of existing code ...
     });
+
+    // Добавляем функцию восстановления состояния
+    function restorePuzzleState(savedState) {
+        try {
+            console.log('Restoring puzzle state:', savedState);
+            
+            // Восстанавливаем состояние
+            currentPuzzle = savedState.puzzle;
+            puzzleConfig = savedState.puzzleConfig;
+            
+            // Показываем задачу с сохраненным состоянием
+            initializeBoard(puzzleConfig);
+            
+            // Восстанавливаем позицию на доске
+            game = new Chess();
+            game.load(savedState.boardFen);
+            board.position(savedState.boardFen);
+            
+            // Отображаем страницу с задачей
+            startPage.classList.add('hidden');
+            puzzlePage.classList.remove('hidden');
+            resultPage.classList.add('hidden');
+            
+            // Запускаем таймер с сохраненным временем
+            startStopwatch(savedState.elapsedTime);
+            
+            // Обновляем обработчик клика для доски
+            setTimeout(() => {
+                setupBoardClickHandler();
+                console.log('Board click handler updated for restored puzzle');
+            }, 100);
+            
+        } catch (error) {
+            console.error('Error restoring puzzle state:', error);
+            showError('Ошибка при восстановлении состояния задачи: ' + error.message);
+            // В случае ошибки восстановления загружаем новую задачу
+            clearPuzzleState();
+            loadPuzzle(currentUsername);
+        }
+    }
 }); 
