@@ -1046,10 +1046,11 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
         );
         
         // Обновляем рейтинг задачи
-        await pool.query(
+        const updateResult = await pool.query(
             `UPDATE Puzzles 
-             SET rating = $1, rd = $2, volatility = $3 
-             WHERE id = $4`,
+             SET rating = $1, rd = $2, volatility = $3, number = COALESCE(number, 0) + 1
+             WHERE id = $4
+             RETURNING number`,
             [
                 newRatings.puzzle.rating,
                 newRatings.puzzle.rd,
@@ -1057,6 +1058,11 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 puzzleId
             ]
         );
+        
+        console.log('Updated puzzle:', {
+            id: puzzleId,
+            newNumber: updateResult.rows[0]?.number
+        });
         
         // Записываем в журнал
         await pool.query(
@@ -1088,7 +1094,8 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 rating: newRatings.puzzle.rating,
                 rd: newRatings.puzzle.rd,
                 volatility: newRatings.puzzle.volatility
-            }
+            },
+            number: updateResult.rows[0]?.number
         };
     } catch (err) {
         console.error('Error recording puzzle solution:', err);
@@ -1118,7 +1125,8 @@ app.post('/api/record-solution', async (req, res) => {
             status: 'success',
             message: 'Solution recorded successfully',
             userRating: result.userRating,
-            puzzleRating: result.puzzleRating
+            puzzleRating: result.puzzleRating,
+            number: result.number
         });
     } catch (err) {
         console.error('Error in /api/record-solution:', err);
