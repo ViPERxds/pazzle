@@ -674,18 +674,26 @@ function calculateNewRatings(userRating, puzzleRating, R) {
         const puzzleMu = (puzzleRatingNum - 1500) / 173.7178;
         const puzzlePhi = puzzleRDNum / 173.7178;
         
+        console.log('Converted to Glicko-2 scale:', {
+            userMu, userPhi, puzzleMu, puzzlePhi
+        });
+        
         // Создаем массивы оппонентов для пользователя и задачи
         const userOpponents = [{
             r: puzzleMu,
             RD: puzzlePhi,
-            s: R
+            s: R  // Используем результат с учетом времени
         }];
         
         const puzzleOpponents = [{
             r: userMu,
             RD: userPhi,
-            s: 1 - R
+            s: 1 - R  // Инвертируем результат для задачи
         }];
+        
+        console.log('Opponents arrays:', {
+            userOpponents, puzzleOpponents
+        });
         
         // Вычисляем новые рейтинги
         const newUserRating = calculateGlicko2(
@@ -704,25 +712,41 @@ function calculateNewRatings(userRating, puzzleRating, R) {
             TAU
         );
         
-        // Преобразуем обратно в шкалу Glicko и округляем значения
-        const newUserRatingGlicko = roundRatingValues(173.7178 * newUserRating.mu + 1500, 'rating');
-        const newUserRDGlicko = roundRatingValues(173.7178 * newUserRating.phi, 'rd');
-        const newUserVolatility = roundRatingValues(newUserRating.sigma, 'volatility');
+        console.log('New ratings in Glicko-2 scale:', {
+            user: newUserRating,
+            puzzle: newPuzzleRating
+        });
         
-        const newPuzzleRatingGlicko = roundRatingValues(173.7178 * newPuzzleRating.mu + 1500, 'rating');
-        const newPuzzleRDGlicko = roundRatingValues(173.7178 * newPuzzleRating.phi, 'rd');
-        const newPuzzleVolatility = roundRatingValues(newPuzzleRating.sigma, 'volatility');
+        // Преобразуем обратно в шкалу Glicko
+        const newUserRatingGlicko = 173.7178 * newUserRating.mu + 1500;
+        const newUserRDGlicko = 173.7178 * newUserRating.phi;
+        
+        const newPuzzleRatingGlicko = 173.7178 * newPuzzleRating.mu + 1500;
+        const newPuzzleRDGlicko = 173.7178 * newPuzzleRating.phi;
+        
+        console.log('Final ratings in Glicko scale:', {
+            user: {
+                rating: newUserRatingGlicko,
+                rd: newUserRDGlicko,
+                volatility: newUserRating.sigma
+            },
+            puzzle: {
+                rating: newPuzzleRatingGlicko,
+                rd: newPuzzleRDGlicko,
+                volatility: newPuzzleRating.sigma
+            }
+        });
         
         return {
             user: {
                 rating: newUserRatingGlicko,
                 rd: newUserRDGlicko,
-                volatility: newUserVolatility
+                volatility: newUserRating.sigma
             },
             puzzle: {
                 rating: newPuzzleRatingGlicko,
                 rd: newPuzzleRDGlicko,
-                volatility: newPuzzleVolatility
+                volatility: newPuzzleRating.sigma
             }
         };
     } catch (err) {
@@ -738,66 +762,93 @@ function calculateNewRatings(userRating, puzzleRating, R) {
 // Функция для расчета рейтингов по алгоритму Glicko-2
 function calculateGlicko2(mu, phi, sigma, oppRatings, oppRDs, oppResults, tau) {
     try {
-        // Вычисляем v
+        console.log('Glicko-2 input:', { mu, phi, sigma, oppRatings, oppRDs, oppResults, tau });
+        
+        // Шаг 1: Определение g(RD) и E для каждого оппонента
+        const g = oppRDs.map(RD => 1 / Math.sqrt(1 + 3 * Math.pow(RD, 2) / Math.pow(Math.PI, 2)));
+        
+        const E = oppRatings.map((r, i) => 1 / (1 + Math.exp(-g[i] * (mu - r))));
+        
+        // Шаг 2: Вычисление вариации
         let v = 0;
         for (let i = 0; i < oppRatings.length; i++) {
-            const g = 1 / Math.sqrt(1 + 3 * oppRDs[i] * oppRDs[i] / (Math.PI * Math.PI));
-            const E = 1 / (1 + Math.exp(-g * (mu - oppRatings[i])));
-            v += (g * g * E * (1 - E));
+            v += Math.pow(g[i], 2) * E[i] * (1 - E[i]);
         }
-        v = roundRatingValues(1 / v, 'rd');
-
-        // Вычисляем Δ
+        v = 1 / v;
+        
+        // Шаг 3: Вычисление дельты
         let delta = 0;
         for (let i = 0; i < oppRatings.length; i++) {
-            const g = 1 / Math.sqrt(1 + 3 * oppRDs[i] * oppRDs[i] / (Math.PI * Math.PI));
-            const E = 1 / (1 + Math.exp(-g * (mu - oppRatings[i])));
-            delta += g * (oppResults[i] - E);
+            delta += g[i] * (oppResults[i] - E[i]);
         }
-        delta = roundRatingValues(v * delta, 'rd');
-
-        // Вычисляем новую волатильность
-        const a = Math.log(sigma * sigma);
+        delta = v * delta;
+        
+        // Шаг 4: Вычисление новой волатильности
+        const a = Math.log(Math.pow(sigma, 2));
+        
+        // Функция f(x)
         const f = (x) => {
             const ex = Math.exp(x);
-            const num = ex * (delta * delta - phi * phi - v - ex);
-            const den = 2 * (phi * phi + v + ex) * (phi * phi + v + ex);
-            return num / den - (x - a) / (tau * tau);
+            const phiSq = Math.pow(phi, 2);
+            const deltaSq = Math.pow(delta, 2);
+            
+            const part1 = ex * (deltaSq - phiSq - v - ex) / (2 * Math.pow(phiSq + v + ex, 2));
+            const part2 = (x - a) / Math.pow(tau, 2);
+            
+            return part1 - part2;
         };
-
-        // Поиск нового значения волатильности методом половинного деления
-        let A = a;
-        let B = f(a) < 0 ? a + tau : a - tau;
-        while (Math.abs(B - A) > 0.0000001) {
-            const C = (A + B) / 2;
-            if (f(C) * f(B) < 0) {
-                A = C;
-            } else {
-                B = C;
-            }
-        }
-
-        const sigma_new = roundRatingValues(Math.exp(A / 2), 'volatility');
-
-        // Обновление φ и μ
-        const phi_star = roundRatingValues(Math.sqrt(phi * phi + sigma_new * sigma_new), 'rd');
-        const phi_new = roundRatingValues(1 / Math.sqrt(1 / (phi_star * phi_star) + 1 / v), 'rd');
         
-        let mu_new = mu;
-        for (let i = 0; i < oppRatings.length; i++) {
-            const g = 1 / Math.sqrt(1 + 3 * oppRDs[i] * oppRDs[i] / (Math.PI * Math.PI));
-            const E = 1 / (1 + Math.exp(-g * (mu - oppRatings[i])));
-            mu_new += phi_new * phi_new * g * (oppResults[i] - E);
+        // Алгоритм поиска корня уравнения f(x) = 0
+        let A = a;
+        let B;
+        
+        if (Math.pow(delta, 2) > Math.pow(phi, 2) + v) {
+            B = Math.log(Math.pow(delta, 2) - Math.pow(phi, 2) - v);
+        } else {
+            let k = 1;
+            while (f(a - k * tau) < 0) {
+                k++;
+            }
+            B = a - k * tau;
         }
-        mu_new = roundRatingValues(mu_new, 'rating');
-
+        
+        let fA = f(A);
+        let fB = f(B);
+        
+        while (Math.abs(B - A) > 0.000001) {
+            const C = A + (A - B) * fA / (fB - fA);
+            const fC = f(C);
+            
+            if (fC * fB <= 0) {
+                A = B;
+                fA = fB;
+            } else {
+                fA = fA / 2;
+            }
+            
+            B = C;
+            fB = fC;
+        }
+        
+        const newSigma = Math.exp(A / 2);
+        
+        // Шаг 5: Обновление phi
+        const phiStar = Math.sqrt(Math.pow(phi, 2) + Math.pow(newSigma, 2));
+        
+        // Шаг 6: Обновление phi и mu
+        const newPhi = 1 / Math.sqrt(1 / Math.pow(phiStar, 2) + 1 / v);
+        const newMu = mu + Math.pow(newPhi, 2) * (delta / v);
+        
+        console.log('Glicko-2 output:', { mu: newMu, phi: newPhi, sigma: newSigma });
+        
         return {
-            mu: mu_new,
-            phi: phi_new,
-            sigma: sigma_new
+            mu: newMu,
+            phi: newPhi,
+            sigma: newSigma
         };
     } catch (err) {
         console.error('Error in Glicko-2 calculation:', err);
+        // В случае ошибки возвращаем исходные значения
         return {
             mu: mu,
             phi: phi,
@@ -891,19 +942,6 @@ app.get('/api/random-puzzle/:username', async (req, res) => {
     }
 });
 
-// Функция для округления числовых значений
-function roundRatingValues(value, type) {
-    switch(type) {
-        case 'rating':
-            return parseFloat(value.toFixed(6));
-        case 'rd':
-        case 'volatility':
-            return parseFloat(value.toFixed(7));
-        default:
-            return value;
-    }
-}
-
 // Добавляем функцию для записи решения задачи
 async function recordPuzzleSolution(username, puzzleId, success, time) {
     try {
@@ -960,8 +998,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
         };
         
         // Вычисляем результат игры с учетом времени
+        // R = S * e^(-ln(2) * time / a), где a = 180 секунд (3 минуты)
         const a = 180; // 3 минуты в секундах
-        const S = success ? 1 : 0;
+        const S = success ? 1 : 0; // Бинарный результат (успех/неудача)
         const R = S * Math.exp(-Math.log(2) * time / a);
         
         console.log(`Calculated game result R = ${R} (S=${S}, time=${time}s, a=${a}s)`);
@@ -969,28 +1008,29 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
         // Вычисляем новые рейтинги
         const newRatings = calculateNewRatings(userRating, puzzleRating, R);
         
-        // Округляем значения перед сохранением
-        const roundedUserRating = {
-            rating: roundRatingValues(newRatings.user.rating, 'rating'),
-            rd: roundRatingValues(newRatings.user.rd, 'rd'),
-            volatility: roundRatingValues(newRatings.user.volatility, 'volatility')
-        };
-        
-        const roundedPuzzleRating = {
-            rating: roundRatingValues(newRatings.puzzle.rating, 'rating'),
-            rd: roundRatingValues(newRatings.puzzle.rd, 'rd'),
-            volatility: roundRatingValues(newRatings.puzzle.volatility, 'volatility')
-        };
+        console.log('New ratings calculated:', newRatings);
         
         // Определяем сложность задачи на основе времени решения
+        // По умолчанию используем среднюю сложность (id=4)
         let complexityId = 4;
-        if (time <= 5) complexityId = 1;
-        else if (time <= 15) complexityId = 2;
-        else if (time <= 30) complexityId = 3;
-        else if (time <= 60) complexityId = 4;
-        else if (time <= 90) complexityId = 5;
-        else if (time <= 120) complexityId = 6;
-        else complexityId = 7;
+        
+        if (time <= 5) {
+            complexityId = 1; // супер легкая
+        } else if (time <= 15) {
+            complexityId = 2; // очень легкая
+        } else if (time <= 30) {
+            complexityId = 3; // легкая
+        } else if (time <= 60) {
+            complexityId = 4; // средняя
+        } else if (time <= 90) {
+            complexityId = 5; // сложная
+        } else if (time <= 120) {
+            complexityId = 6; // очень сложная
+        } else {
+            complexityId = 7; // супер сложная
+        }
+        
+        console.log(`Determined complexity level ${complexityId} based on time ${time}`);
         
         // Обновляем рейтинг пользователя
         await pool.query(
@@ -998,9 +1038,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
              SET rating = $1, rd = $2, volatility = $3 
              WHERE id = $4`,
             [
-                roundedUserRating.rating,
-                roundedUserRating.rd,
-                roundedUserRating.volatility,
+                newRatings.user.rating,
+                newRatings.user.rd,
+                newRatings.user.volatility,
                 userId
             ]
         );
@@ -1011,9 +1051,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
              SET rating = $1, rd = $2, volatility = $3 
              WHERE id = $4`,
             [
-                roundedPuzzleRating.rating,
-                roundedPuzzleRating.rd,
-                roundedPuzzleRating.volatility,
+                newRatings.puzzle.rating,
+                newRatings.puzzle.rd,
+                newRatings.puzzle.volatility,
                 puzzleId
             ]
         );
@@ -1030,7 +1070,7 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 success, 
                 time,
                 puzzleRating.rating,
-                roundedUserRating.rating,
+                newRatings.user.rating,
                 complexityId
             ]
         );
@@ -1039,11 +1079,19 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
         
         return {
             success: true,
-            userRating: roundedUserRating,
-            puzzleRating: roundedPuzzleRating
+            userRating: {
+                rating: newRatings.user.rating,
+                rd: newRatings.user.rd,
+                volatility: newRatings.user.volatility
+            },
+            puzzleRating: {
+                rating: newRatings.puzzle.rating,
+                rd: newRatings.puzzle.rd,
+                volatility: newRatings.puzzle.volatility
+            }
         };
     } catch (err) {
-        console.error('Error recording solution:', err);
+        console.error('Error recording puzzle solution:', err);
         throw err;
     }
 }
