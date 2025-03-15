@@ -1,23 +1,21 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Определяем API URL
+    const API_URL = window.location.origin;  // Используем текущий домен
+
+    // Находим элементы DOM
+    const goodButton = document.querySelector('.good-btn');
+    const blunderButton = document.querySelector('.blunder-btn');
+    const startButton = document.getElementById('startButton');
     const startPage = document.getElementById('startPage');
     const puzzlePage = document.getElementById('puzzlePage');
     const resultPage = document.getElementById('resultPage');
-    const startButton = document.querySelector('.start-btn');
-    const resultText = document.getElementById('resultText');
-    const ratingElements = document.querySelectorAll('.rating');
-    const goodButton = document.querySelector('.good-btn');
-    const blunderButton = document.querySelector('.blunder-btn');
     const timerElement = document.querySelector('.timer');
-    
-    // Определяем API URL
-    const API_URL = window.location.origin;  // Используем текущий домен
-    
+    const ratingElements = document.querySelectorAll('.rating');
+
+    // Глобальные переменные состояния
+    let board = null;
+    let game = new Chess();
     let currentPuzzle = null;
-    let timer = null;
-    let startTime = null;
-    let seconds = 180;
-    
-    // Инициализация конфигурации задачи
     let puzzleConfig = {
         initialFen: '',
         fen2: '',
@@ -26,11 +24,16 @@ document.addEventListener('DOMContentLoaded', function() {
         orientation: 'white',
         solution: false
     };
-    
-    // Инициализация игры
-    let game = new Chess();
-    let board = null;
-    
+    let startTime = Date.now();
+    let elapsedTime = 0;
+    let timerInterval = null;
+    let seconds = 180; // Максимальное время на решение
+
+    // Инициализация таймера
+    if (timerElement) {
+        timerElement.textContent = '0:00';
+    }
+
     // Функция инициализации доски
     function initializeBoard(puzzleConfig) {
         console.log('Initializing board with config:', puzzleConfig);
@@ -645,13 +648,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Вызываем обновление рейтинга при загрузке страницы
     updateRatingDisplay(currentUsername);
     
-    // Глобальные переменные для таймера и состояния
-    let elapsedTime = 0;
-    let timerInterval = null;
+    // Сбрасываем значения таймера
+    elapsedTime = 0;
+    timerInterval = null;
     
     // Функция запуска секундомера
     function startStopwatch() {
-        // Если уже есть сохраненное время, используем его
+        console.log('Starting stopwatch:', { elapsedTime, startTime });
+        stopStopwatch(); // Останавливаем предыдущий таймер если он был
+        
         if (elapsedTime > 0) {
             startTime = Date.now() - elapsedTime;
         } else {
@@ -659,17 +664,17 @@ document.addEventListener('DOMContentLoaded', function() {
             elapsedTime = 0;
         }
         
-        // Очищаем предыдущий интервал, если он существует
-        if (timerInterval) {
-            clearInterval(timerInterval);
-        }
-        
+        updateTimer(); // Обновляем сразу
         timerInterval = setInterval(updateTimer, 1000);
+        console.log('Stopwatch started:', { elapsedTime, startTime, timerInterval });
     }
     
     // Функция обновления таймера
     function updateTimer() {
-        if (!startTime) return;
+        if (!startTime) {
+            console.warn('updateTimer called without startTime');
+            return;
+        }
         
         elapsedTime = Date.now() - startTime;
         const seconds = Math.floor(elapsedTime / 1000);
@@ -678,12 +683,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const timerDisplay = document.querySelector('.timer');
         if (timerDisplay) {
-            timerDisplay.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+            const timeString = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+            timerDisplay.textContent = timeString;
+            console.log('Timer updated:', { timeString, elapsedTime, seconds });
+        } else {
+            console.warn('Timer display element not found');
         }
     }
     
     // Функция остановки секундомера
     function stopStopwatch() {
+        console.log('Stopping stopwatch:', { timerInterval, elapsedTime });
         if (timerInterval) {
             clearInterval(timerInterval);
             timerInterval = null;
@@ -692,13 +702,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Функция сброса секундомера
     function resetStopwatch() {
+        console.log('Resetting stopwatch');
         stopStopwatch();
-        startTime = 0;
+        startTime = Date.now();
         elapsedTime = 0;
         const timerDisplay = document.querySelector('.timer');
         if (timerDisplay) {
             timerDisplay.textContent = '0:00';
         }
+        console.log('Stopwatch reset:', { startTime, elapsedTime });
     }
 
     // Обновляем функцию submitSolution
@@ -711,28 +723,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Останавливаем таймер
-            if (window.timerInterval) {
-                clearInterval(window.timerInterval);
-            }
-            if (window.timeoutTimer) {
-                clearTimeout(window.timeoutTimer);
-            }
+            stopStopwatch();
 
-            // Получаем время решения
-            const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+            // Получаем время решения в секундах
+            const solveTime = Math.floor(elapsedTime / 1000);
 
-            console.log('Sending solution:', {
+            console.log('Submitting solution:', {
                 username: currentUsername,
                 puzzleId: currentPuzzle.id,
                 success: success,
-                successType: typeof success,
-                time: elapsedTime,
-                expectedSolution: puzzleConfig.solution,
-                expectedSolutionType: typeof puzzleConfig.solution,
-                currentPuzzleSolution: currentPuzzle.solution,
-                currentPuzzleSolutionType: typeof currentPuzzle.solution
+                time: solveTime
             });
 
+            // Очищаем сохраненное состояние
+            clearSavedPuzzleState();
+            
+            // Сбрасываем таймер
+            resetStopwatch();
+
+            // Показываем результат
+            showPuzzleResult(success);
+            
             // Получаем текущий рейтинг пользователя
             console.log('Fetching current user rating for:', currentUsername);
             const userRating = await fetchWithAuth(`${API_URL}/api/user-rating/${currentUsername}`);
@@ -841,7 +852,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 username: currentUsername,
                 puzzleId: currentPuzzle.id,
                 success: success,
-                time: elapsedTime,
+                time: solveTime,
                 userRating: {
                     rating: newUserRatingData.rating.toFixed(8),
                     rd: newUserRatingData.rd.toFixed(8),
@@ -940,6 +951,23 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error submitting solution:', error);
             showError('Ошибка при отправке решения: ' + error.message);
+        }
+    }
+
+    // Функция для отображения результата
+    function showPuzzleResult(isCorrect) {
+        // Скрываем страницу с задачей
+        document.getElementById('puzzlePage').classList.add('hidden');
+        
+        // Показываем страницу с результатом
+        const resultPage = document.getElementById('resultPage');
+        resultPage.classList.remove('hidden');
+        
+        // Обновляем текст результата
+        const resultText = document.getElementById('resultText');
+        if (resultText) {
+            resultText.textContent = isCorrect ? 'Правильно!' : 'Неправильно!';
+            resultText.className = 'result ' + (isCorrect ? 'success' : 'failure');
         }
     }
 
@@ -1881,10 +1909,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Функция для сохранения состояния текущей задачи
     function saveCurrentPuzzleState() {
-        if (!currentPuzzle) return;
+        if (!currentPuzzle || !puzzleConfig) {
+            console.log('No puzzle to save');
+            return;
+        }
         
         const puzzleState = {
             puzzle: currentPuzzle,
+            puzzleConfig: puzzleConfig,
             position: board.position(),
             orientation: board.orientation(),
             elapsedTime: elapsedTime,
@@ -1893,35 +1925,49 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         localStorage.setItem('currentPuzzleState', JSON.stringify(puzzleState));
+        console.log('Puzzle state saved:', puzzleState);
     }
 
     // Функция для загрузки сохраненного состояния
     async function loadSavedPuzzleState() {
-        const savedState = localStorage.getItem('currentPuzzleState');
-        if (!savedState) return false;
-        
-        const state = JSON.parse(savedState);
-        
-        // Проверяем, не прошло ли слишком много времени (например, 24 часа)
-        if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
+        try {
+            const savedState = localStorage.getItem('currentPuzzleState');
+            if (!savedState) {
+                console.log('No saved state found');
+                return false;
+            }
+            
+            const state = JSON.parse(savedState);
+            console.log('Loading saved state:', state);
+            
+            // Проверяем, не прошло ли слишком много времени (например, 24 часа)
+            if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
+                console.log('Saved state is too old, removing');
+                localStorage.removeItem('currentPuzzleState');
+                return false;
+            }
+            
+            currentPuzzle = state.puzzle;
+            puzzleConfig = state.puzzleConfig;
+            elapsedTime = state.elapsedTime;
+            startTime = Date.now() - elapsedTime;
+            
+            // Восстанавливаем позицию на доске
+            await showPuzzle(currentPuzzle);
+            board.position(state.position);
+            board.orientation(state.orientation);
+            
+            // Обновляем таймер
+            updateTimer();
+            startStopwatch();
+            
+            console.log('Saved state loaded successfully');
+            return true;
+        } catch (error) {
+            console.error('Error loading saved state:', error);
             localStorage.removeItem('currentPuzzleState');
             return false;
         }
-        
-        currentPuzzle = state.puzzle;
-        elapsedTime = state.elapsedTime;
-        startTime = Date.now() - elapsedTime; // Восстанавливаем startTime
-        
-        // Восстанавливаем позицию на доске
-        await showPuzzle(currentPuzzle);
-        board.position(state.position);
-        board.orientation(state.orientation);
-        
-        // Обновляем таймер
-        updateTimer();
-        startStopwatch();
-        
-        return true;
     }
 
     // Функция для очистки сохраненного состояния
@@ -1949,4 +1995,26 @@ document.addEventListener('DOMContentLoaded', function() {
             saveCurrentPuzzleState();
         }
     });
+
+    // Функция для проверки состояния таймера
+    function checkTimerState() {
+        console.log('Checking timer state:', {
+            startTime,
+            elapsedTime,
+            timerInterval,
+            timerElement: document.querySelector('.timer')?.textContent
+        });
+        
+        // Если таймер не отображается, инициализируем его
+        const timerDisplay = document.querySelector('.timer');
+        if (timerDisplay && timerDisplay.textContent === '') {
+            timerDisplay.textContent = '0:00';
+        }
+    }
+
+    // Проверяем состояние таймера при загрузке
+    checkTimerState();
+
+    // Проверяем состояние таймера после небольшой задержки
+    setTimeout(checkTimerState, 1000);
 }); 
