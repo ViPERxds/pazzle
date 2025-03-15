@@ -732,7 +732,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 username: currentUsername,
                 puzzleId: currentPuzzle.id,
                 success: success,
-                time: solveTime
+                time: solveTime,
+                currentNumber: currentPuzzle.number
             });
 
             // Очищаем сохраненное состояние
@@ -882,7 +883,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 message: result.message,
                 userRating: result.userRating,
                 puzzleRating: result.puzzleRating,
-                note: 'Сервер возвращает оригинальный рейтинг задачи, а не обновленный'
+                oldNumber: result.oldNumber,
+                newNumber: result.newNumber,
+                note: 'Проверяем обновление столбца number'
             });
 
             // После получения ответа от сервера
