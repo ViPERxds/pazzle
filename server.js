@@ -1038,9 +1038,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
              SET rating = $1, rd = $2, volatility = $3 
              WHERE id = $4`,
             [
-                newRatings.user.rating,
-                newRatings.user.rd,
-                newRatings.user.volatility,
+                Math.min(9999.99999999, Math.max(-9999.99999999, newRatings.user.rating)),
+                Math.min(9999.99999999, Math.max(0, newRatings.user.rd)),
+                Math.min(0.99999999, Math.max(0, newRatings.user.volatility)),
                 userId
             ]
         );
@@ -1051,9 +1051,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
              SET rating = $1, rd = $2, volatility = $3 
              WHERE id = $4`,
             [
-                newRatings.puzzle.rating,
-                newRatings.puzzle.rd,
-                newRatings.puzzle.volatility,
+                Math.min(9999.99999999, Math.max(-9999.99999999, newRatings.puzzle.rating)),
+                Math.min(9999.99999999, Math.max(0, newRatings.puzzle.rd)),
+                Math.min(0.99999999, Math.max(0, newRatings.puzzle.volatility)),
                 puzzleId
             ]
         );
@@ -1068,9 +1068,9 @@ async function recordPuzzleSolution(username, puzzleId, success, time) {
                 userId, 
                 puzzleId, 
                 success, 
-                time,
-                puzzleRating.rating,
-                newRatings.user.rating,
+                Math.min(999.99, Math.max(0, time)),
+                Math.min(9999.99999999, Math.max(-9999.99999999, puzzleRating.rating)),
+                Math.min(9999.99999999, Math.max(-9999.99999999, newRatings.user.rating)),
                 complexityId
             ]
         );
